@@ -153,9 +153,9 @@ export function CollectionTokenGrid({
               <Link
                 key={tokenId(token)}
                 href={`/collections/${address}/${tokenId(token)}`}
-                className="block"
+                className="group block transition-transform duration-150 hover:-translate-y-0.5"
               >
-                <Card>
+                <Card className="transition-colors duration-150 group-hover:border-primary/30">
                   <CardContent
                     aria-label={`token-${tokenId(token)}`}
                     className="space-y-2 p-3"
@@ -184,8 +184,9 @@ export function CollectionTokenGrid({
 
       {tokenQuery.isSuccess && visibleTokens.length === 0 ? (
         <Card className="border-dashed">
-          <CardContent className="pt-6 text-sm text-muted-foreground">
-            No tokens matched the active trait filters.
+          <CardContent className="pt-6 text-sm text-muted-foreground font-mono">
+            <span className="text-primary mr-1">$</span>
+            grep --traits -- 0 results
           </CardContent>
         </Card>
       ) : null}

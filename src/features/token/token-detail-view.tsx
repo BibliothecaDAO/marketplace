@@ -114,8 +114,8 @@ export function TokenDetailView({
         {/* Token details */}
         <div className="space-y-6">
           <div>
-            <h1 className="text-2xl font-bold">{name}</h1>
-            <p className="text-sm text-muted-foreground">
+            <h1 className="text-2xl font-bold tracking-wide">{name}</h1>
+            <p className="text-sm text-primary font-mono">
               #{String(token.token_id ?? "unknown")}
             </p>
           </div>
@@ -123,15 +123,15 @@ export function TokenDetailView({
           {/* Attributes */}
           {attributes.length > 0 ? (
             <div className="space-y-2">
-              <h2 className="text-lg font-semibold">Attributes</h2>
+              <h2 className="text-sm font-medium tracking-widest uppercase text-muted-foreground">Attributes</h2>
               <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
                 {attributes.map((attr) => (
-                  <Card key={`${attr.trait_type}-${attr.value}`}>
+                  <Card key={`${attr.trait_type}-${attr.value}`} className="border-border/70">
                     <CardContent className="p-3">
-                      <p className="text-xs text-muted-foreground">
+                      <p className="text-xs text-muted-foreground uppercase tracking-wide">
                         {attr.trait_type}
                       </p>
-                      <p className="text-sm font-medium">{attr.value}</p>
+                      <p className="text-sm font-medium text-primary">{attr.value}</p>
                     </CardContent>
                   </Card>
                 ))}
@@ -143,7 +143,7 @@ export function TokenDetailView({
 
       {/* Listings section */}
       <div className="space-y-3">
-        <h2 className="text-lg font-semibold">Listings</h2>
+        <h2 className="text-sm font-medium tracking-widest uppercase text-muted-foreground">Listings</h2>
         {listings.length === 0 ? (
           <p className="text-sm text-muted-foreground">No listings</p>
         ) : (
@@ -152,7 +152,7 @@ export function TokenDetailView({
               <Card key={listing.id}>
                 <CardContent className="flex items-center justify-between p-3">
                   <div>
-                    <p className="text-sm font-medium">
+                    <p className="text-sm font-medium text-primary font-mono">
                       {listing.price}
                     </p>
                     <p className="text-xs text-muted-foreground">

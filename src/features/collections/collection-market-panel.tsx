@@ -90,7 +90,7 @@ export function CollectionMarketPanel({
     <Card>
       <CardHeader className="space-y-3">
         <div className="flex items-center justify-between gap-3">
-          <CardTitle>Market Activity</CardTitle>
+          <CardTitle className="text-sm font-medium tracking-widest uppercase">Market Activity</CardTitle>
           <div className="flex gap-2">
             <Badge variant="outline">Orders: {orders.status}</Badge>
             <Badge variant="outline">Listings: {listings.status}</Badge>
@@ -136,10 +136,13 @@ export function CollectionMarketPanel({
               ) : null}
 
               {orders.isSuccess ? (
-                <div className="space-y-1">
+                <div className="space-y-0">
                   {(orders.data ?? []).map((order: { id: number; tokenId: number }) => (
-                    <p key={order.id} className="text-sm">
-                      Order #{order.id} · Token #{order.tokenId}
+                    <p key={order.id} className="text-sm font-mono border-b border-border/50 py-1.5">
+                      <span className="text-muted-foreground">order</span>{" "}
+                      <span className="text-primary">#{order.id}</span>{" "}
+                      <span className="text-muted-foreground">token</span>{" "}
+                      <span className="text-foreground">#{order.tokenId}</span>
                     </p>
                   ))}
                 </div>
@@ -179,10 +182,13 @@ export function CollectionMarketPanel({
               ) : null}
 
               {listings.isSuccess ? (
-                <div className="space-y-1">
+                <div className="space-y-0">
                   {(listings.data ?? []).map((listing: { id: number; tokenId: number }) => (
-                    <p key={listing.id} className="text-sm">
-                      Listing #{listing.id} · Token #{listing.tokenId}
+                    <p key={listing.id} className="text-sm font-mono border-b border-border/50 py-1.5">
+                      <span className="text-muted-foreground">listing</span>{" "}
+                      <span className="text-primary">#{listing.id}</span>{" "}
+                      <span className="text-muted-foreground">token</span>{" "}
+                      <span className="text-foreground">#{listing.tokenId}</span>
                     </p>
                   ))}
                 </div>

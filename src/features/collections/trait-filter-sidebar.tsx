@@ -104,7 +104,7 @@ export function TraitFilterSidebar({
     <Card>
       <CardHeader className="space-y-2">
         <div className="flex items-center justify-between gap-2">
-          <CardTitle className="text-base">Traits</CardTitle>
+          <CardTitle className="text-sm font-medium tracking-widest uppercase">Traits</CardTitle>
           {hasActiveFilters ? (
             <Button
               onClick={() => onActiveFiltersChange?.({})}
@@ -126,7 +126,7 @@ export function TraitFilterSidebar({
 
         {precomputed.attributes.map((traitName) => (
           <section className="space-y-2" key={traitName}>
-            <h3 className="text-sm font-medium">{traitName}</h3>
+            <h3 className="text-xs font-medium uppercase tracking-wide text-muted-foreground">{traitName}</h3>
             <div className="flex flex-wrap gap-2">
               {(precomputed.properties[traitName] ?? []).map((item) => {
                 const isActive = activeFilters[traitName]?.has(item.property) ?? false;
@@ -134,7 +134,7 @@ export function TraitFilterSidebar({
                   <Button
                     key={`${traitName}-${item.property}`}
                     onClick={() => toggleFilter(traitName, item.property)}
-                    size="sm"
+                    size="xs"
                     type="button"
                     variant={isActive ? "secondary" : "outline"}
                   >

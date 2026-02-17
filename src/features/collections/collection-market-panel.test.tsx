@@ -122,6 +122,6 @@ describe("collection market panel", () => {
 
     const listingsPanel = screen.getByTestId("listings-panel");
     expect(within(listingsPanel).queryByText(/orders failed to load/i)).toBeNull();
-    expect(within(listingsPanel).getByText(/Listing #10/i)).toBeVisible();
+    expect(within(listingsPanel).getByText(/#10/)).toBeVisible();
   });
 });
