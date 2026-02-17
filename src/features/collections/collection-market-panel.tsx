@@ -3,9 +3,9 @@
 import { useMemo, useState } from "react";
 import type { CollectionOrdersOptions } from "@cartridge/arcade/marketplace";
 import {
-  useMarketplaceCollectionListings,
-  useMarketplaceCollectionOrders,
-} from "@cartridge/arcade/marketplace/react";
+  useCollectionListingsQuery,
+  useCollectionOrdersQuery,
+} from "@/lib/marketplace/hooks";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -72,25 +72,19 @@ export function CollectionMarketPanel({
     [listingTokenId],
   );
 
-  const orders = useMarketplaceCollectionOrders(
-    {
-      collection: address,
-      status: parsedOrderStatus,
-      category: parsedOrderCategory,
-      limit: 24,
-    },
-    Boolean(address),
-  );
-  const listings = useMarketplaceCollectionListings(
-    {
-      collection: address,
-      tokenId: listingTokenFilter,
-      limit: 24,
-      verifyOwnership,
-      projectId,
-    },
-    Boolean(address),
-  );
+  const orders = useCollectionOrdersQuery({
+    collection: address,
+    status: parsedOrderStatus,
+    category: parsedOrderCategory,
+    limit: 24,
+  });
+  const listings = useCollectionListingsQuery({
+    collection: address,
+    tokenId: listingTokenFilter,
+    limit: 24,
+    verifyOwnership,
+    projectId,
+  });
 
   return (
     <Card>
@@ -137,13 +131,13 @@ export function CollectionMarketPanel({
                 </div>
               </div>
 
-              {orders.status === "error" ? (
+              {orders.isError ? (
                 <p className="text-sm text-destructive">Orders failed to load.</p>
               ) : null}
 
-              {orders.status === "success" ? (
+              {orders.isSuccess ? (
                 <div className="space-y-1">
-                  {(orders.data ?? []).map((order) => (
+                  {(orders.data ?? []).map((order: { id: number; tokenId: number }) => (
                     <p key={order.id} className="text-sm">
                       Order #{order.id} · Token #{order.tokenId}
                     </p>
@@ -180,13 +174,13 @@ export function CollectionMarketPanel({
                 </div>
               </div>
 
-              {listings.status === "error" ? (
+              {listings.isError ? (
                 <p className="text-sm text-destructive">Listings failed to load.</p>
               ) : null}
 
-              {listings.status === "success" ? (
+              {listings.isSuccess ? (
                 <div className="space-y-1">
-                  {(listings.data ?? []).map((listing) => (
+                  {(listings.data ?? []).map((listing: { id: number; tokenId: number }) => (
                     <p key={listing.id} className="text-sm">
                       Listing #{listing.id} · Token #{listing.tokenId}
                     </p>

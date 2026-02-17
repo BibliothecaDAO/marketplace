@@ -1,5 +1,5 @@
-import { MarketplaceShell } from "@/components/marketplace/marketplace-shell";
+import { MarketplaceHome } from "@/components/marketplace/marketplace-home";
 
 export default function Home() {
-  return <MarketplaceShell />;
+  return <MarketplaceHome />;
 }

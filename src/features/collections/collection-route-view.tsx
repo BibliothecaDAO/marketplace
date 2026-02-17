@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from "react";
 import type { NormalizedToken } from "@cartridge/arcade/marketplace";
-import { useMarketplaceCollection } from "@cartridge/arcade/marketplace/react";
+import { useCollectionQuery } from "@/lib/marketplace/hooks";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
@@ -12,6 +12,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   type SeedCollection,
   getMarketplaceRuntimeConfig,
@@ -65,10 +66,7 @@ export function CollectionRouteView({
     [address, runtimeCollections],
   );
   const projectId = selectedCollection?.projectId;
-  const collection = useMarketplaceCollection(
-    { address, projectId, fetchImages: true },
-    Boolean(address),
-  );
+  const collection = useCollectionQuery({ address, projectId, fetchImages: true });
 
   function handleChange(nextAddress: string) {
     if (onNavigate) {
@@ -102,7 +100,7 @@ export function CollectionRouteView({
         </CardHeader>
         <CardContent className="space-y-2">
           <p className="text-sm text-muted-foreground">{address}</p>
-          {collection.status === "success" && collection.data ? (
+          {collection.isSuccess && collection.data ? (
             <div className="space-y-1">
               <p className="text-lg font-medium">
                 {collectionName(collection.data.metadata, address)}
@@ -113,7 +111,7 @@ export function CollectionRouteView({
             </div>
           ) : null}
 
-          {collection.status === "success" && !collection.data ? (
+          {collection.isSuccess && !collection.data ? (
             <Card className="border-dashed">
               <CardContent className="pt-6 text-sm text-muted-foreground">
                 Collection not found.
@@ -123,20 +121,33 @@ export function CollectionRouteView({
         </CardContent>
       </Card>
       <div className="grid gap-6 xl:grid-cols-[280px_1fr]">
-        <TraitFilterSidebar
-          activeFilters={resolvedActiveFilters}
-          onActiveFiltersChange={onActiveFiltersChange}
-          tokens={loadedTokens}
-        />
-        <CollectionTokenGrid
-          key={`${address}-${projectId ?? "default"}`}
-          activeFilters={resolvedActiveFilters}
-          address={address}
-          onTokensChange={setLoadedTokens}
-          projectId={projectId}
-        />
+        <div className="sticky top-20 self-start" data-testid="trait-sidebar-container">
+          <TraitFilterSidebar
+            activeFilters={resolvedActiveFilters}
+            onActiveFiltersChange={onActiveFiltersChange}
+            tokens={loadedTokens}
+          />
+        </div>
+
+        <Tabs defaultValue="tokens" className="w-full">
+          <TabsList>
+            <TabsTrigger value="tokens">Tokens</TabsTrigger>
+            <TabsTrigger value="market-activity">Market Activity</TabsTrigger>
+          </TabsList>
+          <TabsContent value="tokens">
+            <CollectionTokenGrid
+              key={`${address}-${projectId ?? "default"}`}
+              activeFilters={resolvedActiveFilters}
+              address={address}
+              onTokensChange={setLoadedTokens}
+              projectId={projectId}
+            />
+          </TabsContent>
+          <TabsContent value="market-activity">
+            <CollectionMarketPanel address={address} projectId={projectId} />
+          </TabsContent>
+        </Tabs>
       </div>
-      <CollectionMarketPanel address={address} projectId={projectId} />
     </section>
   );
 }

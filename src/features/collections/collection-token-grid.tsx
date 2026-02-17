@@ -1,8 +1,9 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import Link from "next/link";
 import type { NormalizedToken } from "@cartridge/arcade/marketplace";
-import { useMarketplaceCollectionTokens } from "@cartridge/arcade/marketplace/react";
+import { useCollectionTokensQuery } from "@/lib/marketplace/hooks";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -77,17 +78,14 @@ export function CollectionTokenGrid({
   const [cursor, setCursor] = useState<string | null | undefined>(undefined);
   const [tokens, setTokens] = useState<NormalizedToken[]>([]);
 
-  const tokenQuery = useMarketplaceCollectionTokens(
-    {
-      address,
-      project: projectId,
-      limit,
-      tokenIds,
-      cursor,
-      fetchImages: true,
-    },
-    Boolean(address),
-  );
+  const tokenQuery = useCollectionTokensQuery({
+    address,
+    project: projectId,
+    limit,
+    tokenIds,
+    cursor,
+    fetchImages: true,
+  });
 
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect
@@ -95,7 +93,7 @@ export function CollectionTokenGrid({
   }, [address, projectId, limit, tokenIdsKey]);
 
   useEffect(() => {
-    if (tokenQuery.status !== "success") {
+    if (!tokenQuery.isSuccess) {
       return;
     }
 
@@ -108,7 +106,7 @@ export function CollectionTokenGrid({
 
       return tokenSignature(previous) === tokenSignature(next) ? previous : next;
     });
-  }, [cursor, tokenQuery.data, tokenQuery.status]);
+  }, [cursor, tokenQuery.data, tokenQuery.isSuccess]);
 
   useEffect(() => {
     onTokensChange?.(tokens);
@@ -126,7 +124,7 @@ export function CollectionTokenGrid({
 
   return (
     <section className="space-y-4">
-      {tokenQuery.status === "loading" && tokens.length === 0 ? (
+      {tokenQuery.isLoading && tokens.length === 0 ? (
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
           {Array.from({ length: 6 }).map((_, index) => (
             <Card key={`token-skeleton-${index}`}>
@@ -139,7 +137,7 @@ export function CollectionTokenGrid({
         </div>
       ) : null}
 
-      {tokenQuery.status === "error" ? (
+      {tokenQuery.isError ? (
         <Card className="border-dashed">
           <CardContent className="pt-6 text-sm text-muted-foreground">
             Failed to load tokens.
@@ -147,38 +145,44 @@ export function CollectionTokenGrid({
         </Card>
       ) : null}
 
-      {tokenQuery.status !== "loading" ? (
+      {!tokenQuery.isLoading ? (
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
           {visibleTokens.map((token) => {
             const image = tokenImage(token);
             return (
-              <Card key={tokenId(token)}>
-                <CardContent
-                  aria-label={`token-${tokenId(token)}`}
-                  className="space-y-2 p-3"
-                  role="article"
-                >
-                  <div className="flex aspect-square items-center justify-center bg-muted">
-                    {image ? (
-                      // eslint-disable-next-line @next/next/no-img-element
-                      <img
-                        alt={tokenName(token)}
-                        className="h-full w-full object-cover"
-                        src={image}
-                      />
-                    ) : (
-                      <span className="text-xs text-muted-foreground">No Image</span>
-                    )}
-                  </div>
-                  <p className="text-sm font-medium">{tokenName(token)}</p>
-                </CardContent>
-              </Card>
+              <Link
+                key={tokenId(token)}
+                href={`/collections/${address}/${tokenId(token)}`}
+                className="block"
+              >
+                <Card>
+                  <CardContent
+                    aria-label={`token-${tokenId(token)}`}
+                    className="space-y-2 p-3"
+                    role="article"
+                  >
+                    <div className="flex aspect-square items-center justify-center bg-muted">
+                      {image ? (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img
+                          alt={tokenName(token)}
+                          className="h-full w-full object-cover"
+                          src={image}
+                        />
+                      ) : (
+                        <span className="text-xs text-muted-foreground">No Image</span>
+                      )}
+                    </div>
+                    <p className="text-sm font-medium">{tokenName(token)}</p>
+                  </CardContent>
+                </Card>
+              </Link>
             );
           })}
         </div>
       ) : null}
 
-      {tokenQuery.status === "success" && visibleTokens.length === 0 ? (
+      {tokenQuery.isSuccess && visibleTokens.length === 0 ? (
         <Card className="border-dashed">
           <CardContent className="pt-6 text-sm text-muted-foreground">
             No tokens matched the active trait filters.

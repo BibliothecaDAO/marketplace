@@ -4,12 +4,12 @@ import { describe, expect, it, vi } from "vitest";
 import { CollectionTokenGrid } from "@/features/collections/collection-token-grid";
 import type { ActiveFilters } from "@/lib/marketplace/traits";
 
-const { mockUseMarketplaceCollectionTokens } = vi.hoisted(() => ({
-  mockUseMarketplaceCollectionTokens: vi.fn(),
+const { mockUseCollectionTokensQuery } = vi.hoisted(() => ({
+  mockUseCollectionTokensQuery: vi.fn(),
 }));
 
-vi.mock("@cartridge/arcade/marketplace/react", () => ({
-  useMarketplaceCollectionTokens: mockUseMarketplaceCollectionTokens,
+vi.mock("@/lib/marketplace/hooks", () => ({
+  useCollectionTokensQuery: mockUseCollectionTokensQuery,
 }));
 
 function token(tokenId: string, overrides?: Record<string, unknown>) {
@@ -23,7 +23,7 @@ function token(tokenId: string, overrides?: Record<string, unknown>) {
 describe("collection token grid", () => {
   it("token_grid_renders_first_page_with_skeleton_then_data", async () => {
     let isLoaded = false;
-    mockUseMarketplaceCollectionTokens.mockImplementation(() => {
+    mockUseCollectionTokensQuery.mockImplementation(() => {
       if (isLoaded) {
         return {
           data: {
@@ -33,19 +33,23 @@ describe("collection token grid", () => {
             },
             error: null,
           },
-          status: "success",
+          isLoading: false,
+          isSuccess: true,
+          isError: false,
           error: null,
           isFetching: false,
-          refresh: vi.fn(),
+          refetch: vi.fn(),
         };
       }
 
       return {
-        data: null,
-        status: "loading",
+        data: undefined,
+        isLoading: true,
+        isSuccess: false,
+        isError: false,
         error: null,
         isFetching: true,
-        refresh: vi.fn(),
+        refetch: vi.fn(),
       };
     });
 
@@ -64,7 +68,7 @@ describe("collection token grid", () => {
   });
 
   it("token_grid_loads_next_cursor_page_without_duplicates", async () => {
-    mockUseMarketplaceCollectionTokens.mockImplementation((options) => {
+    mockUseCollectionTokensQuery.mockImplementation((options) => {
       const cursor = options?.cursor;
       if (cursor === "cursor-2") {
         return {
@@ -75,10 +79,12 @@ describe("collection token grid", () => {
             },
             error: null,
           },
-          status: "success",
+          isLoading: false,
+          isSuccess: true,
+          isError: false,
           error: null,
           isFetching: false,
-          refresh: vi.fn(),
+          refetch: vi.fn(),
         };
       }
 
@@ -90,10 +96,12 @@ describe("collection token grid", () => {
           },
           error: null,
         },
-        status: "success",
+        isLoading: false,
+        isSuccess: true,
+        isError: false,
         error: null,
         isFetching: false,
-        refresh: vi.fn(),
+        refetch: vi.fn(),
       };
     });
 
@@ -111,7 +119,7 @@ describe("collection token grid", () => {
   });
 
   it("token_grid_respects_limit_and_tokenIds_filters", () => {
-    mockUseMarketplaceCollectionTokens.mockReturnValue({
+    mockUseCollectionTokensQuery.mockReturnValue({
       data: {
         page: {
           tokens: [],
@@ -119,10 +127,12 @@ describe("collection token grid", () => {
         },
         error: null,
       },
-      status: "success",
+      isLoading: false,
+      isSuccess: true,
+      isError: false,
       error: null,
       isFetching: false,
-      refresh: vi.fn(),
+      refetch: vi.fn(),
     });
 
     render(
@@ -134,19 +144,18 @@ describe("collection token grid", () => {
       />,
     );
 
-    expect(mockUseMarketplaceCollectionTokens).toHaveBeenCalledWith(
+    expect(mockUseCollectionTokensQuery).toHaveBeenCalledWith(
       expect.objectContaining({
         address: "0xabc",
         project: "project-a",
         limit: 10,
         tokenIds: ["7", "9"],
       }),
-      true,
     );
   });
 
   it("token_grid_uses_image_fallback_when_missing", async () => {
-    mockUseMarketplaceCollectionTokens.mockReturnValue({
+    mockUseCollectionTokensQuery.mockReturnValue({
       data: {
         page: {
           tokens: [
@@ -162,10 +171,12 @@ describe("collection token grid", () => {
         },
         error: null,
       },
-      status: "success",
+      isLoading: false,
+      isSuccess: true,
+      isError: false,
       error: null,
       isFetching: false,
-      refresh: vi.fn(),
+      refetch: vi.fn(),
     });
 
     render(<CollectionTokenGrid address="0xabc" projectId="project-a" />);
@@ -176,9 +187,46 @@ describe("collection token grid", () => {
     );
   });
 
+  it("token_cards_link_to_token_detail_page", () => {
+    mockUseCollectionTokensQuery.mockReturnValue({
+      data: {
+        page: {
+          tokens: [
+            token("1", {
+              image: "https://cdn.example/1.png",
+              metadata: { name: "Token #1" },
+            }),
+            token("2", {
+              image: "https://cdn.example/2.png",
+              metadata: { name: "Token #2" },
+            }),
+          ],
+          nextCursor: null,
+        },
+        error: null,
+      },
+      isLoading: false,
+      isSuccess: true,
+      isError: false,
+      error: null,
+      isFetching: false,
+      refetch: vi.fn(),
+    });
+
+    render(<CollectionTokenGrid address="0xabc" projectId="project-a" />);
+
+    const link = screen.getByRole("link", { name: "token-1" });
+    expect(link).toBeVisible();
+    expect(link).toHaveAttribute("href", "/collections/0xabc/1");
+
+    const link2 = screen.getByRole("link", { name: "token-2" });
+    expect(link2).toBeVisible();
+    expect(link2).toHaveAttribute("href", "/collections/0xabc/2");
+  });
+
   it("token_grid_filters_tokens_by_active_filters", async () => {
     const filters: ActiveFilters = { Background: new Set(["Blue"]) };
-    mockUseMarketplaceCollectionTokens.mockReturnValue({
+    mockUseCollectionTokensQuery.mockReturnValue({
       data: {
         page: {
           tokens: [
@@ -199,10 +247,12 @@ describe("collection token grid", () => {
         },
         error: null,
       },
-      status: "success",
+      isLoading: false,
+      isSuccess: true,
+      isError: false,
       error: null,
       isFetching: false,
-      refresh: vi.fn(),
+      refetch: vi.fn(),
     });
 
     render(
