@@ -1,36 +1,70 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Biblio Marketplace
 
-## Getting Started
+Next.js marketplace scaffold using:
+- `@cartridge/arcade` marketplace SDK
+- `shadcn/ui` only for UI primitives
+- Tailwind CSS theme tokens/utilities
 
-First, run the development server:
+## Quick Start
+
+```bash
+npm install
+cp .env.example .env.local
+npm run dev
+```
+
+Open `http://localhost:3000`.
+
+## Environment Variables
+
+Configure these in `.env.local`:
+
+- `NEXT_PUBLIC_MARKETPLACE_CHAIN_ID`
+  - `SN_MAIN`, `SN_SEPOLIA`, or a `0x...` chain id
+- `NEXT_PUBLIC_MARKETPLACE_DEFAULT_PROJECT`
+  - optional Arcade project id
+- `NEXT_PUBLIC_MARKETPLACE_COLLECTIONS`
+  - comma-separated `address|name|projectId` entries
+
+Example:
+
+```env
+NEXT_PUBLIC_MARKETPLACE_CHAIN_ID=SN_SEPOLIA
+NEXT_PUBLIC_MARKETPLACE_DEFAULT_PROJECT=
+NEXT_PUBLIC_MARKETPLACE_COLLECTIONS=0x123...|Genesis|project-a,0x456...|Artifacts|project-b
+```
+
+## Scripts
 
 ```bash
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+npm run lint
+npm run typecheck
+npm run test
+npm run test:coverage
+npm run test:e2e:install
+npm run test:e2e
+npm run test:e2e:screenshots
+npm run ci:feature-routes
+npm run build
+npm run start
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+## CI
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+GitHub Actions workflow: `.github/workflows/ci.yml`
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+Pipeline stages:
+- lint
+- typecheck
+- unit tests
+- build
+- Playwright e2e
+- feature screenshot capture (when frontend feature files changed)
 
-## Learn More
+Feature screenshots are uploaded as workflow artifacts under `feature-screenshots-*`.
 
-To learn more about Next.js, take a look at the following resources:
+## Scope
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
-
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
-
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+Detailed phased scope is in `docs/SCOPE.md`.
+Detailed TDD product requirements are in `docs/TDD-PRD.md`.
