@@ -3,36 +3,48 @@ import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { CollectionMarketPanel } from "@/features/collections/collection-market-panel";
 
-const { mockUseMarketplaceCollectionOrders, mockUseMarketplaceCollectionListings } =
+const { mockUseCollectionOrdersQuery, mockUseCollectionListingsQuery } =
   vi.hoisted(() => ({
-    mockUseMarketplaceCollectionOrders: vi.fn(),
-    mockUseMarketplaceCollectionListings: vi.fn(),
+    mockUseCollectionOrdersQuery: vi.fn(),
+    mockUseCollectionListingsQuery: vi.fn(),
   }));
 
-vi.mock("@cartridge/arcade/marketplace/react", () => ({
-  useMarketplaceCollectionOrders: mockUseMarketplaceCollectionOrders,
-  useMarketplaceCollectionListings: mockUseMarketplaceCollectionListings,
+vi.mock("@/lib/marketplace/hooks", () => ({
+  useCollectionOrdersQuery: mockUseCollectionOrdersQuery,
+  useCollectionListingsQuery: mockUseCollectionListingsQuery,
 }));
+
+function successQuery(data: unknown) {
+  return {
+    data,
+    isLoading: false,
+    isSuccess: true,
+    isError: false,
+    error: null,
+    isFetching: false,
+    refetch: vi.fn(),
+  };
+}
+
+function errorQuery(error: Error) {
+  return {
+    data: undefined,
+    isLoading: false,
+    isSuccess: false,
+    isError: true,
+    error,
+    isFetching: false,
+    refetch: vi.fn(),
+  };
+}
 
 describe("collection market panel", () => {
   beforeEach(() => {
-    mockUseMarketplaceCollectionOrders.mockReset();
-    mockUseMarketplaceCollectionListings.mockReset();
+    mockUseCollectionOrdersQuery.mockReset();
+    mockUseCollectionListingsQuery.mockReset();
 
-    mockUseMarketplaceCollectionOrders.mockReturnValue({
-      data: [],
-      status: "success",
-      error: null,
-      isFetching: false,
-      refresh: vi.fn(),
-    });
-    mockUseMarketplaceCollectionListings.mockReturnValue({
-      data: [],
-      status: "success",
-      error: null,
-      isFetching: false,
-      refresh: vi.fn(),
-    });
+    mockUseCollectionOrdersQuery.mockReturnValue(successQuery([]));
+    mockUseCollectionListingsQuery.mockReturnValue(successQuery([]));
   });
 
   it("orders_tab_filters_by_status_and_category", async () => {
@@ -43,7 +55,7 @@ describe("collection market panel", () => {
     await user.type(screen.getByLabelText(/order category/i), "Buy");
 
     await waitFor(() => {
-      const latest = mockUseMarketplaceCollectionOrders.mock.calls.at(-1)?.[0];
+      const latest = mockUseCollectionOrdersQuery.mock.calls.at(-1)?.[0];
       expect(latest).toMatchObject({
         collection: "0xabc",
         status: "Placed",
@@ -60,7 +72,7 @@ describe("collection market panel", () => {
     await user.type(screen.getByLabelText(/listing token id/i), "42");
 
     await waitFor(() => {
-      const latest = mockUseMarketplaceCollectionListings.mock.calls.at(-1)?.[0];
+      const latest = mockUseCollectionListingsQuery.mock.calls.at(-1)?.[0];
       expect(latest).toMatchObject({
         collection: "0xabc",
         tokenId: "42",
@@ -77,7 +89,7 @@ describe("collection market panel", () => {
     await user.click(screen.getByRole("switch", { name: /verify ownership/i }));
 
     await waitFor(() => {
-      const latest = mockUseMarketplaceCollectionListings.mock.calls.at(-1)?.[0];
+      const latest = mockUseCollectionListingsQuery.mock.calls.at(-1)?.[0];
       expect(latest).toMatchObject({
         verifyOwnership: true,
       });
@@ -85,27 +97,19 @@ describe("collection market panel", () => {
   });
 
   it("orders_and_listings_errors_are_isolated_per_panel", async () => {
-    mockUseMarketplaceCollectionOrders.mockReturnValue({
-      data: null,
-      status: "error",
-      error: new Error("orders endpoint failed"),
-      isFetching: false,
-      refresh: vi.fn(),
-    });
-    mockUseMarketplaceCollectionListings.mockReturnValue({
-      data: [
+    mockUseCollectionOrdersQuery.mockReturnValue(
+      errorQuery(new Error("orders endpoint failed")),
+    );
+    mockUseCollectionListingsQuery.mockReturnValue(
+      successQuery([
         {
           id: 10,
           tokenId: 7,
           owner: "0x1",
           price: 100,
         },
-      ],
-      status: "success",
-      error: null,
-      isFetching: false,
-      refresh: vi.fn(),
-    });
+      ]),
+    );
 
     const user = userEvent.setup();
     render(<CollectionMarketPanel address="0xabc" projectId="project-a" />);

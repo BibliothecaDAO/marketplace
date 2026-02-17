@@ -13,7 +13,7 @@ export default async function CollectionPage({
   const { cursor } = await searchParams;
 
   return (
-    <main className="mx-auto flex min-h-screen w-full max-w-4xl items-start px-4 py-10 sm:px-8">
+    <main className="flex min-h-screen w-full items-start px-4 py-6 sm:px-6 lg:px-8">
       <CollectionRouteContainer address={address} cursor={cursor ?? null} />
     </main>
   );

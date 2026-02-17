@@ -4,26 +4,31 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { CollectionRouteContainer } from "@/features/collections/collection-route-container";
 import type { SeedCollection } from "@/lib/marketplace/config";
 
-const {
-  mockUseMarketplaceCollection,
-  mockUseMarketplaceCollectionTokens,
-  mockUseMarketplaceCollectionOrders,
-  mockUseMarketplaceCollectionListings,
-  mockPush,
-} =
-  vi.hoisted(() => ({
-    mockUseMarketplaceCollection: vi.fn(),
-    mockUseMarketplaceCollectionTokens: vi.fn(),
-    mockUseMarketplaceCollectionOrders: vi.fn(),
-    mockUseMarketplaceCollectionListings: vi.fn(),
-    mockPush: vi.fn(),
-  }));
+const { mockUseCollectionQuery, mockPush } = vi.hoisted(() => ({
+  mockUseCollectionQuery: vi.fn(),
+  mockPush: vi.fn(),
+}));
 
-vi.mock("@cartridge/arcade/marketplace/react", () => ({
-  useMarketplaceCollection: mockUseMarketplaceCollection,
-  useMarketplaceCollectionTokens: mockUseMarketplaceCollectionTokens,
-  useMarketplaceCollectionOrders: mockUseMarketplaceCollectionOrders,
-  useMarketplaceCollectionListings: mockUseMarketplaceCollectionListings,
+vi.mock("@/lib/marketplace/hooks", () => ({
+  useCollectionQuery: mockUseCollectionQuery,
+}));
+
+vi.mock("@/features/collections/collection-token-grid", () => ({
+  CollectionTokenGrid: (props: Record<string, unknown>) => (
+    <div data-testid="collection-token-grid">Token Grid: {props.address as string}</div>
+  ),
+}));
+
+vi.mock("@/features/collections/collection-market-panel", () => ({
+  CollectionMarketPanel: (props: Record<string, unknown>) => (
+    <div data-testid="collection-market-panel">Market Panel: {props.address as string}</div>
+  ),
+}));
+
+vi.mock("@/features/collections/trait-filter-sidebar", () => ({
+  TraitFilterSidebar: () => (
+    <div data-testid="trait-filter-sidebar">Trait Sidebar</div>
+  ),
 }));
 
 vi.mock("next/navigation", () => ({
@@ -41,47 +46,19 @@ const collections: SeedCollection[] = [
 
 describe("collection route container", () => {
   beforeEach(() => {
-    mockUseMarketplaceCollection.mockReset();
-    mockUseMarketplaceCollectionTokens.mockReset();
-    mockUseMarketplaceCollectionOrders.mockReset();
-    mockUseMarketplaceCollectionListings.mockReset();
+    mockUseCollectionQuery.mockReset();
     mockPush.mockReset();
-    mockUseMarketplaceCollectionTokens.mockReturnValue({
-      data: {
-        page: {
-          tokens: [],
-          nextCursor: null,
-        },
-        error: null,
-      },
-      status: "success",
-      error: null,
-      isFetching: false,
-      refresh: vi.fn(),
-    });
-    mockUseMarketplaceCollectionOrders.mockReturnValue({
-      data: [],
-      status: "success",
-      error: null,
-      isFetching: false,
-      refresh: vi.fn(),
-    });
-    mockUseMarketplaceCollectionListings.mockReturnValue({
-      data: [],
-      status: "success",
-      error: null,
-      isFetching: false,
-      refresh: vi.fn(),
-    });
   });
 
   it("collection_switch_uses_router_push", async () => {
-    mockUseMarketplaceCollection.mockReturnValue({
+    mockUseCollectionQuery.mockReturnValue({
       data: null,
-      status: "success",
+      isLoading: false,
+      isSuccess: true,
+      isError: false,
       error: null,
       isFetching: false,
-      refresh: vi.fn(),
+      refetch: vi.fn(),
     });
     const user = userEvent.setup();
 
