@@ -98,7 +98,7 @@ describe("collection route view", () => {
 
     render(<CollectionRouteView address="0x404" collections={collections} />);
 
-    expect(screen.getByText(/collection not found/i)).toBeVisible();
+    expect(screen.getByText(/find collection/i)).toBeVisible();
   });
 
   it("shows_tokens_tab_by_default", () => {

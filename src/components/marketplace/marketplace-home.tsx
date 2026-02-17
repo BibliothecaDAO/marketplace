@@ -12,7 +12,8 @@ export function MarketplaceHome() {
       className="w-full space-y-8 px-4 sm:px-6 lg:px-8"
     >
       {collections.length === 0 ? (
-        <p className="text-sm text-muted-foreground">
+        <p className="text-sm text-muted-foreground font-mono">
+          <span className="text-primary mr-1">$</span>
           No collections configured
         </p>
       ) : (

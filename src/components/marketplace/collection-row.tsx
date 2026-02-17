@@ -41,7 +41,7 @@ export function CollectionRow({ address, name, projectId }: CollectionRowProps) 
 
   return (
     <section className="space-y-3">
-      <h2 className="text-lg font-semibold">
+      <h2 className="text-sm font-medium tracking-widest uppercase text-muted-foreground">
         <Link href={`/collections/${address}`}>{name}</Link>
       </h2>
 
@@ -62,7 +62,10 @@ export function CollectionRow({ address, name, projectId }: CollectionRowProps) 
       ) : null}
 
       {tokenQuery.isSuccess && tokens.length === 0 ? (
-        <p className="text-sm text-muted-foreground">No tokens found</p>
+        <p className="text-sm text-muted-foreground font-mono">
+          <span className="text-primary mr-1">$</span>
+          ls tokens/ -- (empty)
+        </p>
       ) : null}
 
       {tokenQuery.isSuccess && tokens.length > 0 ? (
@@ -73,9 +76,9 @@ export function CollectionRow({ address, name, projectId }: CollectionRowProps) 
               <Link
                 key={tokenId(token)}
                 href={`/collections/${address}/${tokenId(token)}`}
-                className="block w-48 shrink-0"
+                className="group block w-48 shrink-0 transition-transform duration-150 hover:-translate-y-0.5"
               >
-                <Card>
+                <Card className="transition-colors duration-150 group-hover:border-primary/30">
                   <CardContent className="space-y-2 p-3">
                     <div className="flex aspect-square items-center justify-center bg-muted">
                       {image ? (

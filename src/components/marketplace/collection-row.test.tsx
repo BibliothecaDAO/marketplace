@@ -111,7 +111,7 @@ describe("collection row", () => {
       <CollectionRow address="0xabc" name="Empty Collection" />,
     );
 
-    expect(screen.getByText(/no tokens found/i)).toBeVisible();
+    expect(screen.getByText(/ls tokens/i)).toBeVisible();
   });
 
   it("passes_correct_args_to_hook", () => {

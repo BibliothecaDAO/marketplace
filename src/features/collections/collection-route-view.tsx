@@ -79,7 +79,7 @@ export function CollectionRouteView({
       <Card>
         <CardHeader className="space-y-3">
           <div className="flex items-center justify-between gap-3">
-            <CardTitle>Collection</CardTitle>
+            <CardTitle className="text-sm font-medium tracking-widest uppercase">Collection</CardTitle>
             <Badge variant="outline">Cursor: {cursor ?? "none"}</Badge>
           </div>
           <Select value={address} onValueChange={handleChange}>
@@ -113,8 +113,9 @@ export function CollectionRouteView({
 
           {collection.isSuccess && !collection.data ? (
             <Card className="border-dashed">
-              <CardContent className="pt-6 text-sm text-muted-foreground">
-                Collection not found.
+              <CardContent className="pt-6 text-sm text-muted-foreground font-mono">
+                <span className="text-primary mr-1">$</span>
+                find collection -- not found
               </CardContent>
             </Card>
           ) : null}

@@ -32,21 +32,23 @@ export function Header() {
   };
 
   return (
-    <header className="sticky top-0 z-50 w-full border-b bg-background">
+    <header className="sticky top-0 z-50 w-full border-b border-border/80 bg-background/95 backdrop-blur-sm">
       <div className="flex h-14 items-center justify-between px-4">
         <Link href="/" className="flex items-center gap-2">
-          <div
+          <span
             data-testid="logo-placeholder"
-            className="h-8 w-8 rounded bg-muted"
-          />
-          <span className="text-lg font-semibold">Biblio</span>
+            className="flex h-7 w-7 items-center justify-center rounded-sm border border-primary/40 bg-primary/10 text-xs font-bold text-primary"
+          >
+            {">_"}
+          </span>
+          <span className="text-sm font-medium tracking-widest uppercase text-foreground">Biblio</span>
         </Link>
 
         <div className="flex items-center gap-2">
           {isConnected && address ? (
             <span
               data-testid="wallet-address"
-              className="hidden text-xs text-muted-foreground sm:inline"
+              className="hidden rounded-sm bg-muted/50 px-2 py-0.5 text-xs text-primary font-mono sm:inline"
             >
               {formatAddress(address)}
             </span>

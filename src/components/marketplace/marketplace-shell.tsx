@@ -14,7 +14,6 @@ import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Separator } from "@/components/ui/separator";
 import { Skeleton } from "@/components/ui/skeleton";
-import { ThemePalette } from "@/components/marketplace/theme-palette";
 import { getMarketplaceRuntimeConfig } from "@/lib/marketplace/config";
 
 const runtimeConfig = getMarketplaceRuntimeConfig();
@@ -118,11 +117,9 @@ export function MarketplaceShell() {
   );
 
   return (
-    <main className="relative min-h-screen overflow-hidden bg-gradient-to-b from-background via-muted/30 to-background px-4 py-8 sm:px-8 lg:px-12">
-      <div className="pointer-events-none absolute inset-0 -z-10 bg-[radial-gradient(circle_at_top_left,var(--color-accent),transparent_40%),radial-gradient(circle_at_bottom_right,var(--color-secondary),transparent_35%)] opacity-45" />
-
+    <main className="min-h-screen bg-background px-4 py-8 sm:px-8 lg:px-12">
       <div className="mx-auto flex w-full max-w-6xl flex-col gap-6">
-        <Card className="border-border/70 bg-card/90 backdrop-blur">
+        <Card>
           <CardHeader className="gap-4 sm:flex-row sm:items-start sm:justify-between">
             <div className="space-y-2">
               <p className="text-xs tracking-[0.2em] text-muted-foreground uppercase">
@@ -230,8 +227,8 @@ export function MarketplaceShell() {
           </CardContent>
         </Card>
 
-        <div className="grid gap-6 xl:grid-cols-[2fr,1fr]">
-          <Card className="border-border/70 bg-card/90 backdrop-blur">
+        <div className="flex flex-col gap-6">
+          <Card>
             <CardHeader className="space-y-3">
               <div className="flex flex-wrap items-center justify-between gap-2">
                 <CardTitle className="text-lg">Token Grid</CardTitle>
@@ -302,8 +299,6 @@ export function MarketplaceShell() {
               )}
             </CardContent>
           </Card>
-
-          <ThemePalette />
         </div>
       </div>
     </main>

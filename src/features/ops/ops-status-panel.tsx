@@ -10,7 +10,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 function statusBadgeVariant(status: MarketplaceClientStatus) {
   switch (status) {
     case "ready":
-      return "secondary" as const;
+      return "default" as const;
     case "error":
       return "destructive" as const;
     default:
@@ -34,7 +34,7 @@ export function OpsStatusPanel() {
   return (
     <Card className="w-full">
       <CardHeader className="flex flex-row items-start justify-between gap-3">
-        <CardTitle className="text-lg">Client Status</CardTitle>
+        <CardTitle className="text-sm font-medium tracking-widest uppercase">Client Status</CardTitle>
         <Badge variant={statusBadgeVariant(status)}>{status}</Badge>
       </CardHeader>
       <CardContent className="space-y-4">
