@@ -16,8 +16,11 @@ function makeWrapper() {
   const queryClient = new QueryClient({
     defaultOptions: { queries: { retry: false, gcTime: 0 } },
   });
-  return ({ children }: { children: ReactNode }) =>
-    createElement(QueryClientProvider, { client: queryClient }, children);
+  function QueryWrapper({ children }: { children: ReactNode }) {
+    return createElement(QueryClientProvider, { client: queryClient }, children);
+  }
+  QueryWrapper.displayName = "QueryWrapper";
+  return QueryWrapper;
 }
 
 function mockClient(overrides: Record<string, unknown> = {}) {
