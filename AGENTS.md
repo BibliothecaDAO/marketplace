@@ -78,6 +78,20 @@ NEXT_PUBLIC_MARKETPLACE_DEFAULT_PROJECT=
 NEXT_PUBLIC_MARKETPLACE_COLLECTIONS=0x123...|Genesis|project-a,0x456...|Artifacts|project-b
 ```
 
+How to add collections:
+- Update `NEXT_PUBLIC_MARKETPLACE_COLLECTIONS` in `.env.local`.
+- Use comma-separated entries in this format:
+  - `address|name|projectId`
+- `address` and `name` are required.
+- `projectId` is optional.
+- Restart the dev server after changes.
+
+Example single collection:
+
+```env
+NEXT_PUBLIC_MARKETPLACE_COLLECTIONS=0xabc123...|Genesis|project-a
+```
+
 ## 6) Daily Development Workflow
 
 1. Create a branch from latest main.
