@@ -43,8 +43,8 @@ jobs:
       - name: Typecheck
         run: pnpm typecheck
 
-      - name: Unit tests
-        run: pnpm test
+      - name: Unit tests with coverage
+        run: pnpm test:coverage
 
       - name: Build
         run: pnpm build
@@ -55,28 +55,25 @@ jobs:
       - name: E2E tests
         run: pnpm test:e2e
 
-      - name: Resolve diff range
-        id: diff_range
+      - name: Resolve app page files
+        id: app_pages
         run: |
-          if [ "${{ github.event_name }}" = "pull_request" ]; then
-            echo "base_sha=${{ github.event.pull_request.base.sha }}" >> "$GITHUB_OUTPUT"
-            echo "head_sha=${{ github.event.pull_request.head.sha }}" >> "$GITHUB_OUTPUT"
-          else
-            echo "base_sha=${{ github.event.before }}" >> "$GITHUB_OUTPUT"
-            echo "head_sha=${{ github.sha }}" >> "$GITHUB_OUTPUT"
-          fi
+          APP_PAGE_FILES="$(git ls-files src/app | grep '/page.tsx$' || true)"
+          {
+            echo "files<<EOF"
+            echo "$APP_PAGE_FILES"
+            echo "EOF"
+          } >> "$GITHUB_OUTPUT"
 
-      - name: Detect feature routes
-        id: feature_routes
+      - name: Resolve screenshot routes
+        id: screenshot_routes
         env:
-          CI_BASE_SHA: ${{ steps.diff_range.outputs.base_sha }}
-          CI_HEAD_SHA: ${{ steps.diff_range.outputs.head_sha }}
+          CHANGED_FILES: ${{ steps.app_pages.outputs.files }}
         run: pnpm run ci:feature-routes
 
       - name: Capture feature screenshots
-        if: steps.feature_routes.outputs.has_routes == 'true'
         env:
-          SCREENSHOT_ROUTES_JSON: ${{ steps.feature_routes.outputs.routes_json }}
+          SCREENSHOT_ROUTES_JSON: ${{ steps.screenshot_routes.outputs.routes_json }}
         run: pnpm run test:e2e:screenshots
 
       - name: Upload feature screenshots
