@@ -1,7 +1,7 @@
 # Biblio Marketplace TDD PRD
 
-Version: 1.0  
-Date: February 17, 2026  
+Version: 1.1  
+Date: February 18, 2026  
 Target SDK: `@cartridge/arcade@0.3.12` (`@cartridge/arcade/marketplace`, `@cartridge/arcade/marketplace/react`)
 
 ## 1. Product Intent
@@ -62,10 +62,15 @@ Build a production-grade marketplace web app for multiple collections with:
    - Token metadata and media
    - Orders/listings history
    - Fee and royalty estimate card
-4. `/portfolio`
+4. Global cart sidebar
+   - Header trigger in top-right
+   - Listing-based cart rows keyed by `orderId`
+   - Inline per-item validation error rows
+   - One-click buy-all submit
+5. `/portfolio`
    - Address input
    - Token balances with filters (contracts, token ids, project)
-5. `/ops`
+6. `/ops`
    - Client status (`idle/loading/ready/error`)
    - Config diagnostics and refresh controls
 
@@ -172,6 +177,44 @@ Acceptance criteria:
 1. All interactive controls are reachable by keyboard.
 2. Lighthouse accessibility score >= 95 on primary routes.
 
+## FR-11 Cart state and selection model
+
+1. Cart entries represent concrete listings and must include `orderId`, `collection`, `tokenId`, `price`, and `currency`.
+2. Cart add behavior from collection and home surfaces resolves to the cheapest active listing for a token.
+3. Token detail route exposes `Add to cart` as the buy action for this phase.
+4. Cart supports one currency only and blocks mixed-currency additions.
+5. Cart size is capped at 25 items.
+6. Cart persists locally using Zustand persistence.
+
+Acceptance criteria:
+1. Duplicate `orderId` adds are deduplicated.
+2. Attempting to exceed 25 items is rejected with visible feedback.
+3. Mixed-currency adds are rejected with visible feedback.
+4. Cart state restores after reload from local persistence.
+
+## FR-12 Atomic cart checkout and validation
+
+1. Checkout pre-validates each selected listing before transaction submission.
+2. If any listing is stale, changed, or invalid, checkout is strictly blocked.
+3. Checkout submits a single transaction for all valid selected listings.
+4. Cart totals include marketplace fee values in checkout summary.
+5. Validation failures are rendered per item as inline error rows.
+
+Acceptance criteria:
+1. Any stale listing prevents submission and highlights each failing row.
+2. Successful submission path emits one transaction hash for the entire cart.
+3. Fee-inclusive total updates as cart composition changes.
+
+## FR-13 Sweeper-ready candidate intake
+
+1. Sweeper candidate generation path can auto-add listings to cart.
+2. Auto-add strategy prioritizes lowest-value listings.
+3. Candidate intake respects currency and max-size constraints.
+
+Acceptance criteria:
+1. Candidate intake fills cart in ascending price order.
+2. Intake stops at 25 items or first disallowed currency.
+
 ## 8. SDK Coverage Matrix (Must Implement)
 
 | Capability | SDK API | Product Surface | Required |
@@ -184,6 +227,7 @@ Acceptance criteria:
 | Collection orders | `useMarketplaceCollectionOrders` + `getCollectionOrders` | Orders tab, filters | Yes |
 | Collection listings | `useMarketplaceCollectionListings` + `listCollectionListings` | Listings tab, count cards | Yes |
 | Token detail | `useMarketplaceToken` + `getToken` | Token detail route | Yes |
+| Buy execution | `ArcadeProvider.marketplace.execute` + `buildExecuteCalldata` | Cart buy-all single transaction | Yes |
 | Token balances | `useMarketplaceTokenBalances` + `fetchTokenBalances` | Portfolio route | Yes |
 | Marketplace fees | `useMarketplaceFees` + `getFees` | Fees panel | Yes |
 | Royalty estimate | `useMarketplaceRoyaltyFee` + `getRoyaltyFee` | Token pricing card | Yes |
@@ -207,10 +251,12 @@ Acceptance criteria:
 3. UI feature modules:
    - `src/features/collections/*`
    - `src/features/tokens/*`
+   - `src/features/cart/*`
    - `src/features/portfolio/*`
    - `src/features/ops/*`
 4. Shared UI primitives only from `src/components/ui/*`.
 5. URL state helpers for filters/cursor/search.
+6. Zustand persisted store for cart state and checkout lifecycle.
 
 ## 10. TDD Governance Rules
 
@@ -360,6 +406,73 @@ Implementation after red:
 Refactor:
 1. Remove duplicated state patterns and dead code.
 
+## Epic I: Cart store and sidebar UX
+
+Tests first:
+1. `cart_store_dedupes_by_order_id`
+2. `cart_store_rejects_mixed_currency`
+3. `cart_store_enforces_max_25_items`
+4. `cart_store_persists_and_rehydrates`
+5. `header_cart_trigger_opens_top_right_sidebar`
+6. `cart_sidebar_renders_inline_item_errors`
+
+Implementation after red:
+1. Introduce persisted Zustand cart store with selectors.
+2. Add top-right header cart trigger and sidebar.
+3. Render listing rows keyed by `orderId`.
+
+Refactor:
+1. Extract cart selectors and invariant guard helpers.
+
+## Epic J: Cheapest-listing add flows and detail buy UX
+
+Tests first:
+1. `collection_and_home_add_to_cart_resolves_cheapest_listing`
+2. `token_detail_exposes_add_to_cart_only`
+3. `add_to_cart_blocks_mixed_currency_and_surfaces_row_error`
+4. `add_to_cart_blocks_when_cart_at_capacity`
+
+Implementation after red:
+1. Wire add-to-cart controls in collection/home/token detail surfaces.
+2. Resolve cheapest listing using listing query results.
+3. Surface add failure reasons inline in cart rows.
+
+Refactor:
+1. Consolidate listing-to-cart adapter utilities.
+
+## Epic K: Atomic checkout, strict blocking, and fee total
+
+Tests first:
+1. `checkout_blocks_when_any_listing_is_stale`
+2. `checkout_renders_per_item_inline_validation_errors`
+3. `checkout_submits_single_transaction_for_all_items`
+4. `checkout_total_includes_marketplace_fee`
+5. `successful_checkout_clears_purchased_rows`
+
+Implementation after red:
+1. Build preflight validation pass across cart items.
+2. Build execute multicall payload from validated listings.
+3. Submit one transaction and update cart state on success.
+4. Render fee-inclusive summary block in sidebar.
+
+Refactor:
+1. Extract checkout orchestrator from sidebar UI component.
+
+## Epic L: Sweeper candidate auto-add foundation
+
+Tests first:
+1. `sweeper_candidate_intake_adds_lowest_price_first`
+2. `sweeper_candidate_intake_stops_at_25_items`
+3. `sweeper_candidate_intake_respects_single_currency_rule`
+
+Implementation after red:
+1. Add candidate intake API on cart store.
+2. Sort candidate listings by price ascending before insertion.
+3. Reuse cart invariant guards for intake behavior.
+
+Refactor:
+1. Share candidate normalization across sweeper and manual add flows.
+
 ## 13. Definition of Done
 
 1. Every SDK capability in Section 8 has:
@@ -377,13 +490,21 @@ Refactor:
    - This PRD
    - Route-level feature docs
    - Env and runbook updates
+6. Cart constraints hold under tests:
+   - listing-based `orderId` identity
+   - one currency only
+   - max 25 items
+   - strict stale-block checkout
+   - single transaction submit
 
 ## 14. Delivery Plan
 
 1. Milestone M1: Epics A-B-C (foundation browsing)
 2. Milestone M2: Epics D-E (market and trait intelligence)
 3. Milestone M3: Epics F-G (detail economics and portfolio)
-4. Milestone M4: Epic H + release hardening
+4. Milestone M4: Epic H (UX hardening)
+5. Milestone M5: Epics I-J (cart foundation and add flows)
+6. Milestone M6: Epics K-L (atomic checkout and sweeper intake)
 
 ## 15. Risks and Mitigations
 
@@ -395,10 +516,14 @@ Refactor:
    - Mitigation: cursor pagination, incremental rendering, and precomputed filter slices.
 4. Runtime incompatibilities
    - Mitigation: lock Node and dependency versions in CI, add startup diagnostics in `/ops`.
+5. Cart transaction failure and stale listings
+   - Mitigation: strict preflight validation, inline row-level errors, and one-transaction submission path.
+6. Currency mismatches in mixed listing sets
+   - Mitigation: invariant guard in store to block mixed-currency cart composition.
 
 ## 16. Immediate Next Step
 
-Implement Milestone M1 strictly by TDD:
-1. Add test tooling (Vitest, RTL, MSW, Playwright).
-2. Write failing tests for Epics A-B-C.
-3. Build only the minimum code needed to pass those tests.
+Implement Milestone M5 strictly by TDD:
+1. Add failing tests for Epic I cart invariants and sidebar UX.
+2. Build minimal Zustand persisted store and header/sidebar integration.
+3. Continue with Epic J cheapest-listing add flows.

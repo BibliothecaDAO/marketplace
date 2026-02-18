@@ -22,32 +22,38 @@ jobs:
         with:
           fetch-depth: 0
 
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10.8.1
+
       - name: Setup Node
         uses: actions/setup-node@v4
         with:
           node-version: 20
-          cache: npm
+          cache: pnpm
+          cache-dependency-path: pnpm-lock.yaml
 
       - name: Install dependencies
-        run: npm ci
+        run: pnpm install --frozen-lockfile
 
       - name: Lint
-        run: npm run lint
+        run: pnpm lint
 
       - name: Typecheck
-        run: npm run typecheck
+        run: pnpm typecheck
 
       - name: Unit tests
-        run: npm test
+        run: pnpm test
 
       - name: Build
-        run: npm run build
+        run: pnpm build
 
       - name: Install Playwright browser
-        run: npx playwright install --with-deps chromium
+        run: pnpm exec playwright install --with-deps chromium
 
       - name: E2E tests
-        run: npm run test:e2e
+        run: pnpm test:e2e
 
       - name: Resolve diff range
         id: diff_range
@@ -65,13 +71,13 @@ jobs:
         env:
           CI_BASE_SHA: ${{ steps.diff_range.outputs.base_sha }}
           CI_HEAD_SHA: ${{ steps.diff_range.outputs.head_sha }}
-        run: npm run ci:feature-routes
+        run: pnpm run ci:feature-routes
 
       - name: Capture feature screenshots
         if: steps.feature_routes.outputs.has_routes == 'true'
         env:
           SCREENSHOT_ROUTES_JSON: ${{ steps.feature_routes.outputs.routes_json }}
-        run: npm run test:e2e:screenshots
+        run: pnpm run test:e2e:screenshots
 
       - name: Upload feature screenshots
         if: always()

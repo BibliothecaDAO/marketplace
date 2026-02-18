@@ -1,10 +1,24 @@
 "use client";
 
 import Link from "next/link";
-import type { NormalizedToken } from "@cartridge/arcade/marketplace";
-import { useCollectionTokensQuery } from "@/lib/marketplace/hooks";
+import {
+  useCollectionListingsQuery,
+  useCollectionTokensQuery,
+} from "@/lib/marketplace/hooks";
+import {
+  displayTokenId,
+  tokenId,
+  tokenPrice,
+} from "@/lib/marketplace/token-display";
+import { MarketplaceTokenCard } from "@/components/marketplace/token-card";
+import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
+import {
+  cartItemFromTokenListing,
+  cheapestListingByTokenId,
+} from "@/features/cart/listing-utils";
+import { useCartStore } from "@/features/cart/store/cart-store";
 
 type CollectionRowProps = {
   address: string;
@@ -12,32 +26,22 @@ type CollectionRowProps = {
   projectId?: string;
 };
 
-function tokenId(token: NormalizedToken) {
-  return String(token.token_id ?? "unknown");
-}
-
-function tokenName(token: NormalizedToken) {
-  const meta = token.metadata as Record<string, unknown> | null;
-  const name = meta?.name;
-  return typeof name === "string" && name.trim() ? name : `Token #${tokenId(token)}`;
-}
-
-function tokenImage(token: NormalizedToken) {
-  if (token.image) return token.image;
-  const meta = token.metadata as Record<string, unknown> | null;
-  const source = meta?.image ?? meta?.image_url;
-  return typeof source === "string" && source.length > 0 ? source : null;
-}
-
 export function CollectionRow({ address, name, projectId }: CollectionRowProps) {
+  const addItem = useCartStore((state) => state.addItem);
   const tokenQuery = useCollectionTokensQuery({
     address,
     project: projectId,
     limit: 12,
     fetchImages: true,
   });
+  const listingQuery = useCollectionListingsQuery({
+    collection: address,
+    projectId,
+    verifyOwnership: false,
+  });
 
   const tokens = tokenQuery.data?.page?.tokens ?? [];
+  const listingPrices = cheapestListingByTokenId(listingQuery.data);
 
   return (
     <section className="space-y-3">
@@ -70,39 +74,34 @@ export function CollectionRow({ address, name, projectId }: CollectionRowProps) 
 
       {tokenQuery.isSuccess && tokens.length > 0 ? (
         <div className="flex gap-3 overflow-x-auto pb-2">
-          {tokens.map((token) => {
-            const image = tokenImage(token);
-            return (
-              <Link
-                key={tokenId(token)}
+          {tokens.map((token) => (
+            <div key={tokenId(token)} className="w-48 shrink-0 space-y-2">
+              <MarketplaceTokenCard
                 href={`/collections/${address}/${tokenId(token)}`}
-                className="group block w-48 shrink-0 transition-transform duration-150 hover:-translate-y-0.5"
+                price={listingPrices.get(displayTokenId(token))?.price ?? tokenPrice(token)}
+                token={token}
+              />
+              <Button
+                className="w-full"
+                disabled={!listingPrices.get(displayTokenId(token))}
+                onClick={() => {
+                  const listing = listingPrices.get(displayTokenId(token));
+                  if (!listing) {
+                    return;
+                  }
+
+                  addItem(
+                    cartItemFromTokenListing(token, address, listing, projectId),
+                  );
+                }}
+                size="sm"
+                type="button"
+                variant="outline"
               >
-                <Card className="transition-colors duration-150 group-hover:border-primary/30">
-                  <CardContent className="space-y-2 p-3">
-                    <div className="flex aspect-square items-center justify-center bg-muted">
-                      {image ? (
-                        // eslint-disable-next-line @next/next/no-img-element
-                        <img
-                          alt={tokenName(token)}
-                          className="h-full w-full object-cover"
-                          src={image}
-                        />
-                      ) : (
-                        <span className="text-xs text-muted-foreground">
-                          No Image
-                        </span>
-                      )}
-                    </div>
-                    <p className="text-sm font-medium">{tokenName(token)}</p>
-                    <p className="text-xs text-muted-foreground">
-                      #{tokenId(token)}
-                    </p>
-                  </CardContent>
-                </Card>
-              </Link>
-            );
-          })}
+                Add to cart
+              </Button>
+            </div>
+          ))}
         </div>
       ) : null}
     </section>

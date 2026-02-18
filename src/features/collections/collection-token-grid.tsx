@@ -1,16 +1,30 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import Link from "next/link";
 import type { NormalizedToken } from "@cartridge/arcade/marketplace";
-import { useCollectionTokensQuery } from "@/lib/marketplace/hooks";
+import {
+  useCollectionListingsQuery,
+  useCollectionTokensQuery,
+} from "@/lib/marketplace/hooks";
+import {
+  displayTokenId,
+  tokenId,
+  tokenPrice,
+} from "@/lib/marketplace/token-display";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
+import { MarketplaceTokenCard } from "@/components/marketplace/token-card";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
   type ActiveFilters,
   filterTokensByActiveFilters,
 } from "@/lib/marketplace/traits";
+import { cn } from "@/lib/utils";
+import {
+  cartItemFromTokenListing,
+  cheapestListingByTokenId,
+} from "@/features/cart/listing-utils";
+import { useCartStore } from "@/features/cart/store/cart-store";
 
 type CollectionTokenGridProps = {
   address: string;
@@ -21,36 +35,19 @@ type CollectionTokenGridProps = {
   onTokensChange?: (tokens: NormalizedToken[]) => void;
 };
 
-function tokenId(token: NormalizedToken) {
-  return String(token.token_id ?? "unknown");
-}
+type GridDensity = "compact" | "standard" | "comfort";
 
-function tokenName(token: NormalizedToken) {
-  if (token.metadata && typeof token.metadata === "object") {
-    const name = (token.metadata as Record<string, unknown>).name;
-    if (typeof name === "string" && name.trim().length > 0) {
-      return name;
-    }
-  }
+const GRID_DENSITY_OPTIONS: Array<{ label: string; value: GridDensity }> = [
+  { label: "Compact", value: "compact" },
+  { label: "Standard", value: "standard" },
+  { label: "Comfort", value: "comfort" },
+];
 
-  return `Token #${tokenId(token)}`;
-}
-
-function tokenImage(token: NormalizedToken) {
-  if (token.image) {
-    return token.image;
-  }
-
-  if (token.metadata && typeof token.metadata === "object") {
-    const metadata = token.metadata as Record<string, unknown>;
-    const source = metadata.image ?? metadata.image_url;
-    if (typeof source === "string" && source.length > 0) {
-      return source;
-    }
-  }
-
-  return null;
-}
+const GRID_DENSITY_CLASSES: Record<GridDensity, string> = {
+  compact: "grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 xl:grid-cols-6",
+  standard: "grid-cols-1 sm:grid-cols-2 lg:grid-cols-3",
+  comfort: "grid-cols-1 sm:grid-cols-2 lg:grid-cols-2",
+};
 
 function dedupeTokens(tokens: NormalizedToken[]) {
   const unique = new Map<string, NormalizedToken>();
@@ -74,9 +71,11 @@ export function CollectionTokenGrid({
   activeFilters,
   onTokensChange,
 }: CollectionTokenGridProps) {
+  const addItem = useCartStore((state) => state.addItem);
   const tokenIdsKey = useMemo(() => tokenIds?.join(",") ?? "", [tokenIds]);
   const [cursor, setCursor] = useState<string | null | undefined>(undefined);
   const [tokens, setTokens] = useState<NormalizedToken[]>([]);
+  const [gridDensity, setGridDensity] = useState<GridDensity>("standard");
 
   const tokenQuery = useCollectionTokensQuery({
     address,
@@ -85,6 +84,11 @@ export function CollectionTokenGrid({
     tokenIds,
     cursor,
     fetchImages: true,
+  });
+  const listingQuery = useCollectionListingsQuery({
+    collection: address,
+    projectId,
+    verifyOwnership: false,
   });
 
   useEffect(() => {
@@ -121,11 +125,31 @@ export function CollectionTokenGrid({
         : tokens,
     [activeFilters, tokens],
   );
+  const listingPrices = cheapestListingByTokenId(listingQuery.data);
 
   return (
     <section className="space-y-4">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <p className="text-xs tracking-wide uppercase text-muted-foreground">
+          Grid density
+        </p>
+        <div aria-label="Grid density" className="flex items-center gap-1">
+          {GRID_DENSITY_OPTIONS.map((option) => (
+            <Button
+              key={option.value}
+              onClick={() => setGridDensity(option.value)}
+              size="sm"
+              type="button"
+              variant={gridDensity === option.value ? "default" : "outline"}
+            >
+              {option.label}
+            </Button>
+          ))}
+        </div>
+      </div>
+
       {tokenQuery.isLoading && tokens.length === 0 ? (
-        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+        <div className={cn("grid gap-3", GRID_DENSITY_CLASSES[gridDensity])}>
           {Array.from({ length: 6 }).map((_, index) => (
             <Card key={`token-skeleton-${index}`}>
               <CardContent className="space-y-2 p-3">
@@ -146,39 +170,41 @@ export function CollectionTokenGrid({
       ) : null}
 
       {!tokenQuery.isLoading ? (
-        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-          {visibleTokens.map((token) => {
-            const image = tokenImage(token);
-            return (
-              <Link
-                key={tokenId(token)}
+        <div
+          className={cn("grid gap-3", GRID_DENSITY_CLASSES[gridDensity])}
+          data-testid="collection-token-grid-cards"
+        >
+          {visibleTokens.map((token) => (
+            <div key={tokenId(token)} className="space-y-2">
+              <MarketplaceTokenCard
+                cardContentAriaLabel={`token-${displayTokenId(token)}`}
+                cardContentRole="article"
                 href={`/collections/${address}/${tokenId(token)}`}
-                className="group block transition-transform duration-150 hover:-translate-y-0.5"
+                linkAriaLabel={`token-${displayTokenId(token)}`}
+                price={listingPrices.get(displayTokenId(token))?.price ?? tokenPrice(token)}
+                token={token}
+              />
+              <Button
+                className="w-full"
+                disabled={!listingPrices.get(displayTokenId(token))}
+                onClick={() => {
+                  const listing = listingPrices.get(displayTokenId(token));
+                  if (!listing) {
+                    return;
+                  }
+
+                  addItem(
+                    cartItemFromTokenListing(token, address, listing, projectId),
+                  );
+                }}
+                size="sm"
+                type="button"
+                variant="outline"
               >
-                <Card className="transition-colors duration-150 group-hover:border-primary/30">
-                  <CardContent
-                    aria-label={`token-${tokenId(token)}`}
-                    className="space-y-2 p-3"
-                    role="article"
-                  >
-                    <div className="flex aspect-square items-center justify-center bg-muted">
-                      {image ? (
-                        // eslint-disable-next-line @next/next/no-img-element
-                        <img
-                          alt={tokenName(token)}
-                          className="h-full w-full object-cover"
-                          src={image}
-                        />
-                      ) : (
-                        <span className="text-xs text-muted-foreground">No Image</span>
-                      )}
-                    </div>
-                    <p className="text-sm font-medium">{tokenName(token)}</p>
-                  </CardContent>
-                </Card>
-              </Link>
-            );
-          })}
+                Add to cart
+              </Button>
+            </div>
+          ))}
         </div>
       ) : null}
 
