@@ -33,7 +33,7 @@ describe("tokenId", () => {
   });
 
   it("returns string representation for bigint token_id", () => {
-    expect(tokenId(tok({ token_id: 99n }))).toBe("99");
+    expect(tokenId(tok({ token_id: BigInt(99) }))).toBe("99");
   });
 });
 
@@ -42,7 +42,7 @@ describe("tokenId", () => {
 // ---------------------------------------------------------------------------
 describe("formatNumberish", () => {
   it("converts a bigint to its decimal string", () => {
-    expect(formatNumberish(123n)).toBe("123");
+    expect(formatNumberish(BigInt(123))).toBe("123");
   });
 
   it("converts a large bigint correctly", () => {
@@ -254,7 +254,7 @@ describe("tokenPrice", () => {
   });
 
   it("handles a bigint price value", () => {
-    const token = { token_id: "1", price: 42n } as unknown as NormalizedToken;
+    const token = { token_id: "1", price: BigInt(42) } as unknown as NormalizedToken;
     expect(tokenPrice(token)).toBe("42");
   });
 });
