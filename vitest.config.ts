@@ -21,6 +21,12 @@ export default defineConfig({
         "src/app/**",
         "src/components/ui/**",
       ],
+      thresholds: {
+        statements: 70,
+        branches: 70,
+        functions: 70,
+        lines: 70,
+      },
     },
   },
 });

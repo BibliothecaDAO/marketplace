@@ -1,4 +1,4 @@
-import { render, screen } from "@testing-library/react";
+import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi, beforeEach } from "vitest";
 import { TokenDetailView } from "@/features/token/token-detail-view";
@@ -7,9 +7,10 @@ const { mockUseTokenDetailQuery, mockUseCollectionListingsQuery } = vi.hoisted((
   mockUseTokenDetailQuery: vi.fn(),
   mockUseCollectionListingsQuery: vi.fn(),
 }));
-const { mockUseAccount, mockMarketplaceList } = vi.hoisted(() => ({
+const { mockUseAccount, mockMarketplaceList, mockMarketplaceOffer } = vi.hoisted(() => ({
   mockUseAccount: vi.fn(),
   mockMarketplaceList: vi.fn(),
+  mockMarketplaceOffer: vi.fn(),
 }));
 const { mockCartAddItem } = vi.hoisted(() => ({
   mockCartAddItem: vi.fn(),
@@ -33,7 +34,7 @@ vi.mock("@cartridge/arcade", () => ({
   ArcadeProvider: class {
     marketplace = {
       list: mockMarketplaceList,
-      offer: vi.fn(),
+      offer: mockMarketplaceOffer,
       execute: vi.fn(),
       cancel: vi.fn(),
     };
@@ -82,6 +83,7 @@ describe("token detail view", () => {
     mockUseCollectionListingsQuery.mockReset();
     mockUseAccount.mockReset();
     mockMarketplaceList.mockReset();
+    mockMarketplaceOffer.mockReset();
     mockCartAddItem.mockReset();
     mockUseCollectionListingsQuery.mockReturnValue(successListingsQuery([]));
     mockUseAccount.mockReturnValue({
@@ -379,5 +381,161 @@ describe("token detail view", () => {
       expect.any(String),
       true,
     );
+  });
+
+  // --- New tests ---
+
+  it("renders_token_not_found", () => {
+    mockUseTokenDetailQuery.mockReturnValue({
+      data: null,
+      isLoading: false,
+      isSuccess: true,
+      isError: false,
+      error: null,
+      isFetching: false,
+      refetch: vi.fn(),
+    });
+
+    render(<TokenDetailView address="0xabc" tokenId="99" />);
+
+    expect(screen.getByText("Token not found.")).toBeVisible();
+  });
+
+  it("renders_no_image_fallback", () => {
+    mockUseTokenDetailQuery.mockReturnValue(
+      successQuery({
+        token: {
+          token_id: "5",
+          image: null,
+          metadata: { name: "Imageless Token" },
+        },
+        orders: [],
+        listings: [],
+      }),
+    );
+
+    render(<TokenDetailView address="0xabc" tokenId="5" />);
+
+    expect(screen.getByText("No Image")).toBeVisible();
+  });
+
+  it("make_offer_calls_marketplace_offer", async () => {
+    mockUseAccount.mockReturnValue({
+      account: { execute: vi.fn() },
+      address: "0xabc",
+      isConnected: true,
+      status: "connected",
+    });
+    mockMarketplaceOffer.mockResolvedValue({ transaction_hash: "0xofferhash" });
+
+    mockUseTokenDetailQuery.mockReturnValue(
+      successQuery({
+        token: {
+          token_id: "7",
+          image: "https://cdn.example/7.png",
+          metadata: { name: "Token #7" },
+        },
+        orders: [],
+        listings: [],
+      }),
+    );
+
+    const user = userEvent.setup();
+    render(<TokenDetailView address="0x123" tokenId="7" />);
+
+    await user.click(screen.getByRole("button", { name: /make offer/i }));
+
+    expect(mockMarketplaceOffer).toHaveBeenCalled();
+    expect(mockMarketplaceOffer).toHaveBeenCalledWith(
+      expect.anything(),
+      "0x123",
+      "7",
+      expect.any(String),
+      expect.any(String),
+      expect.any(String),
+      expect.any(String),
+    );
+  });
+
+  it("transaction_error_shown", async () => {
+    mockUseAccount.mockReturnValue({
+      account: { execute: vi.fn() },
+      address: "0xabc",
+      isConnected: true,
+      status: "connected",
+    });
+    mockMarketplaceList.mockRejectedValue(new Error("Transaction reverted"));
+
+    mockUseTokenDetailQuery.mockReturnValue(
+      successQuery({
+        token: {
+          token_id: "7",
+          image: "https://cdn.example/7.png",
+          metadata: { name: "Token #7" },
+        },
+        orders: [],
+        listings: [],
+      }),
+    );
+
+    const user = userEvent.setup();
+    render(<TokenDetailView address="0x123" tokenId="7" />);
+
+    await user.click(screen.getByRole("button", { name: /list token/i }));
+
+    await waitFor(() => {
+      expect(screen.getByText("Transaction reverted")).toBeVisible();
+    });
+  });
+
+  it("add_to_cart_disabled_when_no_cheapest_listing", () => {
+    // listings array is empty, so cheapestListing will be null -> button disabled
+    mockUseCollectionListingsQuery.mockReturnValue(successListingsQuery([]));
+    mockUseTokenDetailQuery.mockReturnValue(
+      successQuery({
+        token: {
+          token_id: "7",
+          image: "https://cdn.example/7.png",
+          metadata: { name: "Token #7" },
+        },
+        orders: [],
+        listings: [],
+      }),
+    );
+
+    render(<TokenDetailView address="0x123" tokenId="7" />);
+
+    expect(screen.getByRole("button", { name: /add cheapest to cart/i })).toBeDisabled();
+  });
+
+  it("refresh_listings_button_calls_refetch", async () => {
+    const mockRefetch = vi.fn().mockResolvedValue({});
+    mockUseCollectionListingsQuery.mockReturnValue({
+      data: [],
+      isLoading: false,
+      isSuccess: true,
+      isError: false,
+      error: null,
+      isFetching: false,
+      refetch: mockRefetch,
+    });
+    mockUseTokenDetailQuery.mockReturnValue(
+      successQuery({
+        token: {
+          token_id: "7",
+          image: "https://cdn.example/7.png",
+          metadata: { name: "Token #7" },
+        },
+        orders: [],
+        listings: [],
+      }),
+    );
+
+    const user = userEvent.setup();
+    render(<TokenDetailView address="0x123" tokenId="7" />);
+
+    await user.click(screen.getByRole("button", { name: /refresh listings/i }));
+
+    expect(mockRefetch).toHaveBeenCalled();
   });
 });
