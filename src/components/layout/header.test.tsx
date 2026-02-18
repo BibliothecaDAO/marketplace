@@ -75,6 +75,12 @@ describe("Header", () => {
     expect(screen.getByRole("button", { name: /login/i })).toBeVisible();
   });
 
+  it("shows_cart_trigger_button", () => {
+    render(<Header />);
+
+    expect(screen.getByRole("button", { name: /cart \(0\)/i })).toBeVisible();
+  });
+
   it("login_uses_controller_connector_when_available", async () => {
     const walletConnector = { id: "braavos", name: "Braavos" };
     const controllerConnector = { id: "controller", name: "Controller" };

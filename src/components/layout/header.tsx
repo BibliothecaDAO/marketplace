@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useAccount, useConnect, useDisconnect } from "@starknet-react/core";
 import { Button } from "@/components/ui/button";
+import { CartSidebar } from "@/features/cart/components/cart-sidebar";
 
 function formatAddress(address: string) {
   return `${address.slice(0, 6)}...${address.slice(-4)}`;
@@ -45,6 +46,8 @@ export function Header() {
         </Link>
 
         <div className="flex items-center gap-2">
+          <CartSidebar />
+
           {isConnected && address ? (
             <span
               data-testid="wallet-address"
