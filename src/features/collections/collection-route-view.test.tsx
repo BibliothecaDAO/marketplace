@@ -69,7 +69,6 @@ describe("collection route view", () => {
     expect(mockUseCollectionQuery).toHaveBeenCalledWith(
       { address: "0xabc", projectId: "project-a", fetchImages: true },
     );
-    expect(screen.getByText(/Contract Type: erc721/i)).toBeVisible();
     expect(screen.getByText("0xabc")).toBeVisible();
   });
 
@@ -128,5 +127,19 @@ describe("collection route view", () => {
     render(<CollectionRouteView address="0xabc" collections={collections} />);
 
     expect(screen.getByTestId("trait-sidebar-container")).toBeVisible();
+  });
+
+  it("cursor_debug_badge_not_shown", () => {
+    mockUseCollectionQuery.mockReturnValue(successQuery(null));
+    render(<CollectionRouteView address="0xabc" collections={collections} cursor="some-cursor" />);
+    expect(screen.queryByText(/cursor:/i)).toBeNull();
+  });
+
+  it("contract_type_not_shown_to_users", () => {
+    mockUseCollectionQuery.mockReturnValue(
+      successQuery({ metadata: { name: "Genesis" }, contractType: "erc721", address: "0xabc" })
+    );
+    render(<CollectionRouteView address="0xabc" collections={collections} />);
+    expect(screen.queryByText(/contract type/i)).toBeNull();
   });
 });

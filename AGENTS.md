@@ -205,6 +205,7 @@ If you are an automated coding agent working in this repo:
 ## 13) Quick Reference
 
 - Start dev server: `npm run dev`
+- Start HTTPS dev server for wallet testing: `npm run dev:https`
 - Unit/integration tests: `npm test`
 - E2E tests: `npm run test:e2e`
 - Feature screenshots e2e: `npm run test:e2e:screenshots`

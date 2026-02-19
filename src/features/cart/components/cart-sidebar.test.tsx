@@ -60,4 +60,41 @@ describe("cart sidebar", () => {
 
     expect(await screen.findByText("Listing is stale.")).toBeVisible();
   });
+
+  it("formats_wei_prices_for_items_and_totals", async () => {
+    const user = userEvent.setup();
+    useCartStore.setState({
+      items: [
+        {
+          orderId: "9001",
+          collection: "0xabc",
+          tokenId: "1",
+          price: "1000000000000000000",
+          currency: "0xfee",
+          quantity: "1",
+          tokenName: "Token #1",
+        },
+        {
+          orderId: "9002",
+          collection: "0xabc",
+          tokenId: "2",
+          price: "500000000000000000",
+          currency: "0xfee",
+          quantity: "1",
+          tokenName: "Token #2",
+        },
+      ],
+      inlineErrors: {},
+      isOpen: false,
+      lastActionError: null,
+    });
+
+    render(<CartSidebar />);
+    await user.click(screen.getByRole("button", { name: /cart \(2\)/i }));
+
+    expect(await screen.findByText("1 0xfee")).toBeVisible();
+    expect(screen.getByText("0.5 0xfee")).toBeVisible();
+    expect(screen.getAllByText("1.5")).toHaveLength(2);
+    expect(screen.queryByText("1000000000000000000 0xfee")).toBeNull();
+  });
 });

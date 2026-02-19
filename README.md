@@ -15,6 +15,15 @@ npm run dev
 
 Open `http://localhost:3000`.
 
+For wallet testing on HTTPS:
+
+```bash
+brew install mkcert nss
+npm run dev:https
+```
+
+Open `https://localhost:3000`.
+
 ## Environment Variables
 
 Configure these in `.env.local`:
@@ -38,6 +47,7 @@ NEXT_PUBLIC_MARKETPLACE_COLLECTIONS=0x123...|Genesis|project-a,0x456...|Artifact
 
 ```bash
 npm run dev
+npm run dev:https
 npm run lint
 npm run typecheck
 npm run test

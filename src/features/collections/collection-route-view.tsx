@@ -3,7 +3,6 @@
 import { useMemo, useState } from "react";
 import type { NormalizedToken } from "@cartridge/arcade/marketplace";
 import { useCollectionQuery } from "@/lib/marketplace/hooks";
-import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
   Select,
@@ -46,7 +45,7 @@ function collectionName(metadata: unknown, fallbackAddress: string) {
 
 export function CollectionRouteView({
   address,
-  cursor,
+  cursor: _cursor,
   collections,
   activeFilters,
   onActiveFiltersChange,
@@ -78,10 +77,6 @@ export function CollectionRouteView({
     <section className="w-full space-y-6">
       <Card>
         <CardHeader className="space-y-3">
-          <div className="flex items-center justify-between gap-3">
-            <CardTitle className="text-sm font-medium tracking-widest uppercase">Collection</CardTitle>
-            <Badge variant="outline">Cursor: {cursor ?? "none"}</Badge>
-          </div>
           <Select value={address} onValueChange={handleChange}>
             <SelectTrigger aria-label="Collection">
               <SelectValue placeholder="Select collection" />
@@ -104,9 +99,6 @@ export function CollectionRouteView({
             <div className="space-y-1">
               <p className="text-lg font-medium">
                 {collectionName(collection.data.metadata, address)}
-              </p>
-              <p className="text-sm text-muted-foreground">
-                Contract Type: {collection.data.contractType}
               </p>
             </div>
           ) : null}

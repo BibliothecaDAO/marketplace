@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import type { NormalizedToken } from "@cartridge/arcade/marketplace";
 import {
   displayTokenId,
+  formatPriceForDisplay,
   formatNumberish,
   listingPriceByTokenId,
   tokenId,
@@ -59,6 +60,10 @@ describe("formatNumberish", () => {
     expect(formatNumberish(3.9)).toBe("3");
   });
 
+  it("expands scientific-notation numbers to full integers", () => {
+    expect(formatNumberish(1.85e21)).toBe("1850000000000000000000");
+  });
+
   it("returns null for non-finite number Infinity", () => {
     expect(formatNumberish(Infinity)).toBeNull();
   });
@@ -105,6 +110,27 @@ describe("formatNumberish", () => {
 
   it("returns null for a boolean", () => {
     expect(formatNumberish(true)).toBeNull();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// formatPriceForDisplay
+// ---------------------------------------------------------------------------
+describe("formatPriceForDisplay", () => {
+  it("converts a 18-decimal wei value into a readable token amount", () => {
+    expect(formatPriceForDisplay("150000000000000000000")).toBe("150");
+  });
+
+  it("keeps small integer-like values unchanged", () => {
+    expect(formatPriceForDisplay("88")).toBe("88");
+  });
+
+  it("renders fractional token amounts when needed", () => {
+    expect(formatPriceForDisplay("500000000000000000")).toBe("0.5");
+  });
+
+  it("returns null for empty input", () => {
+    expect(formatPriceForDisplay("")).toBeNull();
   });
 });
 
@@ -332,6 +358,20 @@ describe("listingPriceByTokenId", () => {
     ];
     const map = listingPriceByTokenId(listings);
     expect(map.get("1")).toBe("50");
+  });
+
+  it("reads snake_case token id and nested order price fields", () => {
+    const listings = [
+      {
+        token_id: "0x460",
+        order: {
+          listing_price: "77",
+        },
+      },
+    ];
+
+    const map = listingPriceByTokenId(listings);
+    expect(map.get("1120")).toBe("77");
   });
 
   it("keeps current price when new price cannot be parsed as bigint", () => {

@@ -8,6 +8,7 @@ import {
 } from "@/lib/marketplace/hooks";
 import {
   displayTokenId,
+  listingPriceByTokenId,
   tokenId,
   tokenPrice,
 } from "@/lib/marketplace/token-display";
@@ -126,6 +127,7 @@ export function CollectionTokenGrid({
     [activeFilters, tokens],
   );
   const listingPrices = cheapestListingByTokenId(listingQuery.data);
+  const listingPriceMap = listingPriceByTokenId(listingQuery.data);
 
   return (
     <section className="space-y-4">
@@ -174,37 +176,50 @@ export function CollectionTokenGrid({
           className={cn("grid gap-3", GRID_DENSITY_CLASSES[gridDensity])}
           data-testid="collection-token-grid-cards"
         >
-          {visibleTokens.map((token) => (
-            <div key={tokenId(token)} className="space-y-2">
-              <MarketplaceTokenCard
-                cardContentAriaLabel={`token-${displayTokenId(token)}`}
-                cardContentRole="article"
-                href={`/collections/${address}/${tokenId(token)}`}
-                linkAriaLabel={`token-${displayTokenId(token)}`}
-                price={listingPrices.get(displayTokenId(token))?.price ?? tokenPrice(token)}
-                token={token}
-              />
-              <Button
-                className="w-full"
-                disabled={!listingPrices.get(displayTokenId(token))}
-                onClick={() => {
-                  const listing = listingPrices.get(displayTokenId(token));
-                  if (!listing) {
-                    return;
-                  }
+          {visibleTokens.map((token) => {
+            const tokenKey = displayTokenId(token);
+            const cheapestListing = listingPrices.get(tokenKey);
+            const price =
+              cheapestListing?.price ??
+              listingPriceMap.get(tokenKey) ??
+              tokenPrice(token);
 
-                  addItem(
-                    cartItemFromTokenListing(token, address, listing, projectId),
-                  );
-                }}
-                size="sm"
-                type="button"
-                variant="outline"
-              >
-                Add to cart
-              </Button>
-            </div>
-          ))}
+            return (
+              <div key={tokenId(token)} className="space-y-2">
+                <MarketplaceTokenCard
+                  cardContentAriaLabel={`token-${tokenKey}`}
+                  cardContentRole="article"
+                  href={`/collections/${address}/${tokenId(token)}`}
+                  linkAriaLabel={`token-${tokenKey}`}
+                  price={price}
+                  token={token}
+                />
+                <Button
+                  className="w-full"
+                  disabled={!cheapestListing}
+                  onClick={() => {
+                    if (!cheapestListing) {
+                      return;
+                    }
+
+                    addItem(
+                      cartItemFromTokenListing(
+                        token,
+                        address,
+                        cheapestListing,
+                        projectId,
+                      ),
+                    );
+                  }}
+                  size="sm"
+                  type="button"
+                  variant="outline"
+                >
+                  Add to cart
+                </Button>
+              </div>
+            );
+          })}
         </div>
       ) : null}
 

@@ -142,6 +142,166 @@ describe("collection row", () => {
     expect(screen.getByText(/ls tokens/i)).toBeVisible();
   });
 
+  it("falls_back_to_listing_token_ids_when_tokens_endpoint_is_empty", () => {
+    mockUseCollectionTokensQuery.mockReturnValue(successResult([]));
+    mockUseCollectionListingsQuery.mockReturnValue(
+      successListingsResult([
+        {
+          id: 17,
+          tokenId: 777,
+          price: 101,
+          currency: "0xfee",
+          quantity: 1,
+          owner: "0xowner",
+        },
+      ]),
+    );
+
+    render(<CollectionRow address="0xabc" name="Listing-backed Collection" />);
+
+    expect(screen.queryByText(/ls tokens/i)).toBeNull();
+    expect(screen.getByText("Token #777")).toBeVisible();
+    expect(screen.getByText("101")).toBeVisible();
+    expect(screen.getByRole("button", { name: /add to cart/i })).toBeEnabled();
+  });
+
+  it("fetches_listing_backed_token_metadata_for_images_when_primary_tokens_are_empty", () => {
+    mockUseCollectionTokensQuery.mockImplementation((options) => {
+      const request = options as { tokenIds?: string[] };
+      if (request.tokenIds) {
+        return successResult([
+          token("777", {
+            image: "https://cdn.example/777.png",
+            metadata: { name: "Listed 777" },
+          }),
+        ]);
+      }
+
+      return successResult([]);
+    });
+    mockUseCollectionListingsQuery.mockReturnValue(
+      successListingsResult([
+        {
+          id: 17,
+          tokenId: 777,
+          price: 101,
+          currency: "0xfee",
+          quantity: 1,
+          owner: "0xowner",
+        },
+      ]),
+    );
+
+    render(<CollectionRow address="0xabc" name="Listing-backed Collection" />);
+
+    expect(screen.getByAltText("Listed 777")).toBeVisible();
+    expect(screen.queryByText("No Image")).toBeNull();
+    expect(screen.getByText("101")).toBeVisible();
+  });
+
+  it("requests_listing_metadata_with_decimal_and_hex_token_ids", () => {
+    mockUseCollectionTokensQuery.mockImplementation((options) => {
+      const request = options as { tokenIds?: string[] };
+      if (request.tokenIds?.includes("0x935")) {
+        return successResult([
+          token("0x935", {
+            image: "https://cdn.example/2357.png",
+            metadata: { name: "Loot Chest #2357" },
+          }),
+        ]);
+      }
+
+      return successResult([]);
+    });
+    mockUseCollectionListingsQuery.mockReturnValue(
+      successListingsResult([
+        {
+          id: 99,
+          tokenId: 2357,
+          price: 149,
+          currency: "0xfee",
+          quantity: 1,
+          owner: "0xowner",
+        },
+      ]),
+    );
+
+    render(<CollectionRow address="0xabc" name="Loot Chests" />);
+
+    const listingMetadataRequest = mockUseCollectionTokensQuery.mock.calls
+      .map(([options]) => options as { tokenIds?: string[] })
+      .find((options) => Array.isArray(options.tokenIds));
+
+    expect(listingMetadataRequest?.tokenIds).toEqual(
+      expect.arrayContaining(["2357", "0x935"]),
+    );
+    expect(screen.getByAltText("Loot Chest #2357")).toBeVisible();
+    expect(screen.getByText("#2357")).toBeVisible();
+    expect(screen.queryByText("No Image")).toBeNull();
+  });
+
+  it("uses_listing_backed_tokens_when_loaded_tokens_have_no_listing_prices", () => {
+    mockUseCollectionTokensQuery.mockReturnValue(
+      successResult([
+        token("1", {
+          image: "https://cdn.example/1.png",
+          metadata: { name: "Token #1" },
+        }),
+      ]),
+    );
+    mockUseCollectionListingsQuery.mockReturnValue(
+      successListingsResult([
+        {
+          id: 17,
+          tokenId: 777,
+          price: 101,
+          currency: "0xfee",
+          quantity: 1,
+          owner: "0xowner",
+        },
+      ]),
+    );
+
+    render(<CollectionRow address="0xabc" name="Listing-first Collection" />);
+
+    expect(screen.queryByText("Token #1")).toBeNull();
+    expect(screen.getByText("Token #777")).toBeVisible();
+    expect(screen.getByText("101")).toBeVisible();
+  });
+
+  it("prefers_priced_loaded_tokens_when_listings_exist", () => {
+    mockUseCollectionTokensQuery.mockReturnValue(
+      successResult([
+        token("1", {
+          image: "https://cdn.example/1.png",
+          metadata: { name: "Token #1" },
+        }),
+        token("777", {
+          image: "https://cdn.example/777.png",
+          metadata: { name: "Token #777" },
+        }),
+      ]),
+    );
+    mockUseCollectionListingsQuery.mockReturnValue(
+      successListingsResult([
+        {
+          id: 17,
+          tokenId: 777,
+          price: 101,
+          currency: "0xfee",
+          quantity: 1,
+          owner: "0xowner",
+        },
+      ]),
+    );
+
+    render(<CollectionRow address="0xabc" name="Prioritized Pricing Collection" />);
+
+    expect(screen.queryByText("Token #1")).toBeNull();
+    expect(screen.getByText("Token #777")).toBeVisible();
+    expect(screen.getByText("101")).toBeVisible();
+  });
+
   it("passes_correct_args_to_hook", () => {
     render(
       <CollectionRow
@@ -235,7 +395,60 @@ describe("collection row", () => {
       <CollectionRow address="0xabc" name="Priced Collection" />,
     );
 
-    expect(screen.getByText("Price: 100")).toBeVisible();
+    expect(screen.getByText("100")).toBeVisible();
+  });
+
+  it("formats_wei_prices_in_token_cards", () => {
+    mockUseCollectionListingsQuery.mockReturnValue(
+      successListingsResult([
+        {
+          id: 7,
+          tokenId: 1,
+          price: "150000000000000000000",
+          currency: "0xfee",
+          quantity: 1,
+          owner: "0xowner",
+        },
+      ]),
+    );
+
+    mockUseCollectionTokensQuery.mockReturnValue(
+      successResult([
+        token("1", {
+          image: "https://cdn.example/1.png",
+          metadata: { name: "Alpha" },
+        }),
+      ]),
+    );
+
+    render(<CollectionRow address="0xabc" name="Wei Collection" />);
+
+    expect(screen.getByText("150")).toBeVisible();
+    expect(screen.queryByText("150000000000000000000")).toBeNull();
+  });
+
+  it("renders_price_when_listing_lacks_currency_but_has_token_and_price", () => {
+    mockUseCollectionListingsQuery.mockReturnValue(
+      successListingsResult([
+        {
+          tokenId: 1,
+          price: 88,
+        },
+      ]),
+    );
+    mockUseCollectionTokensQuery.mockReturnValue(
+      successResult([
+        token("1", {
+          image: "https://cdn.example/1.png",
+          metadata: { name: "Alpha" },
+        }),
+      ]),
+    );
+
+    render(<CollectionRow address="0xabc" name="Partially Mapped Collection" />);
+
+    expect(screen.getByText("88")).toBeVisible();
+    expect(screen.getByRole("button", { name: /add to cart/i })).toBeDisabled();
   });
 
   it("passes_collection_listing_query_args", () => {
@@ -305,5 +518,31 @@ describe("collection row", () => {
     const tokenLink = screen.getByRole("link", { name: /alpha/i });
     const card = tokenLink.querySelector("[data-slot='card']");
     expect(card).toHaveClass("py-0", "overflow-hidden");
+  });
+
+  it("price_label_prefix_is_never_shown", () => {
+    mockUseCollectionListingsQuery.mockReturnValue(
+      successListingsResult([
+        { id: 7, tokenId: 1, price: 100, currency: "0xfee", quantity: 1, owner: "0xowner" },
+      ]),
+    );
+    mockUseCollectionTokensQuery.mockReturnValue(
+      successResult([
+        token("1", { image: "https://cdn.example/1.png", metadata: { name: "Alpha" } }),
+      ]),
+    );
+    render(<CollectionRow address="0xabc" name="Test Collection" />);
+    expect(screen.queryByText(/^price:/i)).toBeNull();
+  });
+
+  it("no_price_element_shown_when_token_has_no_listing", () => {
+    mockUseCollectionListingsQuery.mockReturnValue(successListingsResult([]));
+    mockUseCollectionTokensQuery.mockReturnValue(
+      successResult([
+        token("1", { image: "https://cdn.example/1.png", metadata: { name: "Alpha" } }),
+      ]),
+    );
+    render(<CollectionRow address="0xabc" name="Test" />);
+    expect(screen.queryByText("—")).toBeNull();
   });
 });

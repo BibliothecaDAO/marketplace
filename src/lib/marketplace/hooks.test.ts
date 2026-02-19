@@ -210,5 +210,119 @@ describe("marketplace cached hooks", () => {
       expect(result.current.fetchStatus).toBe("idle");
       expect(client.getToken).not.toHaveBeenCalled();
     });
+
+    it("retries_with_hex_token_id_when_decimal_lookup_returns_null", async () => {
+      const detail = {
+        token: { token_id: "0x935", metadata: { name: "Loot Chest #2357" } },
+        orders: [],
+        listings: [],
+      };
+      const getToken = vi
+        .fn()
+        .mockResolvedValueOnce(null)
+        .mockResolvedValueOnce(detail);
+      const client = mockClient({ getToken });
+      mockUseMarketplaceClient.mockReturnValue({ client, status: "ready" });
+
+      const { useTokenDetailQuery } = await import("@/lib/marketplace/hooks");
+      const { result } = renderHook(
+        () =>
+          useTokenDetailQuery({
+            collection: "0xloot",
+            tokenId: "2357",
+            fetchImages: true,
+          }),
+        { wrapper: makeWrapper() },
+      );
+
+      await waitFor(() => expect(result.current.isSuccess).toBe(true));
+      expect(result.current.data).toEqual(detail);
+      expect(getToken).toHaveBeenNthCalledWith(1, {
+        collection: "0xloot",
+        tokenId: "2357",
+        fetchImages: true,
+      });
+      expect(getToken).toHaveBeenNthCalledWith(2, {
+        collection: "0xloot",
+        tokenId: "0x935",
+        fetchImages: true,
+      });
+    });
+
+    it("retries_with_decimal_token_id_when_hex_lookup_returns_null", async () => {
+      const detail = {
+        token: { token_id: "2357", metadata: { name: "Loot Chest #2357" } },
+        orders: [],
+        listings: [],
+      };
+      const getToken = vi
+        .fn()
+        .mockResolvedValueOnce(null)
+        .mockResolvedValueOnce(detail);
+      const client = mockClient({ getToken });
+      mockUseMarketplaceClient.mockReturnValue({ client, status: "ready" });
+
+      const { useTokenDetailQuery } = await import("@/lib/marketplace/hooks");
+      const { result } = renderHook(
+        () =>
+          useTokenDetailQuery({
+            collection: "0xloot",
+            tokenId: "0x935",
+            fetchImages: true,
+          }),
+        { wrapper: makeWrapper() },
+      );
+
+      await waitFor(() => expect(result.current.isSuccess).toBe(true));
+      expect(result.current.data).toEqual(detail);
+      expect(getToken).toHaveBeenNthCalledWith(1, {
+        collection: "0xloot",
+        tokenId: "0x935",
+        fetchImages: true,
+      });
+      expect(getToken).toHaveBeenNthCalledWith(2, {
+        collection: "0xloot",
+        tokenId: "2357",
+        fetchImages: true,
+      });
+    });
+
+    it("retries_with_alternate_token_id_when_first_lookup_throws", async () => {
+      const detail = {
+        token: { token_id: "0x935", metadata: { name: "Loot Chest #2357" } },
+        orders: [],
+        listings: [],
+      };
+      const getToken = vi
+        .fn()
+        .mockRejectedValueOnce(new Error("invalid token format"))
+        .mockResolvedValueOnce(detail);
+      const client = mockClient({ getToken });
+      mockUseMarketplaceClient.mockReturnValue({ client, status: "ready" });
+
+      const { useTokenDetailQuery } = await import("@/lib/marketplace/hooks");
+      const { result } = renderHook(
+        () =>
+          useTokenDetailQuery({
+            collection: "0xloot",
+            tokenId: "2357",
+            fetchImages: true,
+          }),
+        { wrapper: makeWrapper() },
+      );
+
+      await waitFor(() => expect(result.current.isSuccess).toBe(true));
+      expect(result.current.data).toEqual(detail);
+      expect(getToken).toHaveBeenNthCalledWith(1, {
+        collection: "0xloot",
+        tokenId: "2357",
+        fetchImages: true,
+      });
+      expect(getToken).toHaveBeenNthCalledWith(2, {
+        collection: "0xloot",
+        tokenId: "0x935",
+        fetchImages: true,
+      });
+    });
   });
 });

@@ -332,7 +332,7 @@ describe("collection token grid", () => {
     render(<CollectionTokenGrid address="0xabc" projectId="project-a" />);
 
     expect(await screen.findByText("#1120")).toBeVisible();
-    expect(screen.getByText("Price: 77")).toBeVisible();
+    expect(screen.getByText("77")).toBeVisible();
 
     const tokenLink = screen.getByRole("link", { name: "token-1120" });
     const card = tokenLink.querySelector("[data-slot='card']");

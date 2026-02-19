@@ -7,6 +7,7 @@ import type { NormalizedToken } from "@cartridge/arcade/marketplace";
 import {
   useCollectionListingsQuery,
   useTokenDetailQuery,
+  useTokenOwnershipQuery,
 } from "@/lib/marketplace/hooks";
 import { getMarketplaceRuntimeConfig } from "@/lib/marketplace/config";
 import { Button } from "@/components/ui/button";
@@ -14,12 +15,26 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
-import { displayTokenId } from "@/lib/marketplace/token-display";
+import { Switch } from "@/components/ui/switch";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import {
+  displayTokenId,
+  formatNumberish,
+  formatPriceForDisplay,
+} from "@/lib/marketplace/token-display";
+import type { CheapestListing } from "@/features/cart/listing-utils";
 import {
   cartItemFromTokenListing,
   cheapestListingByTokenId,
 } from "@/features/cart/listing-utils";
 import { useCartStore } from "@/features/cart/store/cart-store";
+
 
 type TokenDetailViewProps = {
   address: string;
@@ -69,11 +84,16 @@ function getTokenAttributes(token: NormalizedToken): TokenAttribute[] {
   return Array.isArray(meta?.attributes) ? meta.attributes : [];
 }
 
+function truncateAddress(addr: string) {
+  return addr.length > 14 ? addr.slice(0, 6) + "..." + addr.slice(-4) : addr;
+}
+
 export function TokenDetailView({
   address,
   tokenId,
   projectId,
 }: TokenDetailViewProps) {
+  const normalizedTokenId = formatNumberish(tokenId) ?? tokenId;
   const addItem = useCartStore((state) => state.addItem);
   const { account, address: walletAddress, isConnected } = useAccount();
   const {
@@ -84,12 +104,12 @@ export function TokenDetailView({
     [chainId],
   );
   const [verifyOwnership, setVerifyOwnership] = useState(false);
-  const [priceInput, setPriceInput] = useState("1000000000000000000");
+  // Human-readable price in STRK (1 STRK = 1e18 wei)
+  const [priceInput, setPriceInput] = useState("1");
   const [quantityInput, setQuantityInput] = useState("1");
   const [currencyInput, setCurrencyInput] = useState("0x0");
-  const [expirationInput, setExpirationInput] = useState(() =>
-    String(Math.floor(Date.now() / 1000) + 60 * 60 * 24),
-  );
+  // Expiration as a preset duration in seconds (default: 24 hours)
+  const [expirationPreset, setExpirationPreset] = useState("86400");
   const [txStatus, setTxStatus] = useState<{
     tone: "idle" | "success" | "error";
     message: string;
@@ -99,16 +119,34 @@ export function TokenDetailView({
   >(null);
   const detailQuery = useTokenDetailQuery({
     collection: address,
-    tokenId,
+    tokenId: normalizedTokenId,
     projectId,
     fetchImages: true,
   });
   const listingQuery = useCollectionListingsQuery({
     collection: address,
-    tokenId,
+    tokenId: normalizedTokenId,
     projectId,
     verifyOwnership,
   });
+
+  const ownershipQuery = useTokenOwnershipQuery({
+    collection: address,
+    tokenId: normalizedTokenId,
+    accountAddress: walletAddress,
+  });
+
+  const isOwner = useMemo(() => {
+    if (!walletAddress || !isConnected) return false;
+    const balances = (ownershipQuery.data as { page?: { balances?: Array<{ balance: string }> } } | null)?.page?.balances ?? [];
+    return balances.some((b) => {
+      try {
+        return BigInt(b.balance) > 0n;
+      } catch {
+        return false;
+      }
+    });
+  }, [ownershipQuery.data, walletAddress, isConnected]);
 
   const token = detailQuery.data?.token ?? null;
   const listings = useMemo(
@@ -148,6 +186,16 @@ export function TokenDetailView({
       setCurrencyInput(listedCurrency);
     }
   }, [currencyInput, listingRows]);
+
+  // Convert human-readable STRK price to wei string
+  function priceToWei(humanPrice: string): string {
+    return String(BigInt(Math.round(parseFloat(humanPrice) * 1e18)));
+  }
+
+  // Compute expiration unix timestamp from preset duration
+  function computeExpiration(): string {
+    return String(Math.floor(Date.now() / 1000) + parseInt(expirationPreset));
+  }
 
   async function runTransaction(
     action: "list" | "offer" | "cancel",
@@ -283,14 +331,15 @@ export function TokenDetailView({
             >
               Add cheapest to cart
             </Button>
-            <Button
-              onClick={() => setVerifyOwnership((current) => !current)}
-              size="sm"
-              type="button"
-              variant="outline"
-            >
-              {verifyOwnership ? "Ownership verified" : "Ownership unverified"}
-            </Button>
+            <div className="flex items-center gap-2">
+              <Switch
+                aria-label="Verify ownership"
+                checked={verifyOwnership}
+                id="verify-ownership-detail"
+                onCheckedChange={setVerifyOwnership}
+              />
+              <label htmlFor="verify-ownership-detail">Verify ownership</label>
+            </div>
             <Button
               disabled={listingQuery.isFetching}
               onClick={() => {
@@ -305,125 +354,177 @@ export function TokenDetailView({
           </div>
         </div>
 
-        <Card className="border-dashed">
-          <CardContent className="space-y-3 p-3">
-            <div className="grid gap-2 sm:grid-cols-2">
-              <Input
-                aria-label="Listing price"
-                onChange={(event) => setPriceInput(event.target.value)}
-                placeholder="Price"
-                value={priceInput}
-              />
-              <Input
-                aria-label="Quantity"
-                onChange={(event) => setQuantityInput(event.target.value)}
-                placeholder="Quantity"
-                value={quantityInput}
-              />
-              <Input
-                aria-label="Currency"
-                onChange={(event) => setCurrencyInput(event.target.value)}
-                placeholder="Currency"
-                value={currencyInput}
-              />
-              <Input
-                aria-label="Expiration"
-                onChange={(event) => setExpirationInput(event.target.value)}
-                placeholder="Expiration"
-                value={expirationInput}
-              />
-            </div>
+        {/* Ownership indicator */}
+        {isConnected && (ownershipQuery as { isFetching?: boolean }).isFetching ? (
+          <p className="text-xs text-muted-foreground">Checking ownership...</p>
+        ) : null}
+        {isConnected && !(ownershipQuery as { isFetching?: boolean }).isFetching && isOwner ? (
+          <Badge variant="outline" className="self-start">You own this token</Badge>
+        ) : null}
 
-            <div className="flex flex-wrap gap-2">
-              <Button
-                disabled={!isConnected || pendingAction !== null}
-                onClick={() => {
-                  void runTransaction("list", () =>
-                    marketplaceProvider.marketplace.list(
-                      account!,
-                      address,
-                      tokenId,
-                      quantityInput,
-                      priceInput,
-                      currencyInput,
-                      expirationInput,
-                      true,
-                    ),
-                  );
-                }}
-                size="sm"
-                type="button"
-              >
-                List token
-              </Button>
-              <Button
-                disabled={!isConnected || pendingAction !== null}
-                onClick={() => {
-                  void runTransaction("offer", () =>
-                    marketplaceProvider.marketplace.offer(
-                      account!,
-                      address,
-                      tokenId,
-                      quantityInput,
-                      priceInput,
-                      currencyInput,
-                      expirationInput,
-                    ),
-                  );
-                }}
-                size="sm"
-                type="button"
-                variant="secondary"
-              >
-                Make offer
-              </Button>
-              <Button
-                disabled={!isConnected || pendingAction !== null || !ownListing}
-                onClick={() => {
-                  if (!ownListing) {
-                    setTxStatus({
-                      tone: "error",
-                      message: "No owned listing available to cancel.",
-                    });
-                    return;
-                  }
+        {/* Sell form — only for owners */}
+        {isConnected && isOwner ? (
+          <Card className="border-dashed">
+            <CardContent className="space-y-3 p-3">
+              <div className="grid gap-2 sm:grid-cols-2">
+                <div className="flex items-center gap-1">
+                  <Input
+                    aria-label="Price (STRK)"
+                    min="0"
+                    onChange={(event) => setPriceInput(event.target.value)}
+                    placeholder="Price"
+                    step="any"
+                    type="number"
+                    value={priceInput}
+                  />
+                  <span className="text-sm text-muted-foreground shrink-0">STRK</span>
+                </div>
+                <Input
+                  aria-label="Quantity"
+                  onChange={(event) => setQuantityInput(event.target.value)}
+                  placeholder="Quantity"
+                  value={quantityInput}
+                />
+                <div className="flex flex-col gap-1">
+                  <label className="text-xs text-muted-foreground" htmlFor="expiration-preset">Expires in</label>
+                  <Select onValueChange={setExpirationPreset} value={expirationPreset}>
+                    <SelectTrigger aria-label="Expires in" id="expiration-preset">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="3600">1 hour</SelectItem>
+                      <SelectItem value="86400">24 hours</SelectItem>
+                      <SelectItem value="604800">7 days</SelectItem>
+                      <SelectItem value="2592000">30 days</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+              <div className="flex flex-wrap gap-2">
+                <Button
+                  disabled={pendingAction !== null}
+                  onClick={() => {
+                    void runTransaction("list", () =>
+                      marketplaceProvider.marketplace.list(
+                        account!,
+                        address,
+                        normalizedTokenId,
+                        quantityInput,
+                        priceToWei(priceInput),
+                        currencyInput,
+                        computeExpiration(),
+                        true,
+                      ),
+                    );
+                  }}
+                  size="sm"
+                  type="button"
+                >
+                  List token
+                </Button>
+                <Button
+                  disabled={pendingAction !== null || !ownListing}
+                  onClick={() => {
+                    if (!ownListing) return;
+                    void runTransaction("cancel", () =>
+                      marketplaceProvider.marketplace.cancel(
+                        account!,
+                        ownListing.id,
+                        address,
+                        normalizedTokenId,
+                      ),
+                    );
+                  }}
+                  size="sm"
+                  type="button"
+                  variant="destructive"
+                >
+                  Cancel mine
+                </Button>
+              </div>
+              {txStatus.message ? (
+                <p className={txStatus.tone === "error" ? "text-xs text-destructive" : "text-xs text-primary"}>
+                  {txStatus.message}
+                </p>
+              ) : null}
+            </CardContent>
+          </Card>
+        ) : null}
 
-                  void runTransaction("cancel", () =>
-                    marketplaceProvider.marketplace.cancel(
-                      account!,
-                      ownListing.id,
-                      address,
-                      tokenId,
-                    ),
-                  );
-                }}
-                size="sm"
-                type="button"
-                variant="destructive"
-              >
-                Cancel mine
-              </Button>
-            </div>
+        {/* Offer form — for non-owners who are connected */}
+        {isConnected && !isOwner ? (
+          <Card className="border-dashed">
+            <CardContent className="space-y-3 p-3">
+              <div className="grid gap-2 sm:grid-cols-2">
+                <div className="flex items-center gap-1">
+                  <Input
+                    aria-label="Price (STRK)"
+                    min="0"
+                    onChange={(event) => setPriceInput(event.target.value)}
+                    placeholder="Price"
+                    step="any"
+                    type="number"
+                    value={priceInput}
+                  />
+                  <span className="text-sm text-muted-foreground shrink-0">STRK</span>
+                </div>
+                <Input
+                  aria-label="Quantity"
+                  onChange={(event) => setQuantityInput(event.target.value)}
+                  placeholder="Quantity"
+                  value={quantityInput}
+                />
+                <div className="flex flex-col gap-1">
+                  <label className="text-xs text-muted-foreground" htmlFor="offer-expiration-preset">Expires in</label>
+                  <Select onValueChange={setExpirationPreset} value={expirationPreset}>
+                    <SelectTrigger aria-label="Expires in" id="offer-expiration-preset">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="3600">1 hour</SelectItem>
+                      <SelectItem value="86400">24 hours</SelectItem>
+                      <SelectItem value="604800">7 days</SelectItem>
+                      <SelectItem value="2592000">30 days</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+              <div className="flex flex-wrap gap-2">
+                <Button
+                  disabled={pendingAction !== null}
+                  onClick={() => {
+                    void runTransaction("offer", () =>
+                      marketplaceProvider.marketplace.offer(
+                        account!,
+                        address,
+                        normalizedTokenId,
+                        quantityInput,
+                        priceToWei(priceInput),
+                        currencyInput,
+                        computeExpiration(),
+                      ),
+                    );
+                  }}
+                  size="sm"
+                  type="button"
+                  variant="secondary"
+                >
+                  Make offer
+                </Button>
+              </div>
+              {txStatus.message ? (
+                <p className={txStatus.tone === "error" ? "text-xs text-destructive" : "text-xs text-primary"}>
+                  {txStatus.message}
+                </p>
+              ) : null}
+            </CardContent>
+          </Card>
+        ) : null}
 
-            {!isConnected ? (
-              <p className="text-xs text-muted-foreground">
-                Connect wallet to transact.
-              </p>
-            ) : null}
-
-            {txStatus.message ? (
-              <p
-                className={
-                  txStatus.tone === "error"
-                    ? "text-xs text-destructive"
-                    : "text-xs text-primary"
-                }
-              >
-                {txStatus.message}
-              </p>
-            ) : null}
-          </CardContent>
-        </Card>
+        {/* Not connected prompt */}
+        {!isConnected ? (
+          <p className="text-xs text-muted-foreground">Connect wallet to transact.</p>
+        ) : null}
 
         {listingQuery.isError ? (
           <p className="text-sm text-destructive">Listings failed to load.</p>
@@ -437,23 +538,59 @@ export function TokenDetailView({
           <p className="text-sm text-muted-foreground">No listings</p>
         ) : (
           <div className="space-y-2">
-            {listings.map((listing: { id: number; price: number; owner: string; expiration?: number }) => (
-              <Card key={listing.id}>
-                <CardContent className="flex items-center justify-between p-3">
-                  <div>
-                    <p className="text-sm font-medium text-primary font-mono">
-                      {listing.price}
-                    </p>
-                    <p className="text-xs text-muted-foreground">
-                      {listing.owner}
-                    </p>
-                  </div>
-                  {listing.expiration ? (
-                    <Badge variant="secondary">{listing.expiration}</Badge>
-                  ) : null}
-                </CardContent>
-              </Card>
-            ))}
+            {listings.map((listing: { id: number; price: number | string; owner: string; expiration?: number; currency?: string; quantity?: number | string; tokenId?: number | string }) => {
+              const isCheapest = cheapestListing?.orderId === String(listing.id);
+              const hasFullCartData =
+                listing.id !== undefined &&
+                listing.price !== undefined &&
+                listing.currency !== undefined &&
+                listing.quantity !== undefined;
+              return (
+                <Card key={listing.id}>
+                  <CardContent className="flex items-center justify-between p-3">
+                    <div>
+                      <div className="flex items-center gap-2">
+                        <p className="text-sm font-medium text-primary font-mono">
+                          {formatPriceForDisplay(listing.price) ?? String(listing.price)}
+                        </p>
+                        {isCheapest ? (
+                          <Badge variant="secondary">Best Price</Badge>
+                        ) : null}
+                      </div>
+                      <p className="text-xs text-muted-foreground">
+                        {truncateAddress(listing.owner)}
+                      </p>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      {listing.expiration ? (
+                        <Badge variant="secondary">
+                          {new Date(listing.expiration * 1000).toLocaleDateString()}
+                        </Badge>
+                      ) : null}
+                      <Button
+                        disabled={!hasFullCartData}
+                        onClick={() => {
+                          if (!token || !hasFullCartData) return;
+                          addItem(
+                            cartItemFromTokenListing(
+                              token,
+                              address,
+                              listing as unknown as CheapestListing,
+                              projectId,
+                            ),
+                          );
+                        }}
+                        size="sm"
+                        type="button"
+                        variant="outline"
+                      >
+                        Add to cart
+                      </Button>
+                    </div>
+                  </CardContent>
+                </Card>
+              );
+            })}
           </div>
         )}
       </div>
