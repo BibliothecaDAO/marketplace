@@ -1,4 +1,6 @@
+import type { Metadata } from "next";
 import { TokenDetailView } from "@/features/token/token-detail-view";
+import { buildMarketplacePageMetadata } from "@/lib/seo/metadata";
 
 type TokenPageProps = {
   params: Promise<{ address: string; tokenId: string }>;
@@ -12,4 +14,25 @@ export default async function TokenPage({ params }: TokenPageProps) {
       <TokenDetailView address={address} tokenId={tokenId} />
     </main>
   );
+}
+
+export async function generateMetadata({
+  params,
+}: TokenPageProps): Promise<Metadata> {
+  const { address, tokenId } = await params;
+  const { getTokenSeoData } = await import("@/lib/marketplace/seo-data");
+  const seoData = await getTokenSeoData(address, tokenId);
+
+  return buildMarketplacePageMetadata({
+    title: `${seoData.tokenName} | ${seoData.collectionName} | Realms.market`,
+    description:
+      seoData.description ??
+      `View listings and activity for ${seoData.tokenName}.`,
+    pathname: `/collections/${address}/${tokenId}`,
+    image:
+      seoData.image ??
+      seoData.collectionImage ??
+      `/collections/${address}/${tokenId}/opengraph-image`,
+    noIndex: !seoData.exists,
+  });
 }
