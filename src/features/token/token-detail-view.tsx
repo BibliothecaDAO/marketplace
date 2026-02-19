@@ -141,7 +141,7 @@ export function TokenDetailView({
     const balances = (ownershipQuery.data as { page?: { balances?: Array<{ balance: string }> } } | null)?.page?.balances ?? [];
     return balances.some((b) => {
       try {
-        return BigInt(b.balance) > 0n;
+        return BigInt(b.balance) > BigInt(0);
       } catch {
         return false;
       }

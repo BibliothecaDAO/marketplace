@@ -101,6 +101,13 @@ export function tokenImage(token: NormalizedToken) {
   return typeof source === "string" && source.length > 0 ? source : null;
 }
 
+export function formatAddress(address: string) {
+  if (/^0x[0-9a-fA-F]{9,}$/i.test(address)) {
+    return `${address.slice(0, 6)}...${address.slice(-4)}`;
+  }
+  return address;
+}
+
 export function tokenPrice(token: NormalizedToken) {
   const fields = token as unknown as Record<string, unknown>;
   const metadata = normalizeMetadata(token);

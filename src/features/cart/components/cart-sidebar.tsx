@@ -2,7 +2,7 @@
 
 import { useMemo } from "react";
 import { Button } from "@/components/ui/button";
-import { formatPriceForDisplay } from "@/lib/marketplace/token-display";
+import { formatAddress, formatPriceForDisplay } from "@/lib/marketplace/token-display";
 import {
   Sheet,
   SheetContent,
@@ -96,7 +96,7 @@ export function CartSidebar() {
                         #{item.tokenId}
                       </p>
                       <p className="text-xs text-primary font-medium">
-                        {formatPriceForDisplay(item.price) ?? item.price} {item.currency}
+                        {formatPriceForDisplay(item.price) ?? item.price} {formatAddress(item.currency)}
                       </p>
                     </div>
                     <Button
