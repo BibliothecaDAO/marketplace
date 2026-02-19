@@ -31,6 +31,7 @@ vi.mock("@/lib/marketplace/config", () => ({
 
 describe("marketplace seo data", () => {
   beforeEach(() => {
+    vi.resetModules();
     mockGetCollection.mockReset();
     mockGetToken.mockReset();
     mockCreateMarketplaceClient.mockReset();
@@ -132,5 +133,41 @@ describe("marketplace seo data", () => {
       image: null,
       collectionImage: null,
     });
+  });
+
+  it("returns_collection_fallback_when_client_init_fails", async () => {
+    mockCreateMarketplaceClient.mockImplementation(() => {
+      throw new Error("init failed");
+    });
+
+    const { getCollectionSeoData } = await import("@/lib/marketplace/seo-data");
+    const result = await getCollectionSeoData("0xabc");
+
+    expect(result).toEqual({
+      exists: false,
+      name: "Genesis",
+      description: null,
+      image: null,
+    });
+    expect(mockGetCollection).not.toHaveBeenCalled();
+  });
+
+  it("returns_token_fallback_when_client_init_fails", async () => {
+    mockCreateMarketplaceClient.mockImplementation(() => {
+      throw new Error("init failed");
+    });
+
+    const { getTokenSeoData } = await import("@/lib/marketplace/seo-data");
+    const result = await getTokenSeoData("0xabc", "7");
+
+    expect(result).toEqual({
+      exists: false,
+      tokenName: "Token #7",
+      collectionName: "Genesis",
+      description: null,
+      image: null,
+      collectionImage: null,
+    });
+    expect(mockGetToken).not.toHaveBeenCalled();
   });
 });

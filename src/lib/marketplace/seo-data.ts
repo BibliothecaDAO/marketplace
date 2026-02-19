@@ -118,9 +118,24 @@ const getMarketplaceClient = cache(() => {
   return createMarketplaceClient(sdkConfig);
 });
 
+async function getMarketplaceClientSafe() {
+  try {
+    return await getMarketplaceClient();
+  } catch {
+    return null;
+  }
+}
+
 async function fetchCollection(address: string) {
   const context = resolveCollectionContext(address);
-  const client = await getMarketplaceClient();
+  const client = await getMarketplaceClientSafe();
+
+  if (!client) {
+    return {
+      context,
+      collection: null,
+    };
+  }
 
   try {
     const collection = await client.getCollection({
@@ -146,7 +161,11 @@ async function fetchTokenWithFallback(options: {
   tokenId: string;
   projectId?: string;
 }) {
-  const client = await getMarketplaceClient();
+  const client = await getMarketplaceClientSafe();
+  if (!client) {
+    return null;
+  }
+
   let response: TokenDetails | null = null;
 
   try {
