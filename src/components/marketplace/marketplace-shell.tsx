@@ -247,7 +247,7 @@ export function MarketplaceShell() {
               {tokens.status === "loading" && (
                 <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
                   {Array.from({ length: 6 }).map((_, index) => (
-                    <Card key={`skeleton-${index}`} className="overflow-hidden">
+                    <Card key={index} className="overflow-hidden">
                       <Skeleton className="aspect-square w-full rounded-none" />
                       <CardContent className="space-y-2 p-3">
                         <Skeleton className="h-4 w-2/3" />

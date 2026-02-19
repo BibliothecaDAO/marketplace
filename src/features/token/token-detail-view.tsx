@@ -7,9 +7,8 @@ import type { NormalizedToken } from "@cartridge/arcade/marketplace";
 import {
   useCollectionListingsQuery,
   useTokenDetailQuery,
-  useTokenHolderQuery,
-  useTokenOwnershipQuery,
 } from "@/lib/marketplace/hooks";
+import { useTokenOwnership } from "@/features/token/use-token-ownership";
 import { getMarketplaceRuntimeConfig } from "@/lib/marketplace/config";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -89,16 +88,16 @@ function truncateAddress(addr: string) {
   return addr.length > 14 ? addr.slice(0, 6) + "..." + addr.slice(-4) : addr;
 }
 
+// Arcade Marketplace contract address (same on SN_MAIN and SN_SEPOLIA per SDK manifest)
+const MARKETPLACE_CONTRACT = "0x6bbf16b6c67b1bef27a187b499b2f3a14af31646c2c90d64f11b9087c3f527c";
+// STRK token address on Starknet mainnet / testnet
+const STRK_ADDRESS = "0x04718f5a0fc34cc1af16a1cdee98ffb20c31f5cd61d6ab07201858f4287c938d";
+
 export function TokenDetailView({
   address,
   tokenId,
   projectId,
 }: TokenDetailViewProps) {
-  // Arcade Marketplace contract address (same on SN_MAIN and SN_SEPOLIA per SDK manifest)
-  const MARKETPLACE_CONTRACT = "0x6bbf16b6c67b1bef27a187b499b2f3a14af31646c2c90d64f11b9087c3f527c";
-  // STRK token address on Starknet mainnet / testnet
-  const STRK_ADDRESS = "0x04718f5a0fc34cc1af16a1cdee98ffb20c31f5cd61d6ab07201858f4287c938d";
-
   const normalizedTokenId = formatNumberish(tokenId) ?? tokenId;
   const addItem = useCartStore((state) => state.addItem);
   const { account, address: walletAddress, isConnected } = useAccount();
@@ -131,49 +130,12 @@ export function TokenDetailView({
     verifyOwnership,
   });
 
-  const ownershipQuery = useTokenOwnershipQuery({
+  const { holderAddress, isOwner, effectiveIsOwner, ownershipQuery } = useTokenOwnership({
     collection: address,
     tokenId: normalizedTokenId,
-    accountAddress: walletAddress,
+    walletAddress,
+    isConnected: isConnected ?? false,
   });
-
-  const holderQuery = useTokenHolderQuery({
-    collection: address,
-    tokenId: normalizedTokenId,
-  });
-
-  const holderAddress = useMemo(() => {
-    const balances = (holderQuery.data as { page?: { balances?: Array<{ account_address: string; balance: string }> } } | null)?.page?.balances ?? [];
-    const holder = balances.find((b) => {
-      try { return BigInt(b.balance) > BigInt(0); } catch { return false; }
-    });
-    return holder?.account_address ?? null;
-  }, [holderQuery.data]);
-
-  const isOwner = useMemo(() => {
-    if (!walletAddress || !isConnected) return false;
-    const balances = (ownershipQuery.data as { page?: { balances?: Array<{ balance: string }> } } | null)?.page?.balances ?? [];
-    return balances.some((b) => {
-      try {
-        return BigInt(b.balance) > BigInt(0);
-      } catch {
-        return false;
-      }
-    });
-  }, [ownershipQuery.data, walletAddress, isConnected]);
-
-  // Use holderAddress for ownership detection when available (more reliable than token balance API).
-  // Compare via BigInt to handle leading-zero padding differences in Starknet addresses.
-  // Falls back to `isOwner` from ownershipQuery when holderAddress is not yet known.
-  const isOwnerByHolder = useMemo(() => {
-    if (holderAddress === null || walletAddress === undefined) return false;
-    try {
-      return BigInt(holderAddress) === BigInt(walletAddress);
-    } catch {
-      return holderAddress.toLowerCase() === walletAddress.toLowerCase();
-    }
-  }, [holderAddress, walletAddress]);
-  const effectiveIsOwner = holderAddress !== null ? isOwnerByHolder : isOwner;
 
   const token = detailQuery.data?.token ?? null;
   const listings = useMemo(
@@ -598,7 +560,7 @@ export function TokenDetailView({
           <p className="text-sm text-muted-foreground">No listings</p>
         ) : (
           <div className="space-y-2">
-            {listings.map((listing: { id: number; price: number | string; owner: string; expiration?: number; currency?: string; quantity?: number | string; tokenId?: number | string }) => {
+            {listingRows.map((listing) => {
               const isCheapest = cheapestListing?.orderId === String(listing.id);
               const hasFullCartData =
                 listing.id !== undefined &&

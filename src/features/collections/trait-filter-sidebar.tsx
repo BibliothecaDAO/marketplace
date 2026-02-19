@@ -2,6 +2,7 @@
 
 import { useMemo } from "react";
 import { Button } from "@/components/ui/button";
+import { cn } from "@/lib/utils";
 import {
   type ActiveFilters,
   type TraitMetadataRow,
@@ -118,12 +119,12 @@ export function TraitFilterSidebar({
                       key={`${traitName}-${item.property}`}
                       onClick={() => toggleFilter(traitName, item.property)}
                       type="button"
-                      className={[
+                      className={cn(
                         "inline-flex items-center rounded-full border px-2 py-0.5 text-xs transition-colors",
                         isActive
                           ? "border-primary bg-primary/10 text-primary"
                           : "border-border text-muted-foreground hover:border-primary/50 hover:text-foreground",
-                      ].join(" ")}
+                      )}
                     >
                       {item.property} ({item.count})
                     </button>
