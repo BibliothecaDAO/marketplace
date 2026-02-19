@@ -49,6 +49,8 @@ export function useAddToCartFeedback() {
       if (result.ok) {
         setOpen(true);
         markAdded(item.orderId);
+      } else {
+        setOpen(true);
       }
       return result;
     },

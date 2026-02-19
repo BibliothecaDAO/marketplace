@@ -18,7 +18,9 @@ vi.mock("@/lib/marketplace/hooks", () => ({
 
 vi.mock("@/features/collections/collection-token-grid", () => ({
   CollectionTokenGrid: (props: Record<string, unknown>) => (
-    <div data-testid="collection-token-grid">Token Grid: {props.address as string}</div>
+    <div data-testid="collection-token-grid">
+      Token Grid: {props.address as string} | Sort: {String(props.sortMode ?? "recent")}
+    </div>
   ),
 }));
 
@@ -175,5 +177,25 @@ describe("collection route view", () => {
     );
     render(<CollectionRouteView address="0xabc" collections={collections} />);
     expect(screen.queryByText(/contract type/i)).toBeNull();
+  });
+
+  it("sort_controls_update_mode_and_pass_selection_to_token_grid", async () => {
+    mockUseCollectionQuery.mockReturnValue(successQuery(null));
+    const onSortModeChange = vi.fn();
+    const user = userEvent.setup();
+
+    render(
+      <CollectionRouteView
+        address="0xabc"
+        collections={collections}
+        sortMode="recent"
+        onSortModeChange={onSortModeChange}
+      />,
+    );
+
+    await user.click(screen.getByRole("button", { name: /price low to high/i }));
+
+    expect(onSortModeChange).toHaveBeenCalledWith("price-asc");
+    expect(screen.getByText(/sort: recent/i)).toBeVisible();
   });
 });

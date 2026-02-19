@@ -23,6 +23,7 @@ import {
   cheapestListingByTokenId,
 } from "@/features/cart/listing-utils";
 import { useAddToCartFeedback } from "@/features/cart/hooks/use-add-to-cart-feedback";
+import { type CollectionSortMode } from "@/features/collections/collection-query-params";
 
 type CollectionTokenGridProps = {
   address: string;
@@ -30,6 +31,7 @@ type CollectionTokenGridProps = {
   limit?: number;
   tokenIds?: string[];
   activeFilters?: ActiveFilters;
+  sortMode?: CollectionSortMode;
   onTokensChange?: (tokens: NormalizedToken[]) => void;
 };
 
@@ -59,6 +61,66 @@ function dedupeTokens(tokens: NormalizedToken[]) {
 
 function tokenSignature(tokens: NormalizedToken[]) {
   return tokens.map((item) => tokenId(item)).join(",");
+}
+
+function sortablePrice(
+  token: NormalizedToken,
+  listingPrices: Map<string, { price: string }>,
+  listingPriceMap: Map<string, string>,
+) {
+  const tokenKey = displayTokenId(token);
+  const rawPrice =
+    listingPrices.get(tokenKey)?.price ??
+    listingPriceMap.get(tokenKey) ??
+    tokenPrice(token);
+  if (!rawPrice) {
+    return null;
+  }
+
+  try {
+    return BigInt(rawPrice);
+  } catch {
+    return null;
+  }
+}
+
+function sortTokens(
+  tokens: NormalizedToken[],
+  sortMode: CollectionSortMode,
+  listingPrices: Map<string, { price: string }>,
+  listingPriceMap: Map<string, string>,
+) {
+  if (sortMode === "recent") {
+    return tokens;
+  }
+
+  const ordered = [...tokens];
+  ordered.sort((left, right) => {
+    const leftPrice = sortablePrice(left, listingPrices, listingPriceMap);
+    const rightPrice = sortablePrice(right, listingPrices, listingPriceMap);
+
+    if (leftPrice === null && rightPrice === null) {
+      return tokenId(left).localeCompare(tokenId(right));
+    }
+    if (leftPrice === null) {
+      return 1;
+    }
+    if (rightPrice === null) {
+      return -1;
+    }
+    if (leftPrice === rightPrice) {
+      return tokenId(left).localeCompare(tokenId(right));
+    }
+
+    const isAscending = sortMode === "price-asc";
+    if (leftPrice < rightPrice) {
+      return isAscending ? -1 : 1;
+    }
+
+    return isAscending ? 1 : -1;
+  });
+
+  return ordered;
 }
 
 type GridPaginationState = {
@@ -99,6 +161,7 @@ export function CollectionTokenGrid({
   limit = 24,
   tokenIds,
   activeFilters,
+  sortMode = "recent",
   onTokensChange,
 }: CollectionTokenGridProps) {
   const { addListingToCart, isRecentlyAdded } = useAddToCartFeedback();
@@ -160,6 +223,10 @@ export function CollectionTokenGrid({
   const visibleTokens = pagination.tokens;
   const listingPrices = cheapestListingByTokenId(listingQuery.data);
   const listingPriceMap = listingPriceByTokenId(listingQuery.data);
+  const sortedTokens = useMemo(
+    () => sortTokens(visibleTokens, sortMode, listingPrices, listingPriceMap),
+    [listingPriceMap, listingPrices, sortMode, visibleTokens],
+  );
 
   return (
     <section className="space-y-4">
@@ -208,7 +275,7 @@ export function CollectionTokenGrid({
           className={cn("grid gap-3", GRID_DENSITY_CLASSES[gridDensity])}
           data-testid="collection-token-grid-cards"
         >
-          {visibleTokens.map((token) => {
+          {sortedTokens.map((token) => {
             const tokenKey = displayTokenId(token);
             const cheapestListing = listingPrices.get(tokenKey);
             const isAdded = isRecentlyAdded(cheapestListing?.orderId);

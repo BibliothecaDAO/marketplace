@@ -23,6 +23,65 @@ type MarketplaceTokenCardProps = {
   cardContentRole?: "article";
 };
 
+type TokenAttributeRow = {
+  trait: string;
+  value: string;
+};
+
+function normalizeAttributeValue(value: unknown) {
+  if (typeof value === "string") {
+    const normalized = value.trim();
+    return normalized.length > 0 ? normalized : null;
+  }
+
+  if (typeof value === "number" || typeof value === "boolean") {
+    return String(value);
+  }
+
+  return null;
+}
+
+function tokenAttributes(token: NormalizedToken): TokenAttributeRow[] {
+  const metadata = token.metadata;
+  if (!metadata || typeof metadata !== "object") {
+    return [];
+  }
+
+  const attributes = (metadata as { attributes?: unknown }).attributes;
+  if (!Array.isArray(attributes)) {
+    return [];
+  }
+
+  const grouped = new Map<string, string[]>();
+
+  attributes.forEach((rawAttribute) => {
+    if (!rawAttribute || typeof rawAttribute !== "object") {
+      return;
+    }
+
+    const attribute = rawAttribute as Record<string, unknown>;
+    const trait = normalizeAttributeValue(
+      attribute.trait_type ?? attribute.traitName ?? attribute.name,
+    );
+    const value = normalizeAttributeValue(attribute.value ?? attribute.traitValue);
+
+    if (!trait || !value) {
+      return;
+    }
+
+    const values = grouped.get(trait) ?? [];
+    if (!values.includes(value)) {
+      values.push(value);
+    }
+    grouped.set(trait, values);
+  });
+
+  return Array.from(grouped.entries()).map(([trait, values]) => ({
+    trait,
+    value: values.join(", "),
+  }));
+}
+
 export function MarketplaceTokenCard({
   token,
   href,
@@ -36,6 +95,7 @@ export function MarketplaceTokenCard({
 }: MarketplaceTokenCardProps) {
   const image = tokenImage(token);
   const displayPrice = formatPriceForDisplay(price);
+  const attributes = tokenAttributes(token);
 
   return (
     <Link
@@ -48,7 +108,7 @@ export function MarketplaceTokenCard({
     >
       <Card
         className={cn(
-          "overflow-hidden py-0 transition-colors duration-150 group-hover:border-primary/30",
+          "relative overflow-hidden py-0 transition-colors duration-150 group-hover:border-primary/30",
           cardClassName,
         )}
       >
@@ -75,6 +135,52 @@ export function MarketplaceTokenCard({
             <p className="text-xs text-primary font-medium">{displayPrice}</p>
           ) : null}
         </CardContent>
+        <div
+          className="pointer-events-none absolute inset-0 flex items-end bg-background/85 p-2 opacity-0 transition-opacity duration-150 group-hover:pointer-events-auto group-hover:opacity-100 group-focus-visible:pointer-events-auto group-focus-visible:opacity-100 group-focus-within:pointer-events-auto group-focus-within:opacity-100"
+          data-testid="token-attributes-overlay"
+        >
+          <div className="w-full rounded-md border bg-background/95 p-2 shadow-sm">
+            <div
+              className="max-h-44 overflow-y-auto pr-1"
+              data-testid="token-attributes-scroll"
+            >
+              <table
+                className="w-full table-fixed border-collapse text-[11px] leading-4"
+                data-testid="token-attributes-table"
+              >
+                <thead>
+                  <tr className="border-b text-muted-foreground">
+                    <th className="w-1/2 pb-1 text-left font-medium">Trait</th>
+                    <th className="w-1/2 pb-1 text-left font-medium">Value</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {attributes.length > 0 ? (
+                    attributes.map((attribute) => (
+                      <tr
+                        className="border-b last:border-b-0"
+                        key={`${attribute.trait}:${attribute.value}`}
+                      >
+                        <td className="truncate py-1 pr-2 text-foreground">
+                          {attribute.trait}
+                        </td>
+                        <td className="break-words py-1 text-foreground">
+                          {attribute.value}
+                        </td>
+                      </tr>
+                    ))
+                  ) : (
+                    <tr>
+                      <td className="py-2 text-xs text-muted-foreground" colSpan={2}>
+                        No attributes
+                      </td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
       </Card>
     </Link>
   );

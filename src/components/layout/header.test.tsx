@@ -94,12 +94,15 @@ describe("Header", () => {
 
     const twitterLinks = screen.getAllByRole("link", { name: /twitter/i });
     expect(twitterLinks.length).toBeGreaterThan(0);
+    expect(twitterLinks[0]).toHaveAttribute("href", "https://x.com/lootrealms");
 
     const discordLinks = screen.getAllByRole("link", { name: /discord/i });
     expect(discordLinks.length).toBeGreaterThan(0);
+    expect(discordLinks[0]).toHaveAttribute("href", "https://discord.gg/realmsworld");
 
     const githubLinks = screen.getAllByRole("link", { name: /github/i });
     expect(githubLinks.length).toBeGreaterThan(0);
+    expect(githubLinks[0]).toHaveAttribute("href", "https://github.com/bibliothecaDAO");
   });
 
   it("shows_login_button_when_disconnected", () => {
@@ -112,6 +115,14 @@ describe("Header", () => {
     render(<Header />);
 
     expect(screen.getByRole("button", { name: /cart \(0\)/i })).toBeVisible();
+  });
+
+  it("shows_portfolio_link_for_address_lookup", () => {
+    render(<Header />);
+
+    const portfolioLink = screen.getByRole("link", { name: /portfolio/i });
+    expect(portfolioLink).toBeVisible();
+    expect(portfolioLink).toHaveAttribute("href", "/portfolio");
   });
 
   it("login_opens_wallet_modal_with_all_connectors", async () => {

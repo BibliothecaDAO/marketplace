@@ -5,10 +5,13 @@ import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import type { SeedCollection } from "@/lib/marketplace/config";
 import { CollectionRouteView } from "@/features/collections/collection-route-view";
 import {
-  activeFiltersFromSearchParams,
-  activeFiltersToSearchParams,
   type ActiveFilters,
 } from "@/lib/marketplace/traits";
+import {
+  collectionDiscoveryStateFromSearchParams,
+  collectionDiscoveryStateToSearchParams,
+  type CollectionSortMode,
+} from "@/features/collections/collection-query-params";
 
 type CollectionRouteContainerProps = {
   address: string;
@@ -24,21 +27,30 @@ export function CollectionRouteContainer({
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
-  const activeFilters = useMemo(
-    () => activeFiltersFromSearchParams(new URLSearchParams(searchParams.toString())),
+  const discoveryState = useMemo(
+    () =>
+      collectionDiscoveryStateFromSearchParams(
+        new URLSearchParams(searchParams.toString()),
+      ),
     [searchParams],
   );
+  const activeFilters = discoveryState.activeFilters;
+  const sortMode = discoveryState.sortMode;
 
   function handleActiveFiltersChange(nextFilters: ActiveFilters) {
-    const nextParams = new URLSearchParams(searchParams.toString());
-    nextParams.delete("cursor");
-    nextParams.delete("trait");
+    const nextParams = collectionDiscoveryStateToSearchParams(
+      new URLSearchParams(searchParams.toString()),
+      { activeFilters: nextFilters, sortMode },
+    );
+    const query = nextParams.toString();
+    router.push(query ? `${pathname}?${query}` : pathname);
+  }
 
-    const traitParams = activeFiltersToSearchParams(nextFilters);
-    traitParams.getAll("trait").forEach((entry) => {
-      nextParams.append("trait", entry);
-    });
-
+  function handleSortModeChange(nextSortMode: CollectionSortMode) {
+    const nextParams = collectionDiscoveryStateToSearchParams(
+      new URLSearchParams(searchParams.toString()),
+      { activeFilters, sortMode: nextSortMode },
+    );
     const query = nextParams.toString();
     router.push(query ? `${pathname}?${query}` : pathname);
   }
@@ -51,6 +63,8 @@ export function CollectionRouteContainer({
       collections={collections}
       onActiveFiltersChange={handleActiveFiltersChange}
       onNavigate={(href) => router.push(href)}
+      onSortModeChange={handleSortModeChange}
+      sortMode={sortMode}
     />
   );
 }

@@ -1,12 +1,15 @@
 "use client";
 
 import Link from "next/link";
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
+import { Input } from "@/components/ui/input";
 import { useWalletPortfolioQuery } from "@/lib/marketplace/hooks";
 import { formatNumberish } from "@/lib/marketplace/token-display";
 
 type WalletProfileViewProps = {
   address: string;
+  title?: string;
+  addressLabel?: string;
 };
 
 type PortfolioItem = {
@@ -58,8 +61,13 @@ function parsePortfolioItems(data: unknown): PortfolioItem[] {
   return items;
 }
 
-export function WalletProfileView({ address }: WalletProfileViewProps) {
+export function WalletProfileView({
+  address,
+  title = "Wallet Profile",
+  addressLabel = "Connected wallet address:",
+}: WalletProfileViewProps) {
   const portfolioQuery = useWalletPortfolioQuery(address);
+  const [filterInput, setFilterInput] = useState("");
   const isLoading =
     portfolioQuery.status === "loading" || portfolioQuery.isFetching;
   const isError = portfolioQuery.status === "error" || !!portfolioQuery.error;
@@ -67,11 +75,26 @@ export function WalletProfileView({ address }: WalletProfileViewProps) {
     () => parsePortfolioItems(portfolioQuery.data),
     [portfolioQuery.data],
   );
+  const filteredItems = useMemo(() => {
+    const normalized = filterInput.trim().toLowerCase();
+    if (!normalized) {
+      return items;
+    }
+
+    return items.filter(
+      (item) =>
+        item.collectionAddress.toLowerCase().includes(normalized) ||
+        item.tokenId.toLowerCase().includes(normalized),
+    );
+  }, [filterInput, items]);
 
   return (
-    <main className="mx-auto flex min-h-[calc(100vh-3.5rem)] w-full max-w-4xl flex-col gap-4 px-4 py-6 sm:px-6 lg:px-8">
-      <h1 className="text-2xl font-semibold tracking-tight">Wallet Profile</h1>
-      <p className="text-sm text-muted-foreground">Connected wallet address:</p>
+    <main
+      className="mx-auto flex min-h-[calc(100vh-3.5rem)] w-full max-w-4xl flex-col gap-4 px-4 py-6 sm:px-6 lg:px-8"
+      data-testid="wallet-profile-view"
+    >
+      <h1 className="text-2xl font-semibold tracking-tight">{title}</h1>
+      <p className="text-sm text-muted-foreground">{addressLabel}</p>
       <code className="w-full overflow-x-auto rounded-sm border border-border/70 bg-muted/30 p-3 text-xs sm:text-sm">
         {address}
       </code>
@@ -89,33 +112,56 @@ export function WalletProfileView({ address }: WalletProfileViewProps) {
           No items found for this wallet.
         </p>
       ) : (
-        <ul className="space-y-2">
-          {items.map((item) => (
-            <li
-              className="flex items-center justify-between gap-3 rounded-sm border border-border/70 p-3"
-              key={`${item.collectionAddress}:${item.tokenId}`}
+        <>
+          <div className="w-full max-w-sm">
+            <label
+              className="mb-1 block text-xs font-medium text-muted-foreground"
+              htmlFor="wallet-profile-filter"
             >
-              <div className="min-w-0">
-                <p className="truncate text-sm font-medium">
-                  {item.collectionAddress}
-                </p>
-                <p className="text-xs text-muted-foreground">#{item.tokenId}</p>
-              </div>
-              <div className="flex items-center gap-3">
-                <span className="text-sm font-medium text-primary">
-                  x{item.balance}
-                </span>
-                <Link
-                  aria-label={`View token ${item.tokenId}`}
-                  className="text-xs underline-offset-4 hover:underline"
-                  href={`/collections/${item.collectionAddress}/${item.tokenId}`}
+              Filter collection or token
+            </label>
+            <Input
+              aria-label="Filter collection or token"
+              id="wallet-profile-filter"
+              onChange={(event) => setFilterInput(event.target.value)}
+              placeholder="Collection address or token id"
+              value={filterInput}
+            />
+          </div>
+          {filteredItems.length === 0 ? (
+            <p className="text-sm text-muted-foreground">
+              No items match the current filter.
+            </p>
+          ) : (
+            <ul className="space-y-2">
+              {filteredItems.map((item) => (
+                <li
+                  className="flex items-center justify-between gap-3 rounded-sm border border-border/70 p-3"
+                  key={`${item.collectionAddress}:${item.tokenId}`}
                 >
-                  View
-                </Link>
-              </div>
-            </li>
-          ))}
-        </ul>
+                  <div className="min-w-0">
+                    <p className="truncate text-sm font-medium">
+                      {item.collectionAddress}
+                    </p>
+                    <p className="text-xs text-muted-foreground">#{item.tokenId}</p>
+                  </div>
+                  <div className="flex items-center gap-3">
+                    <span className="text-sm font-medium text-primary">
+                      x{item.balance}
+                    </span>
+                    <Link
+                      aria-label={`View token ${item.tokenId}`}
+                      className="text-xs underline-offset-4 hover:underline"
+                      href={`/collections/${item.collectionAddress}/${item.tokenId}`}
+                    >
+                      View
+                    </Link>
+                  </div>
+                </li>
+              ))}
+            </ul>
+          )}
+        </>
       )}
     </main>
   );
