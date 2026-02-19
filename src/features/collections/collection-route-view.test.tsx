@@ -4,12 +4,16 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { CollectionRouteView } from "@/features/collections/collection-route-view";
 import type { SeedCollection } from "@/lib/marketplace/config";
 
-const { mockUseCollectionQuery } = vi.hoisted(() => ({
+const { mockUseCollectionQuery, mockUseCollectionTraitMetadataQuery, mockUseCollectionListingsQuery } = vi.hoisted(() => ({
   mockUseCollectionQuery: vi.fn(),
+  mockUseCollectionTraitMetadataQuery: vi.fn(),
+  mockUseCollectionListingsQuery: vi.fn(),
 }));
 
 vi.mock("@/lib/marketplace/hooks", () => ({
   useCollectionQuery: mockUseCollectionQuery,
+  useCollectionTraitMetadataQuery: mockUseCollectionTraitMetadataQuery,
+  useCollectionListingsQuery: mockUseCollectionListingsQuery,
 }));
 
 vi.mock("@/features/collections/collection-token-grid", () => ({
@@ -50,6 +54,26 @@ function successQuery(data: unknown) {
 describe("collection route view", () => {
   beforeEach(() => {
     mockUseCollectionQuery.mockReset();
+    mockUseCollectionTraitMetadataQuery.mockReset();
+    mockUseCollectionListingsQuery.mockReset();
+    mockUseCollectionTraitMetadataQuery.mockReturnValue({
+      data: [],
+      isLoading: false,
+      isSuccess: true,
+      isError: false,
+      error: null,
+      isFetching: false,
+      refetch: vi.fn(),
+    });
+    mockUseCollectionListingsQuery.mockReturnValue({
+      data: [],
+      isLoading: false,
+      isSuccess: true,
+      isError: false,
+      error: null,
+      isFetching: false,
+      refetch: vi.fn(),
+    });
   });
 
   it("collection_route_loads_summary_for_address", () => {
@@ -69,7 +93,7 @@ describe("collection route view", () => {
     expect(mockUseCollectionQuery).toHaveBeenCalledWith(
       { address: "0xabc", projectId: "project-a", fetchImages: true },
     );
-    expect(screen.getByText("0xabc")).toBeVisible();
+    expect(screen.getByRole("heading", { name: "Genesis" })).toBeVisible();
   });
 
   it("collection_switch_updates_url_and_resets_cursor", async () => {
@@ -133,6 +157,16 @@ describe("collection route view", () => {
     mockUseCollectionQuery.mockReturnValue(successQuery(null));
     render(<CollectionRouteView address="0xabc" collections={collections} cursor="some-cursor" />);
     expect(screen.queryByText(/cursor:/i)).toBeNull();
+  });
+
+  it("fetches_trait_metadata_from_sdk_for_active_collection", () => {
+    mockUseCollectionQuery.mockReturnValue(successQuery(null));
+
+    render(<CollectionRouteView address="0xabc" collections={collections} />);
+
+    expect(mockUseCollectionTraitMetadataQuery).toHaveBeenCalledWith(
+      expect.objectContaining({ address: "0xabc", projectId: "project-a" }),
+    );
   });
 
   it("contract_type_not_shown_to_users", () => {

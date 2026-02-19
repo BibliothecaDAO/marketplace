@@ -16,10 +16,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { MarketplaceTokenCard } from "@/components/marketplace/token-card";
 import { Skeleton } from "@/components/ui/skeleton";
-import {
-  type ActiveFilters,
-  filterTokensByActiveFilters,
-} from "@/lib/marketplace/traits";
+import type { ActiveFilters } from "@/lib/marketplace/traits";
 import { cn } from "@/lib/utils";
 import {
   cartItemFromTokenListing,
@@ -74,6 +71,23 @@ export function CollectionTokenGrid({
 }: CollectionTokenGridProps) {
   const addItem = useCartStore((state) => state.addItem);
   const tokenIdsKey = useMemo(() => tokenIds?.join(",") ?? "", [tokenIds]);
+  const activeFiltersKey = useMemo(
+    () =>
+      activeFilters
+        ? Object.entries(activeFilters)
+            .sort(([a], [b]) => a.localeCompare(b))
+            .map(([k, v]) => `${k}:${Array.from(v).sort().join(",")}`)
+            .join("|")
+        : "",
+    [activeFilters],
+  );
+  const attributeFilters = useMemo(
+    () =>
+      activeFilters && Object.keys(activeFilters).length > 0
+        ? Object.fromEntries(Object.entries(activeFilters))
+        : undefined,
+    [activeFilters],
+  );
   const [cursor, setCursor] = useState<string | null | undefined>(undefined);
   const [tokens, setTokens] = useState<NormalizedToken[]>([]);
   const [gridDensity, setGridDensity] = useState<GridDensity>("standard");
@@ -85,6 +99,7 @@ export function CollectionTokenGrid({
     tokenIds,
     cursor,
     fetchImages: true,
+    attributeFilters,
   });
   const listingQuery = useCollectionListingsQuery({
     collection: address,
@@ -95,7 +110,9 @@ export function CollectionTokenGrid({
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect
     setTokens([]);
-  }, [address, projectId, limit, tokenIdsKey]);
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setCursor(undefined);
+  }, [address, projectId, limit, tokenIdsKey, activeFiltersKey]);
 
   useEffect(() => {
     if (!tokenQuery.isSuccess) {
@@ -119,13 +136,7 @@ export function CollectionTokenGrid({
 
   const nextCursor = tokenQuery.data?.page?.nextCursor ?? null;
   const canLoadMore = Boolean(nextCursor);
-  const visibleTokens = useMemo(
-    () =>
-      activeFilters && Object.keys(activeFilters).length > 0
-        ? filterTokensByActiveFilters(tokens, activeFilters)
-        : tokens,
-    [activeFilters, tokens],
-  );
+  const visibleTokens = tokens;
   const listingPrices = cheapestListingByTokenId(listingQuery.data);
   const listingPriceMap = listingPriceByTokenId(listingQuery.data);
 

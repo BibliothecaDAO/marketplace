@@ -9,6 +9,9 @@ const { mockUseCollectionTokensQuery } = vi.hoisted(() => ({
 const { mockUseCollectionListingsQuery } = vi.hoisted(() => ({
   mockUseCollectionListingsQuery: vi.fn(),
 }));
+const { mockUseCollectionQuery } = vi.hoisted(() => ({
+  mockUseCollectionQuery: vi.fn(),
+}));
 const { mockCartAddItem } = vi.hoisted(() => ({
   mockCartAddItem: vi.fn(),
 }));
@@ -16,6 +19,7 @@ const { mockCartAddItem } = vi.hoisted(() => ({
 vi.mock("@/lib/marketplace/hooks", () => ({
   useCollectionTokensQuery: mockUseCollectionTokensQuery,
   useCollectionListingsQuery: mockUseCollectionListingsQuery,
+  useCollectionQuery: mockUseCollectionQuery,
 }));
 
 vi.mock("@/features/cart/store/cart-store", () => ({
@@ -65,11 +69,21 @@ describe("collection row", () => {
   beforeEach(() => {
     mockUseCollectionTokensQuery.mockReset();
     mockUseCollectionListingsQuery.mockReset();
+    mockUseCollectionQuery.mockReset();
     mockCartAddItem.mockReset();
     mockUseCollectionTokensQuery.mockReturnValue(
       successResult([token("1"), token("2")]),
     );
     mockUseCollectionListingsQuery.mockReturnValue(successListingsResult([]));
+    mockUseCollectionQuery.mockReturnValue({
+      data: undefined,
+      isLoading: false,
+      isSuccess: false,
+      isError: false,
+      error: null,
+      isFetching: false,
+      refetch: vi.fn(),
+    });
   });
 
   it("renders_collection_name", () => {

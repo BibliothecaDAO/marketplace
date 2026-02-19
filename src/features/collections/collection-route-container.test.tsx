@@ -11,6 +11,8 @@ const { mockUseCollectionQuery, mockPush } = vi.hoisted(() => ({
 
 vi.mock("@/lib/marketplace/hooks", () => ({
   useCollectionQuery: mockUseCollectionQuery,
+  useCollectionTraitMetadataQuery: () => ({ data: [], isLoading: false }),
+  useCollectionListingsQuery: () => ({ data: [], isLoading: false, isSuccess: true }),
 }));
 
 vi.mock("@/features/collections/collection-token-grid", () => ({

@@ -4,12 +4,14 @@ import { createElement, type ReactNode } from "react";
 import type { CollectionOrdersOptions } from "@cartridge/arcade/marketplace";
 import { describe, expect, it, vi, beforeEach } from "vitest";
 
-const { mockUseMarketplaceClient } = vi.hoisted(() => ({
+const { mockUseMarketplaceClient, mockUseMarketplaceTokenBalances } = vi.hoisted(() => ({
   mockUseMarketplaceClient: vi.fn(),
+  mockUseMarketplaceTokenBalances: vi.fn(),
 }));
 
 vi.mock("@cartridge/arcade/marketplace/react", () => ({
   useMarketplaceClient: mockUseMarketplaceClient,
+  useMarketplaceTokenBalances: mockUseMarketplaceTokenBalances,
 }));
 
 function makeWrapper() {
@@ -37,6 +39,8 @@ function mockClient(overrides: Record<string, unknown> = {}) {
 describe("marketplace cached hooks", () => {
   beforeEach(() => {
     mockUseMarketplaceClient.mockReset();
+    mockUseMarketplaceTokenBalances.mockReset();
+    mockUseMarketplaceTokenBalances.mockReturnValue({ data: [], isLoading: false });
   });
 
   describe("useCollectionQuery", () => {
@@ -323,6 +327,134 @@ describe("marketplace cached hooks", () => {
         tokenId: "0x935",
         fetchImages: true,
       });
+    });
+  });
+
+  describe("useTokenOwnershipQuery", () => {
+    it("passes_both_decimal_and_hex_token_ids_when_given_decimal", async () => {
+      mockUseMarketplaceClient.mockReturnValue({ client: {}, status: "ready" });
+
+      const { useTokenOwnershipQuery } = await import("@/lib/marketplace/hooks");
+      renderHook(
+        () =>
+          useTokenOwnershipQuery({
+            collection: "0xcol",
+            tokenId: "2648",
+            accountAddress: "0xabc",
+          }),
+        { wrapper: makeWrapper() },
+      );
+
+      expect(mockUseMarketplaceTokenBalances).toHaveBeenCalledWith(
+        expect.objectContaining({
+          tokenIds: expect.arrayContaining(["2648", "0xa58"]),
+        }),
+        true,
+      );
+    });
+
+    it("passes_both_hex_and_decimal_token_ids_when_given_hex", async () => {
+      mockUseMarketplaceClient.mockReturnValue({ client: {}, status: "ready" });
+
+      const { useTokenOwnershipQuery } = await import("@/lib/marketplace/hooks");
+      renderHook(
+        () =>
+          useTokenOwnershipQuery({
+            collection: "0xcol",
+            tokenId: "0xa58",
+            accountAddress: "0xabc",
+          }),
+        { wrapper: makeWrapper() },
+      );
+
+      expect(mockUseMarketplaceTokenBalances).toHaveBeenCalledWith(
+        expect.objectContaining({
+          tokenIds: expect.arrayContaining(["0xa58", "2648"]),
+        }),
+        true,
+      );
+    });
+
+    it("stays_disabled_when_no_account_address", async () => {
+      mockUseMarketplaceClient.mockReturnValue({ client: {}, status: "ready" });
+
+      const { useTokenOwnershipQuery } = await import("@/lib/marketplace/hooks");
+      renderHook(
+        () =>
+          useTokenOwnershipQuery({
+            collection: "0xcol",
+            tokenId: "2648",
+          }),
+        { wrapper: makeWrapper() },
+      );
+
+      expect(mockUseMarketplaceTokenBalances).toHaveBeenCalledWith(
+        expect.anything(),
+        false,
+      );
+    });
+  });
+
+  describe("useTokenHolderQuery", () => {
+    it("passes_both_decimal_and_hex_token_ids_when_given_decimal", async () => {
+      mockUseMarketplaceClient.mockReturnValue({ client: {}, status: "ready" });
+
+      const { useTokenHolderQuery } = await import("@/lib/marketplace/hooks");
+      renderHook(
+        () =>
+          useTokenHolderQuery({
+            collection: "0xcol",
+            tokenId: "2648",
+          }),
+        { wrapper: makeWrapper() },
+      );
+
+      expect(mockUseMarketplaceTokenBalances).toHaveBeenCalledWith(
+        expect.objectContaining({
+          tokenIds: expect.arrayContaining(["2648", "0xa58"]),
+        }),
+        true,
+      );
+    });
+
+    it("passes_both_hex_and_decimal_token_ids_when_given_hex", async () => {
+      mockUseMarketplaceClient.mockReturnValue({ client: {}, status: "ready" });
+
+      const { useTokenHolderQuery } = await import("@/lib/marketplace/hooks");
+      renderHook(
+        () =>
+          useTokenHolderQuery({
+            collection: "0xcol",
+            tokenId: "0xa58",
+          }),
+        { wrapper: makeWrapper() },
+      );
+
+      expect(mockUseMarketplaceTokenBalances).toHaveBeenCalledWith(
+        expect.objectContaining({
+          tokenIds: expect.arrayContaining(["0xa58", "2648"]),
+        }),
+        true,
+      );
+    });
+
+    it("stays_disabled_when_collection_missing", async () => {
+      mockUseMarketplaceClient.mockReturnValue({ client: {}, status: "ready" });
+
+      const { useTokenHolderQuery } = await import("@/lib/marketplace/hooks");
+      renderHook(
+        () =>
+          useTokenHolderQuery({
+            collection: "",
+            tokenId: "2648",
+          }),
+        { wrapper: makeWrapper() },
+      );
+
+      expect(mockUseMarketplaceTokenBalances).toHaveBeenCalledWith(
+        expect.anything(),
+        false,
+      );
     });
   });
 });

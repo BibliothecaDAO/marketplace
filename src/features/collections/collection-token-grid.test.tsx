@@ -253,6 +253,33 @@ describe("collection token grid", () => {
     expect(link2).toHaveAttribute("href", "/collections/0xabc/2");
   });
 
+  it("active_filters_passed_as_attributeFilters_to_sdk_query", () => {
+    const filters: ActiveFilters = { Background: new Set(["Blue"]) };
+    mockUseCollectionTokensQuery.mockReturnValue({
+      data: { page: { tokens: [], nextCursor: null }, error: null },
+      isLoading: false,
+      isSuccess: true,
+      isError: false,
+      error: null,
+      isFetching: false,
+      refetch: vi.fn(),
+    });
+
+    render(
+      <CollectionTokenGrid
+        activeFilters={filters}
+        address="0xabc"
+        projectId="project-a"
+      />,
+    );
+
+    expect(mockUseCollectionTokensQuery).toHaveBeenCalledWith(
+      expect.objectContaining({
+        attributeFilters: { Background: new Set(["Blue"]) },
+      }),
+    );
+  });
+
   it("token_grid_filters_tokens_by_active_filters", async () => {
     const filters: ActiveFilters = { Background: new Set(["Blue"]) };
     mockUseCollectionTokensQuery.mockReturnValue({
@@ -263,12 +290,6 @@ describe("collection token grid", () => {
               metadata: {
                 name: "Token #1",
                 attributes: [{ trait_type: "Background", value: "Blue" }],
-              },
-            }),
-            token("2", {
-              metadata: {
-                name: "Token #2",
-                attributes: [{ trait_type: "Background", value: "Red" }],
               },
             }),
           ],
@@ -293,7 +314,11 @@ describe("collection token grid", () => {
     );
 
     expect(await screen.findByText("Token #1")).toBeVisible();
-    expect(screen.queryByText("Token #2")).toBeNull();
+    expect(mockUseCollectionTokensQuery).toHaveBeenCalledWith(
+      expect.objectContaining({
+        attributeFilters: { Background: new Set(["Blue"]) },
+      }),
+    );
   });
 
   it("formats_hex_ids_and_renders_price_in_shared_card_layout", async () => {

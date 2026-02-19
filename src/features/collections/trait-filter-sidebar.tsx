@@ -2,7 +2,6 @@
 
 import { useMemo } from "react";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
   type ActiveFilters,
   type TraitMetadataRow,
@@ -11,14 +10,11 @@ import {
   flattenActiveFilters,
 } from "@/lib/marketplace/traits";
 
-type TokenLike = {
-  metadata?: unknown;
-};
-
 type TraitFilterSidebarProps = {
-  tokens: TokenLike[];
+  traitMetadata: TraitMetadataRow[];
   activeFilters: ActiveFilters;
   onActiveFiltersChange?: (filters: ActiveFilters) => void;
+  isLoading?: boolean;
 };
 
 function cloneFilters(activeFilters: ActiveFilters): ActiveFilters {
@@ -27,60 +23,21 @@ function cloneFilters(activeFilters: ActiveFilters): ActiveFilters {
   );
 }
 
-function metadataRowsFromTokens(tokens: TokenLike[]): TraitMetadataRow[] {
-  const rows = new Map<string, number>();
-
-  tokens.forEach((token) => {
-    const metadata = token.metadata;
-    if (!metadata || typeof metadata !== "object") {
-      return;
-    }
-
-    const attributes = (metadata as { attributes?: unknown }).attributes;
-    if (!Array.isArray(attributes)) {
-      return;
-    }
-
-    attributes.forEach((rawAttribute) => {
-      if (!rawAttribute || typeof rawAttribute !== "object") {
-        return;
-      }
-
-      const attribute = rawAttribute as Record<string, unknown>;
-      const traitName = String(
-        attribute.trait_type ?? attribute.traitName ?? attribute.name ?? "",
-      ).trim();
-      const traitValue = String(attribute.value ?? attribute.traitValue ?? "").trim();
-      if (!traitName || !traitValue) {
-        return;
-      }
-
-      const key = `${traitName}::${traitValue}`;
-      rows.set(key, (rows.get(key) ?? 0) + 1);
-    });
-  });
-
-  return Array.from(rows.entries()).map(([key, count]) => {
-    const [traitName, traitValue] = key.split("::");
-    return { traitName, traitValue, count };
-  });
-}
-
 export function TraitFilterSidebar({
-  tokens,
+  traitMetadata,
   activeFilters,
   onActiveFiltersChange,
+  isLoading,
 }: TraitFilterSidebarProps) {
-  const metadataRows = useMemo(() => metadataRowsFromTokens(tokens), [tokens]);
   const availableFilters = useMemo(
-    () => computeAvailableFilters(metadataRows, activeFilters),
-    [metadataRows, activeFilters],
+    () => computeAvailableFilters(traitMetadata, activeFilters),
+    [traitMetadata, activeFilters],
   );
   const precomputed = useMemo(
     () => computePrecomputedFilters(availableFilters),
     [availableFilters],
   );
-  const hasActiveFilters = flattenActiveFilters(activeFilters).length > 0;
+  const activeCount = flattenActiveFilters(activeFilters).length;
 
   function toggleFilter(traitName: string, traitValue: string) {
     const next = cloneFilters(activeFilters);
@@ -101,51 +58,82 @@ export function TraitFilterSidebar({
   }
 
   return (
-    <Card>
-      <CardHeader className="space-y-2">
-        <div className="flex items-center justify-between gap-2">
-          <CardTitle className="text-sm font-medium tracking-widest uppercase">Traits</CardTitle>
-          {hasActiveFilters ? (
-            <Button
-              onClick={() => onActiveFiltersChange?.({})}
-              size="sm"
-              type="button"
-              variant="ghost"
-            >
-              Clear
-            </Button>
-          ) : null}
+    <div className="space-y-4">
+      {/* Header */}
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-2">
+          <span className="text-xs font-medium uppercase tracking-widest text-muted-foreground">
+            Filters
+          </span>
+          {activeCount > 0 && (
+            <span className="inline-flex h-4 min-w-4 items-center justify-center rounded-full bg-primary px-1 text-[10px] font-medium text-primary-foreground">
+              {activeCount}
+            </span>
+          )}
         </div>
-      </CardHeader>
-      <CardContent className="space-y-4">
-        {precomputed.attributes.length === 0 ? (
-          <p className="text-sm text-muted-foreground">
-            No trait data yet. Load tokens to populate filters.
-          </p>
-        ) : null}
+        {activeCount > 0 && (
+          <Button
+            onClick={() => onActiveFiltersChange?.({})}
+            size="sm"
+            type="button"
+            variant="ghost"
+            className="h-6 px-2 text-xs text-muted-foreground hover:text-foreground"
+          >
+            Clear
+          </Button>
+        )}
+      </div>
 
-        {precomputed.attributes.map((traitName) => (
-          <section className="space-y-2" key={traitName}>
-            <h3 className="text-xs font-medium uppercase tracking-wide text-muted-foreground">{traitName}</h3>
-            <div className="flex flex-wrap gap-2">
-              {(precomputed.properties[traitName] ?? []).map((item) => {
-                const isActive = activeFilters[traitName]?.has(item.property) ?? false;
-                return (
-                  <Button
-                    key={`${traitName}-${item.property}`}
-                    onClick={() => toggleFilter(traitName, item.property)}
-                    size="xs"
-                    type="button"
-                    variant={isActive ? "secondary" : "outline"}
-                  >
-                    {item.property} ({item.count})
-                  </Button>
-                );
-              })}
-            </div>
-          </section>
-        ))}
-      </CardContent>
-    </Card>
+      {/* Loading / empty states */}
+      {isLoading ? (
+        <p className="text-xs text-muted-foreground">Loading traits...</p>
+      ) : precomputed.attributes.length === 0 ? (
+        <p className="text-xs text-muted-foreground">No trait data available.</p>
+      ) : null}
+
+      {/* Trait groups — collapsible via native details */}
+      <div className="space-y-1">
+        {precomputed.attributes.map((traitName) => {
+          const activeInGroup = activeFilters[traitName]?.size ?? 0;
+          return (
+            <details key={traitName} open className="group">
+              <summary className="flex cursor-pointer select-none list-none items-center justify-between rounded-sm px-2 py-1.5 text-xs font-medium uppercase tracking-wide text-muted-foreground hover:bg-muted/50 hover:text-foreground transition-colors">
+                <span className="flex items-center gap-1.5">
+                  {traitName}
+                  {activeInGroup > 0 && (
+                    <span className="inline-flex h-3.5 min-w-3.5 items-center justify-center rounded-full bg-primary px-0.5 text-[9px] font-medium text-primary-foreground">
+                      {activeInGroup}
+                    </span>
+                  )}
+                </span>
+                <span className="text-muted-foreground/50 group-open:rotate-90 transition-transform duration-150">
+                  ›
+                </span>
+              </summary>
+              <div className="flex flex-wrap gap-1.5 px-2 pb-2 pt-1.5">
+                {(precomputed.properties[traitName] ?? []).map((item) => {
+                  const isActive = activeFilters[traitName]?.has(item.property) ?? false;
+                  return (
+                    <button
+                      key={`${traitName}-${item.property}`}
+                      onClick={() => toggleFilter(traitName, item.property)}
+                      type="button"
+                      className={[
+                        "inline-flex items-center rounded-full border px-2 py-0.5 text-xs transition-colors",
+                        isActive
+                          ? "border-primary bg-primary/10 text-primary"
+                          : "border-border text-muted-foreground hover:border-primary/50 hover:text-foreground",
+                      ].join(" ")}
+                    >
+                      {item.property} ({item.count})
+                    </button>
+                  );
+                })}
+              </div>
+            </details>
+          );
+        })}
+      </div>
+    </div>
   );
 }

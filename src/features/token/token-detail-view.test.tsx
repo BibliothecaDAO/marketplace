@@ -7,10 +7,8 @@ const { mockUseTokenDetailQuery, mockUseCollectionListingsQuery } = vi.hoisted((
   mockUseTokenDetailQuery: vi.fn(),
   mockUseCollectionListingsQuery: vi.fn(),
 }));
-const { mockUseAccount, mockMarketplaceList, mockMarketplaceOffer } = vi.hoisted(() => ({
+const { mockUseAccount } = vi.hoisted(() => ({
   mockUseAccount: vi.fn(),
-  mockMarketplaceList: vi.fn(),
-  mockMarketplaceOffer: vi.fn(),
 }));
 const { mockCartAddItem } = vi.hoisted(() => ({
   mockCartAddItem: vi.fn(),
@@ -18,11 +16,15 @@ const { mockCartAddItem } = vi.hoisted(() => ({
 const { mockUseTokenOwnershipQuery } = vi.hoisted(() => ({
   mockUseTokenOwnershipQuery: vi.fn(),
 }));
+const { mockUseTokenHolderQuery } = vi.hoisted(() => ({
+  mockUseTokenHolderQuery: vi.fn(),
+}));
 
 vi.mock("@/lib/marketplace/hooks", () => ({
   useTokenDetailQuery: mockUseTokenDetailQuery,
   useCollectionListingsQuery: mockUseCollectionListingsQuery,
   useTokenOwnershipQuery: mockUseTokenOwnershipQuery,
+  useTokenHolderQuery: mockUseTokenHolderQuery,
 }));
 
 vi.mock("@starknet-react/core", () => ({
@@ -34,15 +36,15 @@ vi.mock("@/features/cart/store/cart-store", () => ({
     selector({ addItem: mockCartAddItem }),
 }));
 
-vi.mock("@cartridge/arcade", () => ({
-  ArcadeProvider: class {
-    marketplace = {
-      list: mockMarketplaceList,
-      offer: mockMarketplaceOffer,
-      execute: vi.fn(),
-      cancel: vi.fn(),
-    };
-  },
+vi.mock("@/lib/marketplace/config", () => ({
+  getMarketplaceRuntimeConfig: () => ({
+    collections: [
+      { address: "0x123", name: "Realms", projectId: "realms" },
+    ],
+    chainLabel: "SN_SEPOLIA",
+    sdkConfig: { chainId: "0x534e5f5345504f4c4941" },
+    warnings: [],
+  }),
 }));
 
 function successQuery(data: unknown) {
@@ -112,8 +114,6 @@ describe("token detail view", () => {
     mockUseTokenDetailQuery.mockReset();
     mockUseCollectionListingsQuery.mockReset();
     mockUseAccount.mockReset();
-    mockMarketplaceList.mockReset();
-    mockMarketplaceOffer.mockReset();
     mockCartAddItem.mockReset();
     mockUseTokenOwnershipQuery.mockReset();
     mockUseCollectionListingsQuery.mockReturnValue(successListingsQuery([]));
@@ -124,6 +124,13 @@ describe("token detail view", () => {
       status: "disconnected",
     });
     mockUseTokenOwnershipQuery.mockReturnValue({
+      data: null,
+      status: "success",
+      error: null,
+      isFetching: false,
+      refresh: vi.fn(),
+    });
+    mockUseTokenHolderQuery.mockReturnValue({
       data: null,
       status: "success",
       error: null,
@@ -426,16 +433,16 @@ describe("token detail view", () => {
     expect(screen.queryByRole("button", { name: /buy cheapest/i })).toBeNull();
   });
 
-  // UPDATED: must be owner to see "List token"
-  it("list_action_calls_marketplace_list_for_connected_account", async () => {
+  // UPDATED: checks account.execute called with list entrypoint
+  it("list_action_calls_account_execute_with_list_entrypoint", async () => {
+    const mockAccountExecute = vi.fn().mockResolvedValue({ transaction_hash: "0xhash" });
     mockUseAccount.mockReturnValue({
-      account: { execute: vi.fn() },
+      account: { execute: mockAccountExecute },
       address: "0xabc",
       isConnected: true,
       status: "connected",
     });
-    mockUseTokenOwnershipQuery.mockReturnValue(ownershipQuery(true)); // MUST OWN
-    mockMarketplaceList.mockResolvedValue({ transaction_hash: "0xhash" });
+    mockUseTokenOwnershipQuery.mockReturnValue(ownershipQuery(true)); // isOwner=true → effectiveIsOwner=true when holderAddress=null
 
     mockUseTokenDetailQuery.mockReturnValue(
       successQuery({
@@ -454,17 +461,10 @@ describe("token detail view", () => {
 
     await user.click(screen.getByRole("button", { name: /list token/i }));
 
-    expect(mockMarketplaceList).toHaveBeenCalled();
-    expect(mockMarketplaceList).toHaveBeenCalledWith(
-      expect.anything(),
-      "0x123",
-      "7",
-      expect.any(String),
-      expect.any(String),
-      expect.any(String),
-      expect.any(String),
-      true,
-    );
+    expect(mockAccountExecute).toHaveBeenCalled();
+    const [calls] = mockAccountExecute.mock.calls[0] as [[{ contractAddress: string; entrypoint: string; calldata: string[] }]];
+    expect(calls[0].entrypoint).toBe("list");
+    expect(calls[0].calldata[0]).toBe("0x123"); // collection address
   });
 
   // --- New tests ---
@@ -503,16 +503,16 @@ describe("token detail view", () => {
     expect(screen.getByText("No Image")).toBeVisible();
   });
 
-  // UPDATED: non-owner sees "Make offer", not owner
-  it("make_offer_calls_marketplace_offer", async () => {
+  // UPDATED: checks account.execute called with offer entrypoint
+  it("make_offer_calls_account_execute_with_offer_entrypoint", async () => {
+    const mockAccountExecute = vi.fn().mockResolvedValue({ transaction_hash: "0xofferhash" });
     mockUseAccount.mockReturnValue({
-      account: { execute: vi.fn() },
+      account: { execute: mockAccountExecute },
       address: "0xabc",
       isConnected: true,
       status: "connected",
     });
-    mockUseTokenOwnershipQuery.mockReturnValue(ownershipQuery(false)); // NOT owner
-    mockMarketplaceOffer.mockResolvedValue({ transaction_hash: "0xofferhash" });
+    mockUseTokenOwnershipQuery.mockReturnValue(ownershipQuery(false)); // isOwner=false → effectiveIsOwner=false when holderAddress=null
 
     mockUseTokenDetailQuery.mockReturnValue(
       successQuery({
@@ -531,28 +531,22 @@ describe("token detail view", () => {
 
     await user.click(screen.getByRole("button", { name: /make offer/i }));
 
-    expect(mockMarketplaceOffer).toHaveBeenCalled();
-    expect(mockMarketplaceOffer).toHaveBeenCalledWith(
-      expect.anything(),
-      "0x123",
-      "7",
-      expect.any(String),
-      expect.any(String),
-      expect.any(String),
-      expect.any(String),
-    );
+    expect(mockAccountExecute).toHaveBeenCalled();
+    const [calls] = mockAccountExecute.mock.calls[0] as [[{ contractAddress: string; entrypoint: string; calldata: string[] }]];
+    expect(calls[0].entrypoint).toBe("offer");
+    expect(calls[0].calldata[0]).toBe("0x123"); // collection address
   });
 
-  // UPDATED: must be owner to see "List token"
+  // UPDATED: account.execute rejects to test error display
   it("transaction_error_shown", async () => {
+    const mockAccountExecute = vi.fn().mockRejectedValue(new Error("Transaction reverted"));
     mockUseAccount.mockReturnValue({
-      account: { execute: vi.fn() },
+      account: { execute: mockAccountExecute },
       address: "0xabc",
       isConnected: true,
       status: "connected",
     });
-    mockUseTokenOwnershipQuery.mockReturnValue(ownershipQuery(true)); // MUST OWN
-    mockMarketplaceList.mockRejectedValue(new Error("Transaction reverted"));
+    mockUseTokenOwnershipQuery.mockReturnValue(ownershipQuery(true)); // isOwner=true → sell form shown
 
     mockUseTokenDetailQuery.mockReturnValue(
       successQuery({
@@ -828,12 +822,13 @@ describe("token detail view", () => {
     expect(screen.queryByRole("button", { name: /make offer/i })).toBeNull();
   });
 
-  it("make_offer_shown_only_to_non_owner", () => {
+  it("make_offer_shown_to_confirmed_non_owner", () => {
     mockUseAccount.mockReturnValue({ account: { execute: vi.fn() }, address: "0xabc", isConnected: true, status: "connected" });
     mockUseTokenOwnershipQuery.mockReturnValue(ownershipQuery(false));
     mockUseTokenDetailQuery.mockReturnValue(successQuery({ token: { token_id: "7", image: null, metadata: { name: "Token #7" } }, orders: [], listings: [] }));
     render(<TokenDetailView address="0x123" tokenId="7" />);
     expect(screen.getByRole("button", { name: /make offer/i })).toBeVisible();
+    // Non-owner should NOT see the list form
     expect(screen.queryByRole("button", { name: /list token/i })).toBeNull();
   });
 
@@ -869,5 +864,185 @@ describe("token detail view", () => {
     expect(mockUseTokenOwnershipQuery).toHaveBeenCalledWith(
       expect.objectContaining({ collection: "0x123", tokenId: "7", accountAddress: "0xwallet" })
     );
+  });
+
+  it("displays_decimal_token_id_not_hex", () => {
+    mockUseTokenDetailQuery.mockReturnValue(
+      successQuery({
+        token: {
+          token_id: "0x17a",  // hex 378 decimal
+          image: "https://cdn.example/1.png",
+          metadata: { name: "Token #378" },
+        },
+        orders: [],
+        listings: [],
+      }),
+    );
+
+    render(<TokenDetailView address="0xabc" tokenId="0x17a" />);
+
+    // Should display as decimal, not raw hex
+    expect(screen.getByText("#378")).toBeVisible();
+    expect(screen.queryByText("#0x17a")).toBeNull();
+  });
+
+  it("owner_address_shown_as_link_to_profile", () => {
+    mockUseTokenHolderQuery.mockReturnValue({
+      data: {
+        page: {
+          balances: [
+            {
+              balance: "1",
+              account_address: "0xholder99",
+              contract_address: "0xabc",
+              token_id: "1",
+            },
+          ],
+          nextCursor: null,
+        },
+        error: null,
+      },
+      status: "success",
+      error: null,
+      isFetching: false,
+      refresh: vi.fn(),
+    });
+    mockUseTokenDetailQuery.mockReturnValue(
+      successQuery({
+        token: {
+          token_id: "1",
+          image: "https://cdn.example/1.png",
+          metadata: { name: "Token #1" },
+        },
+        orders: [],
+        listings: [],
+      }),
+    );
+
+    render(<TokenDetailView address="0xabc" tokenId="1" />);
+
+    const ownerLink = screen.getByRole("link", { name: /owner/i });
+    expect(ownerLink).toHaveAttribute("href", "/profile/0xholder99");
+  });
+
+  it("owner_not_shown_when_holder_unknown", () => {
+    mockUseTokenHolderQuery.mockReturnValue({
+      data: { page: { balances: [], nextCursor: null }, error: null },
+      status: "success",
+      error: null,
+      isFetching: false,
+      refresh: vi.fn(),
+    });
+    mockUseTokenDetailQuery.mockReturnValue(
+      successQuery({
+        token: {
+          token_id: "1",
+          image: "https://cdn.example/1.png",
+          metadata: { name: "Token #1" },
+        },
+        orders: [],
+        listings: [],
+      }),
+    );
+
+    render(<TokenDetailView address="0xabc" tokenId="1" />);
+
+    expect(screen.queryByRole("link", { name: /owner/i })).toBeNull();
+  });
+
+  it("breadcrumb_shows_home_link", () => {
+    mockUseTokenDetailQuery.mockReturnValue(
+      successQuery({ token: { token_id: "7", image: null, metadata: { name: "Token #7" } }, orders: [], listings: [] }),
+    );
+
+    render(<TokenDetailView address="0x123" tokenId="7" />);
+
+    const homeLink = screen.getByRole("link", { name: /home/i });
+    expect(homeLink).toHaveAttribute("href", "/");
+  });
+
+  it("breadcrumb_shows_collection_name_from_config", () => {
+    mockUseTokenDetailQuery.mockReturnValue(
+      successQuery({ token: { token_id: "7", image: null, metadata: { name: "Token #7" } }, orders: [], listings: [] }),
+    );
+
+    render(<TokenDetailView address="0x123" tokenId="7" />);
+
+    // 0x123 maps to "Realms" in the mocked config
+    const collectionLink = screen.getByRole("link", { name: /realms/i });
+    expect(collectionLink).toHaveAttribute("href", "/collections/0x123");
+  });
+
+  it("breadcrumb_falls_back_to_address_for_unknown_collection", () => {
+    mockUseTokenDetailQuery.mockReturnValue(
+      successQuery({ token: { token_id: "7", image: null, metadata: { name: "Token #7" } }, orders: [], listings: [] }),
+    );
+
+    render(<TokenDetailView address="0xunknown" tokenId="7" />);
+
+    const collectionLink = screen.getByRole("link", { name: /0xunknown/i });
+    expect(collectionLink).toHaveAttribute("href", "/collections/0xunknown");
+  });
+
+  it("trait_box_links_to_collection_with_filter", () => {
+    mockUseTokenDetailQuery.mockReturnValue(
+      successQuery({
+        token: {
+          token_id: "7",
+          image: null,
+          metadata: {
+            name: "Token #7",
+            attributes: [
+              { trait_type: "Background", value: "Blue" },
+              { trait_type: "Eyes", value: "Laser" },
+            ],
+          },
+        },
+        orders: [],
+        listings: [],
+      }),
+    );
+
+    render(<TokenDetailView address="0x123" tokenId="7" />);
+
+    const bgLink = screen.getByRole("link", { name: /background.*blue/i });
+    expect(bgLink).toHaveAttribute("href", "/collections/0x123?trait=Background%3ABlue");
+
+    const eyesLink = screen.getByRole("link", { name: /eyes.*laser/i });
+    expect(eyesLink).toHaveAttribute("href", "/collections/0x123?trait=Eyes%3ALaser");
+  });
+
+  it("listing_owner_is_a_link_to_profile_page", () => {
+    // Use a short address (≤14 chars) so truncation doesn't change it
+    const ownerAddress = "0xseller99";
+    mockUseCollectionListingsQuery.mockReturnValue(
+      successListingsQuery([
+        {
+          id: 1,
+          price: "500000000000000000",
+          owner: ownerAddress,
+          expiration: 1735689600,
+        },
+      ]),
+    );
+    mockUseTokenDetailQuery.mockReturnValue(
+      successQuery({
+        token: {
+          token_id: "1",
+          image: "https://cdn.example/1.png",
+          metadata: { name: "Token #1" },
+        },
+        orders: [],
+        listings: [],
+      }),
+    );
+
+    render(<TokenDetailView address="0xabc" tokenId="1" />);
+
+    // The owner address should be displayed as a link to their profile
+    const ownerText = screen.getByText(ownerAddress);
+    const link = ownerText.closest("a");
+    expect(link).not.toBeNull();
+    expect(link).toHaveAttribute("href", `/profile/${ownerAddress}`);
   });
 });

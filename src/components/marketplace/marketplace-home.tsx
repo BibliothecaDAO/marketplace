@@ -9,7 +9,7 @@ export function MarketplaceHome() {
   return (
     <main
       data-testid="marketplace-home"
-      className="w-full space-y-8 px-4 sm:px-6 lg:px-8"
+      className="w-full space-y-8 pt-6"
     >
       {collections.length === 0 ? (
         <p className="text-sm text-muted-foreground font-mono">

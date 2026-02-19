@@ -5,11 +5,13 @@ import Link from "next/link";
 import type { NormalizedToken } from "@cartridge/arcade/marketplace";
 import {
   useCollectionListingsQuery,
+  useCollectionQuery,
   useCollectionTokensQuery,
 } from "@/lib/marketplace/hooks";
 import {
   displayTokenId,
   formatNumberish,
+  formatPriceForDisplay,
   listingPriceByTokenId,
   tokenId,
   tokenPrice,
@@ -100,8 +102,32 @@ function listingTokenIds(listings: unknown[] | undefined, limit: number) {
   return Array.from(expanded);
 }
 
+function floorPriceFromListings(
+  cheapestListings: Map<string, { price: string }>,
+): string | null {
+  let min: bigint | null = null;
+
+  for (const { price } of cheapestListings.values()) {
+    try {
+      const val = BigInt(price);
+      if (min === null || val < min) {
+        min = val;
+      }
+    } catch {
+      // skip unparseable prices
+    }
+  }
+
+  if (min === null) {
+    return null;
+  }
+
+  return formatPriceForDisplay(min.toString());
+}
+
 export function CollectionRow({ address, name, projectId }: CollectionRowProps) {
   const addItem = useCartStore((state) => state.addItem);
+  const collectionQuery = useCollectionQuery({ address, projectId, fetchImages: false });
   const tokenQuery = useCollectionTokensQuery({
     address,
     project: projectId,
@@ -163,14 +189,35 @@ export function CollectionRow({ address, name, projectId }: CollectionRowProps) 
     return fallbackTokens.length > 0 ? fallbackTokens : tokens;
   }, [cheapestListings, fallbackTokens, listingPrices, tokens]);
 
+  const totalSupply = collectionQuery.data?.totalSupply;
+  const listingCount = Array.isArray(listingQuery.data) ? listingQuery.data.length : 0;
+  const floorPrice = floorPriceFromListings(cheapestListings);
+
   return (
     <section className="space-y-3">
-      <h2 className="text-sm font-medium tracking-widest uppercase text-muted-foreground">
-        <Link href={`/collections/${address}`}>{name}</Link>
-      </h2>
+      {/* Heading with stats — padded for readability */}
+      <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1 px-4 sm:px-6 lg:px-8">
+        <h2 className="text-sm font-medium tracking-widest uppercase text-muted-foreground">
+          <Link href={`/collections/${address}`} className="hover:text-foreground transition-colors">
+            {name}
+          </Link>
+        </h2>
+        <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground">
+          {totalSupply !== undefined && (
+            <span>{Number(totalSupply).toLocaleString()} items</span>
+          )}
+          {listingCount > 0 && (
+            <span>{listingCount} listed</span>
+          )}
+          {floorPrice && (
+            <span className="text-foreground font-medium">Floor: {floorPrice}</span>
+          )}
+        </div>
+      </div>
 
+      {/* Scroll row — edge-to-edge, padded with px on inner items */}
       {tokenQuery.isLoading ? (
-        <div className="flex gap-3 overflow-x-auto pb-2">
+        <div className="flex gap-3 overflow-x-auto pb-2 px-4 sm:px-6 lg:px-8">
           {Array.from({ length: 6 }).map((_, index) => (
             <Card key={`skeleton-${index}`} className="w-48 shrink-0">
               <CardContent className="space-y-2 p-3">
@@ -188,14 +235,14 @@ export function CollectionRow({ address, name, projectId }: CollectionRowProps) 
       {tokenQuery.isSuccess &&
       tokensForDisplay.length === 0 &&
       !listingQuery.isLoading ? (
-        <p className="text-sm text-muted-foreground font-mono">
+        <p className="text-sm text-muted-foreground font-mono px-4 sm:px-6 lg:px-8">
           <span className="text-primary mr-1">$</span>
           ls tokens/ -- (empty)
         </p>
       ) : null}
 
       {tokenQuery.isSuccess && tokensForDisplay.length > 0 ? (
-        <div className="flex gap-3 overflow-x-auto pb-2">
+        <div className="flex gap-3 overflow-x-auto pb-2 px-4 sm:px-6 lg:px-8">
           {tokensForDisplay.map((token) => {
             const tokenKey = displayTokenId(token);
             const cheapestListing = cheapestListings.get(tokenKey);

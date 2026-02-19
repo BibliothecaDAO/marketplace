@@ -1,12 +1,13 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { ArcadeProvider } from "@cartridge/arcade";
+import Link from "next/link";
 import { useAccount } from "@starknet-react/core";
 import type { NormalizedToken } from "@cartridge/arcade/marketplace";
 import {
   useCollectionListingsQuery,
   useTokenDetailQuery,
+  useTokenHolderQuery,
   useTokenOwnershipQuery,
 } from "@/lib/marketplace/hooks";
 import { getMarketplaceRuntimeConfig } from "@/lib/marketplace/config";
@@ -93,21 +94,21 @@ export function TokenDetailView({
   tokenId,
   projectId,
 }: TokenDetailViewProps) {
+  // Arcade Marketplace contract address (same on SN_MAIN and SN_SEPOLIA per SDK manifest)
+  const MARKETPLACE_CONTRACT = "0x6bbf16b6c67b1bef27a187b499b2f3a14af31646c2c90d64f11b9087c3f527c";
+  // STRK token address on Starknet mainnet / testnet
+  const STRK_ADDRESS = "0x04718f5a0fc34cc1af16a1cdee98ffb20c31f5cd61d6ab07201858f4287c938d";
+
   const normalizedTokenId = formatNumberish(tokenId) ?? tokenId;
   const addItem = useCartStore((state) => state.addItem);
   const { account, address: walletAddress, isConnected } = useAccount();
-  const {
-    sdkConfig: { chainId },
-  } = getMarketplaceRuntimeConfig();
-  const marketplaceProvider = useMemo(
-    () => new ArcadeProvider(chainId),
-    [chainId],
-  );
+  const { collections } = getMarketplaceRuntimeConfig();
+  const collectionName = collections.find((c) => c.address === address)?.name ?? address;
   const [verifyOwnership, setVerifyOwnership] = useState(false);
   // Human-readable price in STRK (1 STRK = 1e18 wei)
   const [priceInput, setPriceInput] = useState("1");
   const [quantityInput, setQuantityInput] = useState("1");
-  const [currencyInput, setCurrencyInput] = useState("0x0");
+  const [currencyInput, setCurrencyInput] = useState(STRK_ADDRESS);
   // Expiration as a preset duration in seconds (default: 24 hours)
   const [expirationPreset, setExpirationPreset] = useState("86400");
   const [txStatus, setTxStatus] = useState<{
@@ -136,6 +137,19 @@ export function TokenDetailView({
     accountAddress: walletAddress,
   });
 
+  const holderQuery = useTokenHolderQuery({
+    collection: address,
+    tokenId: normalizedTokenId,
+  });
+
+  const holderAddress = useMemo(() => {
+    const balances = (holderQuery.data as { page?: { balances?: Array<{ account_address: string; balance: string }> } } | null)?.page?.balances ?? [];
+    const holder = balances.find((b) => {
+      try { return BigInt(b.balance) > BigInt(0); } catch { return false; }
+    });
+    return holder?.account_address ?? null;
+  }, [holderQuery.data]);
+
   const isOwner = useMemo(() => {
     if (!walletAddress || !isConnected) return false;
     const balances = (ownershipQuery.data as { page?: { balances?: Array<{ balance: string }> } } | null)?.page?.balances ?? [];
@@ -147,6 +161,19 @@ export function TokenDetailView({
       }
     });
   }, [ownershipQuery.data, walletAddress, isConnected]);
+
+  // Use holderAddress for ownership detection when available (more reliable than token balance API).
+  // Compare via BigInt to handle leading-zero padding differences in Starknet addresses.
+  // Falls back to `isOwner` from ownershipQuery when holderAddress is not yet known.
+  const isOwnerByHolder = useMemo(() => {
+    if (holderAddress === null || walletAddress === undefined) return false;
+    try {
+      return BigInt(holderAddress) === BigInt(walletAddress);
+    } catch {
+      return holderAddress.toLowerCase() === walletAddress.toLowerCase();
+    }
+  }, [holderAddress, walletAddress]);
+  const effectiveIsOwner = holderAddress !== null ? isOwnerByHolder : isOwner;
 
   const token = detailQuery.data?.token ?? null;
   const listings = useMemo(
@@ -174,18 +201,18 @@ export function TokenDetailView({
     );
   }, [listingRows, walletAddress]);
 
+  // If existing listings use a specific currency, adopt it (otherwise keep STRK default).
   useEffect(() => {
-    if (currencyInput !== "0x0") return;
-
     const listedCurrency = listingRows.find(
       (listing) =>
-        typeof listing.currency === "string" && listing.currency.trim().length > 0,
+        typeof listing.currency === "string" &&
+        listing.currency.trim().length > 0 &&
+        listing.currency !== "0x0",
     )?.currency;
-
     if (listedCurrency) {
       setCurrencyInput(listedCurrency);
     }
-  }, [currencyInput, listingRows]);
+  }, [listingRows]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Convert human-readable STRK price to wei string
   function priceToWei(humanPrice: string): string {
@@ -265,6 +292,23 @@ export function TokenDetailView({
 
   return (
     <div className="space-y-8">
+      {/* Breadcrumbs */}
+      <nav aria-label="breadcrumb">
+        <ol className="flex items-center gap-1.5 text-xs text-muted-foreground">
+          <li>
+            <Link href="/" className="hover:text-foreground transition-colors">Home</Link>
+          </li>
+          <li aria-hidden>/</li>
+          <li>
+            <Link href={`/collections/${address}`} className="hover:text-foreground transition-colors">
+              {collectionName}
+            </Link>
+          </li>
+          <li aria-hidden>/</li>
+          <li className="text-foreground truncate max-w-[200px]">{name}</li>
+        </ol>
+      </nav>
+
       <div className="grid gap-6 lg:grid-cols-2">
         {/* Token image */}
         <div className="flex aspect-square items-center justify-center bg-muted">
@@ -285,25 +329,42 @@ export function TokenDetailView({
           <div>
             <h1 className="text-2xl font-bold tracking-wide">{name}</h1>
             <p className="text-sm text-primary font-mono">
-              #{String(token.token_id ?? "unknown")}
+              #{displayTokenId(token)}
             </p>
+            {holderAddress ? (
+              <Link
+                href={`/profile/${holderAddress}`}
+                aria-label="owner"
+                className="mt-1 inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors"
+              >
+                <span className="uppercase tracking-wide">Owner</span>
+                <span className="font-mono">{truncateAddress(holderAddress)}</span>
+              </Link>
+            ) : null}
           </div>
 
           {/* Attributes */}
           {attributes.length > 0 ? (
             <div className="space-y-2">
               <h2 className="text-sm font-medium tracking-widest uppercase text-muted-foreground">Attributes</h2>
-              <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
-                {attributes.map((attr) => (
-                  <Card key={`${attr.trait_type}-${attr.value}`} className="border-border/70">
-                    <CardContent className="p-3">
-                      <p className="text-xs text-muted-foreground uppercase tracking-wide">
+              <div className="grid grid-cols-2 gap-1.5 sm:grid-cols-3">
+                {attributes.map((attr) => {
+                  const params = new URLSearchParams();
+                  params.append("trait", `${attr.trait_type}:${attr.value}`);
+                  return (
+                    <Link
+                      key={`${attr.trait_type}-${attr.value}`}
+                      href={`/collections/${address}?${params.toString()}`}
+                      aria-label={`${attr.trait_type} ${attr.value}`}
+                      className="rounded border border-border/60 bg-muted/30 px-2 py-1.5 hover:border-primary/40 hover:bg-muted/60 transition-colors"
+                    >
+                      <p className="text-[10px] text-muted-foreground uppercase tracking-wide leading-none mb-0.5">
                         {attr.trait_type}
                       </p>
-                      <p className="text-sm font-medium text-primary">{attr.value}</p>
-                    </CardContent>
-                  </Card>
-                ))}
+                      <p className="text-xs font-medium text-primary truncate">{attr.value}</p>
+                    </Link>
+                  );
+                })}
               </div>
             </div>
           ) : null}
@@ -362,8 +423,8 @@ export function TokenDetailView({
           <Badge variant="outline" className="self-start">You own this token</Badge>
         ) : null}
 
-        {/* Sell form — only for owners */}
-        {isConnected && isOwner ? (
+        {/* Sell form — shown to confirmed owners (or when ownership still unknown) */}
+        {isConnected && effectiveIsOwner ? (
           <Card className="border-dashed">
             <CardContent className="space-y-3 p-3">
               <div className="grid gap-2 sm:grid-cols-2">
@@ -404,18 +465,16 @@ export function TokenDetailView({
                 <Button
                   disabled={pendingAction !== null}
                   onClick={() => {
-                    void runTransaction("list", () =>
-                      marketplaceProvider.marketplace.list(
-                        account!,
-                        address,
-                        normalizedTokenId,
-                        quantityInput,
-                        priceToWei(priceInput),
-                        currencyInput,
-                        computeExpiration(),
-                        true,
-                      ),
-                    );
+                    void runTransaction("list", () => {
+                      const big = BigInt(normalizedTokenId);
+                      const low = (big & BigInt("0xffffffffffffffffffffffffffffffff")).toString();
+                      const high = (big >> BigInt(128)).toString();
+                      return account!.execute([{
+                        contractAddress: MARKETPLACE_CONTRACT,
+                        entrypoint: "list",
+                        calldata: [address, low, high, quantityInput, priceToWei(priceInput), currencyInput, computeExpiration(), "1"],
+                      }]);
+                    });
                   }}
                   size="sm"
                   type="button"
@@ -426,14 +485,16 @@ export function TokenDetailView({
                   disabled={pendingAction !== null || !ownListing}
                   onClick={() => {
                     if (!ownListing) return;
-                    void runTransaction("cancel", () =>
-                      marketplaceProvider.marketplace.cancel(
-                        account!,
-                        ownListing.id,
-                        address,
-                        normalizedTokenId,
-                      ),
-                    );
+                    void runTransaction("cancel", () => {
+                      const big = BigInt(normalizedTokenId);
+                      const low = (big & BigInt("0xffffffffffffffffffffffffffffffff")).toString();
+                      const high = (big >> BigInt(128)).toString();
+                      return account!.execute([{
+                        contractAddress: MARKETPLACE_CONTRACT,
+                        entrypoint: "cancel",
+                        calldata: [String(ownListing.id), address, low, high],
+                      }]);
+                    });
                   }}
                   size="sm"
                   type="button"
@@ -451,8 +512,8 @@ export function TokenDetailView({
           </Card>
         ) : null}
 
-        {/* Offer form — for non-owners who are connected */}
-        {isConnected && !isOwner ? (
+        {/* Offer form — shown to confirmed non-owners */}
+        {isConnected && !effectiveIsOwner && !(ownershipQuery as { isLoading?: boolean }).isLoading ? (
           <Card className="border-dashed">
             <CardContent className="space-y-3 p-3">
               <div className="grid gap-2 sm:grid-cols-2">
@@ -493,17 +554,16 @@ export function TokenDetailView({
                 <Button
                   disabled={pendingAction !== null}
                   onClick={() => {
-                    void runTransaction("offer", () =>
-                      marketplaceProvider.marketplace.offer(
-                        account!,
-                        address,
-                        normalizedTokenId,
-                        quantityInput,
-                        priceToWei(priceInput),
-                        currencyInput,
-                        computeExpiration(),
-                      ),
-                    );
+                    void runTransaction("offer", () => {
+                      const big = BigInt(normalizedTokenId);
+                      const low = (big & BigInt("0xffffffffffffffffffffffffffffffff")).toString();
+                      const high = (big >> BigInt(128)).toString();
+                      return account!.execute([{
+                        contractAddress: MARKETPLACE_CONTRACT,
+                        entrypoint: "offer",
+                        calldata: [address, low, high, quantityInput, priceToWei(priceInput), currencyInput, computeExpiration()],
+                      }]);
+                    });
                   }}
                   size="sm"
                   type="button"
@@ -557,9 +617,12 @@ export function TokenDetailView({
                           <Badge variant="secondary">Best Price</Badge>
                         ) : null}
                       </div>
-                      <p className="text-xs text-muted-foreground">
+                      <Link
+                        href={`/profile/${listing.owner}`}
+                        className="text-xs text-muted-foreground hover:underline"
+                      >
                         {truncateAddress(listing.owner)}
-                      </p>
+                      </Link>
                     </div>
                     <div className="flex items-center gap-2">
                       {listing.expiration ? (

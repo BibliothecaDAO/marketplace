@@ -86,6 +86,16 @@ export function useCollectionTokensQuery(
       options.cursor,
       options.tokenIds,
       options.limit,
+      options.attributeFilters
+        ? JSON.stringify(
+            Object.fromEntries(
+              Object.entries(options.attributeFilters).map(([k, v]) => [
+                k,
+                Array.from(v as Iterable<unknown>).sort(),
+              ]),
+            ),
+          )
+        : null,
     ] as const,
     queryFn: async () => {
       const data = await client!.listCollectionTokens(options);
@@ -194,13 +204,61 @@ export function useTokenOwnershipQuery(options: {
   tokenId: string;
   accountAddress?: string;
 }) {
+  const alt = alternateTokenId(options.tokenId);
+  const tokenIds = alt ? [options.tokenId, alt] : [options.tokenId];
   return useMarketplaceTokenBalances(
     {
       contractAddresses: [options.collection],
       accountAddresses: options.accountAddress ? [options.accountAddress] : [],
-      tokenIds: [options.tokenId],
+      tokenIds,
       limit: 1,
     },
     !!options.accountAddress && !!options.collection && !!options.tokenId,
+  );
+}
+
+export function useCollectionTraitMetadataQuery(options: {
+  address: string;
+  projectId?: string;
+}) {
+  return useQuery({
+    queryKey: ["collection-trait-metadata", options.address, options.projectId] as const,
+    queryFn: async () => {
+      const { fetchCollectionTraitMetadata, aggregateTraitMetadata } =
+        await import("@cartridge/arcade/marketplace");
+      const result = await fetchCollectionTraitMetadata({
+        address: options.address,
+        projects: options.projectId ? [options.projectId] : undefined,
+        defaultProjectId: options.projectId,
+      });
+      return aggregateTraitMetadata(result.pages);
+    },
+    enabled: !!options.address,
+  });
+}
+
+export function useTokenHolderQuery(options: {
+  collection: string;
+  tokenId: string;
+}) {
+  const alt = alternateTokenId(options.tokenId);
+  const tokenIds = alt ? [options.tokenId, alt] : [options.tokenId];
+  return useMarketplaceTokenBalances(
+    {
+      contractAddresses: [options.collection],
+      tokenIds,
+      limit: 1,
+    },
+    !!options.collection && !!options.tokenId,
+  );
+}
+
+export function useWalletPortfolioQuery(walletAddress: string | undefined) {
+  return useMarketplaceTokenBalances(
+    {
+      accountAddresses: walletAddress ? [walletAddress] : [],
+      limit: 200,
+    },
+    !!walletAddress,
   );
 }
