@@ -1,8 +1,34 @@
 import { cache } from "react";
-import type { NormalizedToken, TokenDetails } from "@cartridge/arcade/marketplace";
-import { createMarketplaceClient } from "@cartridge/arcade/marketplace";
 import { getMarketplaceRuntimeConfig } from "@/lib/marketplace/config";
 import { tokenImage, tokenName } from "@/lib/marketplace/token-display";
+
+type TokenLike = {
+  token_id?: unknown;
+  image?: unknown;
+  metadata?: unknown;
+};
+
+type TokenDetailsLike = {
+  token?: TokenLike | null;
+} | null;
+
+type MarketplaceClientLike = {
+  getCollection(options: {
+    address: string;
+    projectId?: string;
+    fetchImages?: boolean;
+  }): Promise<unknown>;
+  getToken(options: {
+    collection: string;
+    tokenId: string;
+    projectId?: string;
+    fetchImages?: boolean;
+  }): Promise<TokenDetailsLike>;
+};
+
+type MarketplaceModule = {
+  createMarketplaceClient(config: unknown): Promise<MarketplaceClientLike>;
+};
 
 type CollectionSeoData = {
   exists: boolean;
@@ -79,7 +105,7 @@ function alternateTokenId(rawTokenId: string) {
   return null;
 }
 
-function hasUsableToken(data: TokenDetails | null): data is TokenDetails {
+function hasUsableToken(data: TokenDetailsLike): data is { token: TokenLike } {
   return data !== null && data.token !== null && data.token !== undefined;
 }
 
@@ -113,22 +139,31 @@ function collectionMetadata(rawCollection: unknown) {
   };
 }
 
-const getMarketplaceClient = cache(() => {
-  const { sdkConfig } = getMarketplaceRuntimeConfig();
-  return createMarketplaceClient(sdkConfig);
-});
-
-async function getMarketplaceClientSafe() {
+const loadMarketplaceModule = cache(async (): Promise<MarketplaceModule | null> => {
   try {
-    return await getMarketplaceClient();
+    return (await import("@cartridge/arcade/marketplace")) as unknown as MarketplaceModule;
   } catch {
     return null;
   }
-}
+});
+
+const getMarketplaceClient = cache(async (): Promise<MarketplaceClientLike | null> => {
+  const marketplaceModule = await loadMarketplaceModule();
+  if (!marketplaceModule) {
+    return null;
+  }
+
+  try {
+    const { sdkConfig } = getMarketplaceRuntimeConfig();
+    return await marketplaceModule.createMarketplaceClient(sdkConfig);
+  } catch {
+    return null;
+  }
+});
 
 async function fetchCollection(address: string) {
   const context = resolveCollectionContext(address);
-  const client = await getMarketplaceClientSafe();
+  const client = await getMarketplaceClient();
 
   if (!client) {
     return {
@@ -161,12 +196,12 @@ async function fetchTokenWithFallback(options: {
   tokenId: string;
   projectId?: string;
 }) {
-  const client = await getMarketplaceClientSafe();
+  const client = await getMarketplaceClient();
   if (!client) {
     return null;
   }
 
-  let response: TokenDetails | null = null;
+  let response: TokenDetailsLike = null;
 
   try {
     response = await client.getToken({
@@ -202,8 +237,8 @@ async function fetchTokenWithFallback(options: {
   }
 }
 
-function normalizedTokenImage(token: NormalizedToken) {
-  return normalizeImageUrl(tokenImage(token));
+function normalizedTokenImage(token: TokenLike) {
+  return normalizeImageUrl(tokenImage(token as never));
 }
 
 export async function getCollectionSeoData(address: string): Promise<CollectionSeoData> {
@@ -254,7 +289,7 @@ export async function getTokenSeoData(
     };
   }
 
-  const resolvedTokenName = tokenName(tokenDetail.token);
+  const resolvedTokenName = tokenName(tokenDetail.token as never);
 
   return {
     exists: true,
