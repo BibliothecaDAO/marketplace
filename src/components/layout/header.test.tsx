@@ -18,6 +18,10 @@ vi.mock("@starknet-react/core", () => ({
   useDisconnect: mockUseDisconnect,
 }));
 
+vi.mock("@/features/cart/components/cart-sidebar", () => ({
+  CartSidebar: () => <button type="button">Cart (0)</button>,
+}));
+
 describe("Header", () => {
   beforeEach(() => {
     mockConnect.mockReset();
@@ -110,12 +114,13 @@ describe("Header", () => {
     expect(screen.getByRole("button", { name: /cart \(0\)/i })).toBeVisible();
   });
 
-  it("login_uses_controller_connector_when_available", async () => {
+  it("login_opens_wallet_modal_with_all_connectors", async () => {
     const walletConnector = { id: "braavos", name: "Braavos" };
+    const argentConnector = { id: "argentX", name: "Argent" };
     const controllerConnector = { id: "controller", name: "Controller" };
     mockUseConnect.mockReturnValue({
       connect: mockConnect,
-      connectors: [walletConnector, controllerConnector],
+      connectors: [walletConnector, argentConnector, controllerConnector],
       pendingConnector: undefined,
       isPending: false,
     });
@@ -124,7 +129,28 @@ describe("Header", () => {
     render(<Header />);
     await user.click(screen.getByRole("button", { name: /login/i }));
 
-    expect(mockConnect).toHaveBeenCalledWith({ connector: controllerConnector });
+    expect(screen.getByRole("heading", { name: /select wallet/i })).toBeVisible();
+    expect(screen.getByRole("button", { name: /braavos/i })).toBeVisible();
+    expect(screen.getByRole("button", { name: /argent/i })).toBeVisible();
+    expect(screen.getByRole("button", { name: /controller/i })).toBeVisible();
+  });
+
+  it("wallet_modal_connects_selected_connector", async () => {
+    const braavosConnector = { id: "braavos", name: "Braavos" };
+    const controllerConnector = { id: "controller", name: "Controller" };
+    mockUseConnect.mockReturnValue({
+      connect: mockConnect,
+      connectors: [controllerConnector, braavosConnector],
+      pendingConnector: undefined,
+      isPending: false,
+    });
+    const user = userEvent.setup();
+
+    render(<Header />);
+    await user.click(screen.getByRole("button", { name: /login/i }));
+    await user.click(screen.getByRole("button", { name: /braavos/i }));
+
+    expect(mockConnect).toHaveBeenCalledWith({ connector: braavosConnector });
   });
 
   it("shows_disconnect_button_for_connected_wallet", async () => {
@@ -190,6 +216,7 @@ describe("Header", () => {
 
     render(<Header />);
     await user.click(screen.getByRole("button", { name: /login/i }));
+    await user.click(screen.getByRole("button", { name: /controller/i }));
 
     expect(mockConsoleError).toHaveBeenCalledWith(
       "Failed to connect wallet",

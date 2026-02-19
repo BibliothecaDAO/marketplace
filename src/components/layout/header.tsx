@@ -7,6 +7,13 @@ import { Github, Menu, MessageSquare, Twitter } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { CartSidebar } from "@/features/cart/components/cart-sidebar";
 import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import {
   Sheet,
   SheetContent,
   SheetHeader,
@@ -16,6 +23,14 @@ import {
 
 function formatAddress(address: string) {
   return `${address.slice(0, 6)}...${address.slice(-4)}`;
+}
+
+function connectorLabel(connector: { id: string; name?: string }) {
+  if (connector.name && connector.name.trim().length > 0) {
+    return connector.name;
+  }
+
+  return connector.id;
 }
 
 const NAV_LINKS = [
@@ -35,20 +50,14 @@ export function Header() {
   const { connect, connectors, isPending: isConnecting } = useConnect();
   const { disconnect, isPending: isDisconnecting } = useDisconnect();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [walletModalOpen, setWalletModalOpen] = useState(false);
 
-  const controllerConnector = connectors.find(
-    (connector) => connector.id === "controller",
-  );
-  const selectedConnector = controllerConnector ?? connectors[0];
   const isBusy = isConnecting || isDisconnecting;
 
-  const handleConnect = async () => {
-    if (!selectedConnector) {
-      return;
-    }
-
+  const handleConnect = async (connector: (typeof connectors)[number]) => {
     try {
-      await connect({ connector: selectedConnector });
+      await connect({ connector });
+      setWalletModalOpen(false);
     } catch (error) {
       console.error("Failed to connect wallet", error);
     }
@@ -136,12 +145,45 @@ export function Header() {
             <Button
               type="button"
               size="sm"
-              onClick={handleConnect}
-              disabled={!selectedConnector || isBusy}
+              onClick={() => setWalletModalOpen(true)}
+              disabled={connectors.length === 0 || isBusy}
             >
               Login
             </Button>
           )}
+
+          <Dialog open={walletModalOpen} onOpenChange={setWalletModalOpen}>
+            <DialogContent showCloseButton={!isBusy}>
+              <DialogHeader>
+                <DialogTitle>Select wallet</DialogTitle>
+                <DialogDescription>
+                  Choose a wallet connector to continue.
+                </DialogDescription>
+              </DialogHeader>
+              <div className="space-y-2">
+                {connectors.length === 0 ? (
+                  <p className="text-sm text-muted-foreground">
+                    No wallet connectors are available.
+                  </p>
+                ) : (
+                  connectors.map((connector) => (
+                    <Button
+                      key={connector.id}
+                      className="w-full justify-start"
+                      disabled={isBusy}
+                      onClick={() => {
+                        void handleConnect(connector);
+                      }}
+                      type="button"
+                      variant="outline"
+                    >
+                      {connectorLabel(connector)}
+                    </Button>
+                  ))
+                )}
+              </div>
+            </DialogContent>
+          </Dialog>
 
           {/* Mobile hamburger */}
           <Sheet open={mobileMenuOpen} onOpenChange={setMobileMenuOpen}>

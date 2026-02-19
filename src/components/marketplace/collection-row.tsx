@@ -24,7 +24,7 @@ import {
   cartItemFromTokenListing,
   cheapestListingByTokenId,
 } from "@/features/cart/listing-utils";
-import { useCartStore } from "@/features/cart/store/cart-store";
+import { useAddToCartFeedback } from "@/features/cart/hooks/use-add-to-cart-feedback";
 
 type CollectionRowProps = {
   address: string;
@@ -126,7 +126,7 @@ function floorPriceFromListings(
 }
 
 export function CollectionRow({ address, name, projectId }: CollectionRowProps) {
-  const addItem = useCartStore((state) => state.addItem);
+  const { addListingToCart, isRecentlyAdded } = useAddToCartFeedback();
   const collectionQuery = useCollectionQuery({ address, projectId, fetchImages: false });
   const tokenQuery = useCollectionTokensQuery({
     address,
@@ -246,6 +246,7 @@ export function CollectionRow({ address, name, projectId }: CollectionRowProps) 
           {tokensForDisplay.map((token) => {
             const tokenKey = displayTokenId(token);
             const cheapestListing = cheapestListings.get(tokenKey);
+            const isAdded = isRecentlyAdded(cheapestListing?.orderId);
             const price =
               cheapestListing?.price ??
               listingPrices.get(tokenKey) ??
@@ -266,7 +267,7 @@ export function CollectionRow({ address, name, projectId }: CollectionRowProps) 
                       return;
                     }
 
-                    addItem(
+                    addListingToCart(
                       cartItemFromTokenListing(
                         token,
                         address,
@@ -277,9 +278,9 @@ export function CollectionRow({ address, name, projectId }: CollectionRowProps) 
                   }}
                   size="sm"
                   type="button"
-                  variant="outline"
+                  variant={isAdded ? "default" : "outline"}
                 >
-                  Add to cart
+                  {isAdded ? "Added" : "Add to cart"}
                 </Button>
               </div>
             );
