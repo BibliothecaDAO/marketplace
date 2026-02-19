@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useReducer, useState } from "react";
 import type { NormalizedToken } from "@cartridge/arcade/marketplace";
 import {
   useCollectionListingsQuery,
@@ -61,6 +61,38 @@ function tokenSignature(tokens: NormalizedToken[]) {
   return tokens.map((item) => tokenId(item)).join(",");
 }
 
+type GridPaginationState = {
+  cursor: string | null | undefined;
+  tokens: NormalizedToken[];
+};
+
+type GridPaginationAction =
+  | { type: "RESET" }
+  | { type: "APPEND_PAGE"; pageTokens: NormalizedToken[] }
+  | { type: "ADVANCE_CURSOR"; cursor: string };
+
+function gridPaginationReducer(
+  state: GridPaginationState,
+  action: GridPaginationAction,
+): GridPaginationState {
+  switch (action.type) {
+    case "RESET":
+      return { cursor: undefined, tokens: [] };
+    case "APPEND_PAGE": {
+      const next = !state.cursor
+        ? dedupeTokens(action.pageTokens)
+        : dedupeTokens([...state.tokens, ...action.pageTokens]);
+      // Return the SAME reference so React bails out when tokens are unchanged.
+      // This prevents an infinite render loop when the query returns a new object
+      // reference each render (e.g. in tests) but the underlying data hasn't changed.
+      if (tokenSignature(state.tokens) === tokenSignature(next)) return state;
+      return { ...state, tokens: next };
+    }
+    case "ADVANCE_CURSOR":
+      return { ...state, cursor: action.cursor };
+  }
+}
+
 export function CollectionTokenGrid({
   address,
   projectId,
@@ -88,8 +120,10 @@ export function CollectionTokenGrid({
         : undefined,
     [activeFilters],
   );
-  const [cursor, setCursor] = useState<string | null | undefined>(undefined);
-  const [tokens, setTokens] = useState<NormalizedToken[]>([]);
+  const [pagination, dispatch] = useReducer(gridPaginationReducer, {
+    cursor: undefined,
+    tokens: [],
+  });
   const [gridDensity, setGridDensity] = useState<GridDensity>("standard");
 
   const tokenQuery = useCollectionTokensQuery({
@@ -97,7 +131,7 @@ export function CollectionTokenGrid({
     project: projectId,
     limit,
     tokenIds,
-    cursor,
+    cursor: pagination.cursor,
     fetchImages: true,
     attributeFilters,
   });
@@ -108,35 +142,22 @@ export function CollectionTokenGrid({
   });
 
   useEffect(() => {
-    // eslint-disable-next-line react-hooks/set-state-in-effect
-    setTokens([]);
-    // eslint-disable-next-line react-hooks/set-state-in-effect
-    setCursor(undefined);
+    dispatch({ type: "RESET" });
   }, [address, projectId, limit, tokenIdsKey, activeFiltersKey]);
 
   useEffect(() => {
-    if (!tokenQuery.isSuccess) {
-      return;
-    }
-
+    if (!tokenQuery.isSuccess) return;
     const pageTokens = tokenQuery.data?.page?.tokens ?? [];
-    // eslint-disable-next-line react-hooks/set-state-in-effect
-    setTokens((previous) => {
-      const next = !cursor
-        ? dedupeTokens(pageTokens)
-        : dedupeTokens([...previous, ...pageTokens]);
-
-      return tokenSignature(previous) === tokenSignature(next) ? previous : next;
-    });
-  }, [cursor, tokenQuery.data, tokenQuery.isSuccess]);
+    dispatch({ type: "APPEND_PAGE", pageTokens });
+  }, [tokenQuery.data, tokenQuery.isSuccess]);
 
   useEffect(() => {
-    onTokensChange?.(tokens);
-  }, [tokens, onTokensChange]);
+    onTokensChange?.(pagination.tokens);
+  }, [pagination.tokens, onTokensChange]);
 
   const nextCursor = tokenQuery.data?.page?.nextCursor ?? null;
   const canLoadMore = Boolean(nextCursor);
-  const visibleTokens = tokens;
+  const visibleTokens = pagination.tokens;
   const listingPrices = cheapestListingByTokenId(listingQuery.data);
   const listingPriceMap = listingPriceByTokenId(listingQuery.data);
 
@@ -161,10 +182,10 @@ export function CollectionTokenGrid({
         </div>
       </div>
 
-      {tokenQuery.isLoading && tokens.length === 0 ? (
+      {tokenQuery.isLoading && pagination.tokens.length === 0 ? (
         <div className={cn("grid gap-3", GRID_DENSITY_CLASSES[gridDensity])}>
           {Array.from({ length: 6 }).map((_, index) => (
-            <Card key={`token-skeleton-${index}`}>
+            <Card key={index}>
               <CardContent className="space-y-2 p-3">
                 <Skeleton className="h-40 w-full" data-testid="token-skeleton" />
                 <Skeleton className="h-4 w-2/3" />
@@ -248,7 +269,7 @@ export function CollectionTokenGrid({
           disabled={tokenQuery.isFetching}
           onClick={() => {
             if (nextCursor) {
-              setCursor(nextCursor);
+              dispatch({ type: "ADVANCE_CURSOR", cursor: nextCursor });
             }
           }}
           type="button"

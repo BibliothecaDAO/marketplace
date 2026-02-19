@@ -458,4 +458,76 @@ describe("collection token grid", () => {
     await user.click(screen.getByRole("button", { name: /comfort/i }));
     expect(grid).toHaveClass("lg:grid-cols-2");
   });
+
+  it("tokens_reset_when_address_prop_changes", async () => {
+    mockUseCollectionTokensQuery.mockImplementation((options) => {
+      const tokens =
+        options?.address === "0xabc"
+          ? [token("1"), token("2")]
+          : [token("99")];
+      return {
+        data: { page: { tokens, nextCursor: null }, error: null },
+        isLoading: false,
+        isSuccess: true,
+        isError: false,
+        error: null,
+        isFetching: false,
+        refetch: vi.fn(),
+      };
+    });
+
+    const { rerender } = render(
+      <CollectionTokenGrid address="0xabc" projectId="project-a" />,
+    );
+
+    expect(await screen.findByText("Token #1")).toBeVisible();
+    expect(screen.getByText("Token #2")).toBeVisible();
+
+    rerender(<CollectionTokenGrid address="0xnew" projectId="project-a" />);
+
+    expect(await screen.findByText("Token #99")).toBeVisible();
+    // Tokens from old address must not persist
+    expect(screen.queryByText("Token #1")).toBeNull();
+    expect(screen.queryByText("Token #2")).toBeNull();
+  });
+
+  it("tokens_reset_when_active_filters_change", async () => {
+    const filtersA: ActiveFilters = { Background: new Set(["Blue"]) };
+    const filtersB: ActiveFilters = { Background: new Set(["Red"]) };
+
+    mockUseCollectionTokensQuery.mockImplementation((options) => {
+      const hasBlue = options?.attributeFilters?.Background?.has("Blue");
+      const tokens = hasBlue ? [token("10")] : [token("20")];
+      return {
+        data: { page: { tokens, nextCursor: null }, error: null },
+        isLoading: false,
+        isSuccess: true,
+        isError: false,
+        error: null,
+        isFetching: false,
+        refetch: vi.fn(),
+      };
+    });
+
+    const { rerender } = render(
+      <CollectionTokenGrid
+        address="0xabc"
+        projectId="project-a"
+        activeFilters={filtersA}
+      />,
+    );
+
+    expect(await screen.findByText("Token #10")).toBeVisible();
+
+    rerender(
+      <CollectionTokenGrid
+        address="0xabc"
+        projectId="project-a"
+        activeFilters={filtersB}
+      />,
+    );
+
+    expect(await screen.findByText("Token #20")).toBeVisible();
+    expect(screen.queryByText("Token #10")).toBeNull();
+  });
 });

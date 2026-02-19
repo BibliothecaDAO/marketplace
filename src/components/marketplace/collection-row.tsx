@@ -219,7 +219,7 @@ export function CollectionRow({ address, name, projectId }: CollectionRowProps) 
       {tokenQuery.isLoading ? (
         <div className="flex gap-3 overflow-x-auto pb-2 px-4 sm:px-6 lg:px-8">
           {Array.from({ length: 6 }).map((_, index) => (
-            <Card key={`skeleton-${index}`} className="w-48 shrink-0">
+            <Card key={index} className="w-48 shrink-0">
               <CardContent className="space-y-2 p-3">
                 <Skeleton
                   className="h-40 w-full"
