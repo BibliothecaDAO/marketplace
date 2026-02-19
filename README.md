@@ -34,6 +34,8 @@ Configure these in `.env.local`:
   - optional Arcade project id
 - `NEXT_PUBLIC_MARKETPLACE_COLLECTIONS`
   - comma-separated `address|name|projectId` entries
+- `NEXT_PUBLIC_SITE_URL`
+  - absolute app URL used for canonical links and OG/Twitter metadata URLs
 
 Example:
 
@@ -41,6 +43,7 @@ Example:
 NEXT_PUBLIC_MARKETPLACE_CHAIN_ID=SN_SEPOLIA
 NEXT_PUBLIC_MARKETPLACE_DEFAULT_PROJECT=
 NEXT_PUBLIC_MARKETPLACE_COLLECTIONS=0x123...|Genesis|project-a,0x456...|Artifacts|project-b
+NEXT_PUBLIC_SITE_URL=https://market.realms.world
 ```
 
 ## Scripts

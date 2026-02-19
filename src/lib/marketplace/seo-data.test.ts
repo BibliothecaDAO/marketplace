@@ -1,0 +1,136 @@
+import { beforeEach, describe, expect, it, vi } from "vitest";
+
+const {
+  mockCreateMarketplaceClient,
+  mockGetCollection,
+  mockGetToken,
+  mockRuntimeConfig,
+} = vi.hoisted(() => ({
+  mockCreateMarketplaceClient: vi.fn(),
+  mockGetCollection: vi.fn(),
+  mockGetToken: vi.fn(),
+  mockRuntimeConfig: {
+    chainLabel: "SN_SEPOLIA",
+    warnings: [],
+    sdkConfig: {
+      chainId: "0x534e5f5345504f4c4941",
+    },
+    collections: [
+      { address: "0xabc", name: "Genesis", projectId: "project-a" },
+    ],
+  },
+}));
+
+vi.mock("@cartridge/arcade/marketplace", () => ({
+  createMarketplaceClient: mockCreateMarketplaceClient,
+}));
+
+vi.mock("@/lib/marketplace/config", () => ({
+  getMarketplaceRuntimeConfig: () => mockRuntimeConfig,
+}));
+
+describe("marketplace seo data", () => {
+  beforeEach(() => {
+    mockGetCollection.mockReset();
+    mockGetToken.mockReset();
+    mockCreateMarketplaceClient.mockReset();
+    mockCreateMarketplaceClient.mockReturnValue({
+      getCollection: mockGetCollection,
+      getToken: mockGetToken,
+    });
+  });
+
+  it("returns_collection_name_description_and_image", async () => {
+    mockGetCollection.mockResolvedValue({
+      address: "0xabc",
+      metadata: {
+        name: "Genesis",
+        description: "A flagship collection",
+        image: "https://cdn.example.com/genesis.png",
+      },
+    });
+
+    const { getCollectionSeoData } = await import("@/lib/marketplace/seo-data");
+    const result = await getCollectionSeoData("0xabc");
+
+    expect(result).toEqual({
+      exists: true,
+      name: "Genesis",
+      description: "A flagship collection",
+      image: "https://cdn.example.com/genesis.png",
+    });
+    expect(mockGetCollection).toHaveBeenCalledWith({
+      address: "0xabc",
+      projectId: "project-a",
+      fetchImages: true,
+    });
+  });
+
+  it("retries_token_lookup_with_alternate_id_format", async () => {
+    mockGetCollection.mockResolvedValue({
+      address: "0xabc",
+      metadata: {
+        name: "Genesis",
+        image: "https://cdn.example.com/genesis.png",
+      },
+    });
+    mockGetToken
+      .mockResolvedValueOnce(null)
+      .mockResolvedValueOnce({
+        token: {
+          token_id: "0x935",
+          metadata: {
+            name: "Loot Chest #2357",
+            image: "https://cdn.example.com/2357.png",
+          },
+          image: null,
+        },
+      });
+
+    const { getTokenSeoData } = await import("@/lib/marketplace/seo-data");
+    const result = await getTokenSeoData("0xabc", "2357");
+
+    expect(result).toEqual({
+      exists: true,
+      tokenName: "Loot Chest #2357",
+      collectionName: "Genesis",
+      description: "View listings and activity for Loot Chest #2357.",
+      image: "https://cdn.example.com/2357.png",
+      collectionImage: "https://cdn.example.com/genesis.png",
+    });
+    expect(mockGetToken).toHaveBeenNthCalledWith(1, {
+      collection: "0xabc",
+      tokenId: "2357",
+      projectId: "project-a",
+      fetchImages: true,
+    });
+    expect(mockGetToken).toHaveBeenNthCalledWith(2, {
+      collection: "0xabc",
+      tokenId: "0x935",
+      projectId: "project-a",
+      fetchImages: true,
+    });
+  });
+
+  it("returns_noindex_fallback_payload_when_token_not_found", async () => {
+    mockGetCollection.mockResolvedValue({
+      address: "0xabc",
+      metadata: {
+        name: "Genesis",
+      },
+    });
+    mockGetToken.mockResolvedValue(null);
+
+    const { getTokenSeoData } = await import("@/lib/marketplace/seo-data");
+    const result = await getTokenSeoData("0xabc", "999");
+
+    expect(result).toEqual({
+      exists: false,
+      tokenName: "Token #999",
+      collectionName: "Genesis",
+      description: null,
+      image: null,
+      collectionImage: null,
+    });
+  });
+});
