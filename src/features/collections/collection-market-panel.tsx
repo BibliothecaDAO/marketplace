@@ -1,11 +1,13 @@
 "use client";
 
+import Link from "next/link";
 import { useMemo, useState } from "react";
 import type { CollectionOrdersOptions } from "@cartridge/arcade/marketplace";
 import {
   useCollectionListingsQuery,
   useCollectionOrdersQuery,
 } from "@/lib/marketplace/hooks";
+import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import {
@@ -17,6 +19,11 @@ import {
 } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import {
+  formatAddress,
+  formatNumberish,
+  formatPriceForDisplay,
+} from "@/lib/marketplace/token-display";
 
 type CollectionMarketPanelProps = {
   address: string;
@@ -32,6 +39,169 @@ const ANY_VALUE = "__any__";
 
 type OrderStatusFilter = Exclude<CollectionOrdersOptions["status"], undefined>;
 type OrderCategoryFilter = Exclude<CollectionOrdersOptions["category"], undefined>;
+type ActivityKind = "Order" | "Listing";
+type ActivityRow = {
+  kind: ActivityKind;
+  id: string;
+  tokenId: string | null;
+  price: string | null;
+  owner: string | null;
+  status: string | null;
+  occurredAt: string | null;
+  href: string | null;
+};
+
+function asRecord(value: unknown) {
+  return value && typeof value === "object"
+    ? (value as Record<string, unknown>)
+    : null;
+}
+
+function firstString(candidates: unknown[]) {
+  for (const candidate of candidates) {
+    if (typeof candidate === "string" && candidate.trim()) {
+      return candidate.trim();
+    }
+  }
+
+  return null;
+}
+
+function firstNumberish(candidates: unknown[]) {
+  for (const candidate of candidates) {
+    const normalized = formatNumberish(candidate);
+    if (normalized) {
+      return normalized;
+    }
+  }
+
+  return null;
+}
+
+function formatActivityDate(value: unknown) {
+  if (typeof value === "string" && value.trim()) {
+    const parsed = new Date(value);
+    if (!Number.isNaN(parsed.getTime())) {
+      return `${parsed.toISOString().slice(0, 16).replace("T", " ")} UTC`;
+    }
+  }
+
+  if (typeof value === "number" || typeof value === "bigint") {
+    const asNumber = Number(value);
+    if (Number.isFinite(asNumber)) {
+      const millis = asNumber < 1_000_000_000_000 ? asNumber * 1000 : asNumber;
+      const parsed = new Date(millis);
+      if (!Number.isNaN(parsed.getTime())) {
+        return `${parsed.toISOString().slice(0, 16).replace("T", " ")} UTC`;
+      }
+    }
+  }
+
+  return null;
+}
+
+function toActivityRow(raw: unknown, kind: ActivityKind, address: string): ActivityRow | null {
+  const fields = asRecord(raw);
+  if (!fields) {
+    return null;
+  }
+
+  const nestedOrder = asRecord(fields.order);
+  const nestedListing = asRecord(fields.listing);
+  const id =
+    firstNumberish([fields.id, nestedOrder?.id, nestedListing?.id]) ??
+    firstString([fields.id, nestedOrder?.id, nestedListing?.id]);
+  if (!id) {
+    return null;
+  }
+
+  const tokenId = firstNumberish([
+    fields.tokenId,
+    fields.token_id,
+    nestedOrder?.tokenId,
+    nestedOrder?.token_id,
+    nestedListing?.tokenId,
+    nestedListing?.token_id,
+  ]);
+  const rawPrice = firstNumberish([
+    fields.price,
+    fields.listingPrice,
+    fields.listing_price,
+    nestedOrder?.price,
+    nestedOrder?.listingPrice,
+    nestedOrder?.listing_price,
+    nestedListing?.price,
+    nestedListing?.listingPrice,
+    nestedListing?.listing_price,
+  ]);
+  const owner = firstString([
+    fields.owner,
+    fields.maker,
+    fields.seller,
+    fields.account,
+    nestedOrder?.owner,
+    nestedOrder?.maker,
+    nestedOrder?.seller,
+    nestedListing?.owner,
+    nestedListing?.seller,
+  ]);
+  const status = firstString([
+    fields.status,
+    fields.state,
+    nestedOrder?.status,
+    nestedListing?.status,
+  ]);
+  const occurredAt = formatActivityDate(
+    fields.updatedAt ??
+      fields.updated_at ??
+      fields.createdAt ??
+      fields.created_at ??
+      fields.timestamp ??
+      fields.time ??
+      nestedOrder?.updatedAt ??
+      nestedOrder?.createdAt ??
+      nestedListing?.updatedAt ??
+      nestedListing?.createdAt,
+  );
+  const href = tokenId ? `/collections/${address}/${tokenId}` : null;
+
+  return {
+    kind,
+    id,
+    tokenId,
+    price: formatPriceForDisplay(rawPrice),
+    owner: owner ? formatAddress(owner) : null,
+    status,
+    occurredAt,
+    href,
+  };
+}
+
+function ActivityRowItem({ row }: { row: ActivityRow }) {
+  return (
+    <div className="rounded-md border border-border/60 bg-card px-3 py-2">
+      <div className="flex items-start justify-between gap-3">
+        <div className="space-y-1">
+          <p className="text-sm font-medium">{row.kind} #{row.id}</p>
+          {row.tokenId ? (
+            <p className="text-sm">Token #{row.tokenId}</p>
+          ) : null}
+          <div className="flex flex-wrap gap-x-3 gap-y-1 text-xs text-muted-foreground">
+            {row.price ? <span>Price {row.price}</span> : null}
+            {row.owner ? <span>Owner {row.owner}</span> : null}
+            {row.status ? <span>Status {row.status}</span> : null}
+            {row.occurredAt ? <span>{row.occurredAt}</span> : null}
+          </div>
+        </div>
+        {row.href ? (
+          <Button asChild size="sm" type="button" variant="outline">
+            <Link href={row.href}>View token</Link>
+          </Button>
+        ) : null}
+      </div>
+    </div>
+  );
+}
 
 function parseOrderStatus(value: string): OrderStatusFilter | undefined {
   if (value === ANY_VALUE || value === "") return undefined;
@@ -97,6 +267,20 @@ export function CollectionMarketPanel({
     verifyOwnership,
     projectId,
   });
+  const orderRows = useMemo(
+    () =>
+      (Array.isArray(orders.data) ? orders.data : [])
+        .map((order) => toActivityRow(order, "Order", address))
+        .filter((row): row is ActivityRow => row !== null),
+    [address, orders.data],
+  );
+  const listingRows = useMemo(
+    () =>
+      (Array.isArray(listings.data) ? listings.data : [])
+        .map((listing) => toActivityRow(listing, "Listing", address))
+        .filter((row): row is ActivityRow => row !== null),
+    [address, listings.data],
+  );
 
   return (
     <Card>
@@ -153,14 +337,12 @@ export function CollectionMarketPanel({
               ) : null}
 
               {orders.isSuccess ? (
-                <div className="space-y-0">
-                  {(orders.data ?? []).map((order: { id: number; tokenId: number }) => (
-                    <p key={order.id} className="text-sm font-mono border-b border-border/50 py-1.5">
-                      <span className="text-muted-foreground">order</span>{" "}
-                      <span className="text-primary">#{order.id}</span>{" "}
-                      <span className="text-muted-foreground">token</span>{" "}
-                      <span className="text-foreground">#{order.tokenId}</span>
-                    </p>
+                <div className="space-y-2">
+                  {orderRows.map((row) => (
+                    <ActivityRowItem
+                      key={`${row.kind}-${row.id}-${row.tokenId ?? "none"}`}
+                      row={row}
+                    />
                   ))}
                 </div>
               ) : null}
@@ -199,14 +381,12 @@ export function CollectionMarketPanel({
               ) : null}
 
               {listings.isSuccess ? (
-                <div className="space-y-0">
-                  {(listings.data ?? []).map((listing: { id: number; tokenId: number }) => (
-                    <p key={listing.id} className="text-sm font-mono border-b border-border/50 py-1.5">
-                      <span className="text-muted-foreground">listing</span>{" "}
-                      <span className="text-primary">#{listing.id}</span>{" "}
-                      <span className="text-muted-foreground">token</span>{" "}
-                      <span className="text-foreground">#{listing.tokenId}</span>
-                    </p>
+                <div className="space-y-2">
+                  {listingRows.map((row) => (
+                    <ActivityRowItem
+                      key={`${row.kind}-${row.id}-${row.tokenId ?? "none"}`}
+                      row={row}
+                    />
                   ))}
                 </div>
               ) : null}

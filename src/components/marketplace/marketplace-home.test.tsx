@@ -1,4 +1,6 @@
-import { render, screen } from "@testing-library/react";
+import { useEffect } from "react";
+import { render, screen, waitFor } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi, beforeEach } from "vitest";
 
 const { mockGetConfig, mockCollectionRow } = vi.hoisted(() => ({
@@ -11,9 +13,39 @@ vi.mock("@/lib/marketplace/config", () => ({
 }));
 
 vi.mock("@/components/marketplace/collection-row", () => ({
-  CollectionRow: (props: { address: string; name: string; projectId?: string }) => {
+  CollectionRow: (props: {
+    address: string;
+    name: string;
+    projectId?: string;
+    searchQuery?: string;
+    onSearchMatchChange?: (address: string, isMatch: boolean) => void;
+  }) => {
     mockCollectionRow(props);
-    return <div data-testid={`collection-row-${props.address}`}>{props.name}</div>;
+    const {
+      address,
+      name,
+      onSearchMatchChange,
+      searchQuery,
+    } = props;
+
+    const normalizedSearch = (searchQuery ?? "").trim().toLowerCase();
+    const matchesSearch =
+      !normalizedSearch ||
+      name.toLowerCase().includes(normalizedSearch);
+
+    useEffect(() => {
+      onSearchMatchChange?.(address, matchesSearch);
+    }, [address, matchesSearch, onSearchMatchChange]);
+
+    if (!matchesSearch) {
+      return null;
+    }
+
+    return (
+      <div data-testid={`collection-row-${address}`}>
+        {name}
+      </div>
+    );
   },
 }));
 
@@ -66,14 +98,87 @@ describe("marketplace home", () => {
         address: "0x111",
         name: "First",
         projectId: "proj-1",
+        searchQuery: "",
+        onSearchMatchChange: expect.any(Function),
       }),
     );
     expect(mockCollectionRow).toHaveBeenCalledWith(
       expect.objectContaining({
         address: "0x222",
         name: "Second",
+        searchQuery: "",
+        onSearchMatchChange: expect.any(Function),
       }),
     );
+  });
+
+  it("passes_debounced_search_query_to_collection_rows", async () => {
+    const user = userEvent.setup();
+    mockGetConfig.mockReturnValue({
+      chainLabel: "SN_MAIN",
+      sdkConfig: { chainId: "0x534e5f4d41494e", defaultProject: "main-proj" },
+      collections: [
+        { address: "0x111", name: "Alpha Collection" },
+      ],
+      warnings: [],
+    });
+
+    const { MarketplaceHome } = await import(
+      "@/components/marketplace/marketplace-home"
+    );
+
+    render(<MarketplaceHome />);
+
+    await user.type(
+      screen.getByPlaceholderText(/search collections or token ids\/names/i),
+      "alpha",
+    );
+
+    await waitFor(() => {
+      expect(mockCollectionRow).toHaveBeenCalledWith(
+        expect.objectContaining({
+          address: "0x111",
+          searchQuery: "alpha",
+        }),
+      );
+    });
+  });
+
+  it("shows_search_empty_state_with_reset_action", async () => {
+    const user = userEvent.setup();
+    mockGetConfig.mockReturnValue({
+      chainLabel: "SN_MAIN",
+      sdkConfig: { chainId: "0x534e5f4d41494e", defaultProject: "main-proj" },
+      collections: [
+        { address: "0x111", name: "Alpha Collection" },
+        { address: "0x222", name: "Beta Collection" },
+      ],
+      warnings: [],
+    });
+
+    const { MarketplaceHome } = await import(
+      "@/components/marketplace/marketplace-home"
+    );
+
+    render(<MarketplaceHome />);
+
+    await user.type(
+      screen.getByPlaceholderText(/search collections or token ids\/names/i),
+      "zzzz",
+    );
+
+    await waitFor(() => {
+      expect(screen.getByText(/no matches for/i)).toBeVisible();
+      expect(screen.getByRole("button", { name: /reset search/i })).toBeVisible();
+    });
+
+    await user.click(screen.getByRole("button", { name: /reset search/i }));
+
+    await waitFor(() => {
+      expect(screen.queryByText(/no matches for/i)).toBeNull();
+      expect(screen.getByTestId("collection-row-0x111")).toBeVisible();
+      expect(screen.getByTestId("collection-row-0x222")).toBeVisible();
+    });
   });
 
   it("shows_empty_state_when_no_collections", async () => {

@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useAccount } from "@starknet-react/core";
 import type { NormalizedToken } from "@cartridge/arcade/marketplace";
+import { useMarketplaceClient } from "@cartridge/arcade/marketplace/react";
 import {
   useCollectionListingsQuery,
   useTokenDetailQuery,
@@ -28,6 +29,7 @@ import {
   formatNumberish,
   formatPriceForDisplay,
 } from "@/lib/marketplace/token-display";
+import { calculateMarketplaceFee, parseBigInt } from "@/lib/marketplace/fees";
 import type { CheapestListing } from "@/features/cart/listing-utils";
 import {
   cartItemFromTokenListing,
@@ -114,6 +116,8 @@ function isExpiredListing(listing: ListingRow, nowEpochSeconds: number) {
 const MARKETPLACE_CONTRACT = "0x6bbf16b6c67b1bef27a187b499b2f3a14af31646c2c90d64f11b9087c3f527c";
 // STRK token address on Starknet mainnet / testnet
 const STRK_ADDRESS = "0x04718f5a0fc34cc1af16a1cdee98ffb20c31f5cd61d6ab07201858f4287c938d";
+const DEFAULT_MARKETPLACE_FEE_NUM = 500;
+const DEFAULT_MARKETPLACE_FEE_DENOMINATOR = 10_000;
 
 export function TokenDetailView({
   address,
@@ -123,6 +127,7 @@ export function TokenDetailView({
   const normalizedTokenId = formatNumberish(tokenId) ?? tokenId;
   const { addListingToCart, isRecentlyAdded } = useAddToCartFeedback();
   const { account, address: walletAddress, isConnected } = useAccount();
+  const { client } = useMarketplaceClient();
   const { collections } = getMarketplaceRuntimeConfig();
   const collectionName = collections.find((c) => c.address === address)?.name ?? address;
   const [verifyOwnership, setVerifyOwnership] = useState(false);
@@ -139,6 +144,17 @@ export function TokenDetailView({
   const [pendingAction, setPendingAction] = useState<
     "list" | "offer" | "cancel" | null
   >(null);
+  const [feeEstimate, setFeeEstimate] = useState<{
+    status: "loading" | "empty" | "error" | "success";
+    marketplaceFee: bigint;
+    royaltyFee: bigint;
+    total: bigint;
+  }>({
+    status: "empty",
+    marketplaceFee: BigInt(0),
+    royaltyFee: BigInt(0),
+    total: BigInt(0),
+  });
   const detailQuery = useTokenDetailQuery({
     collection: address,
     tokenId: normalizedTokenId,
@@ -192,6 +208,85 @@ export function TokenDetailView({
     );
   }, [listingRows, walletAddress]);
   const isCheapestAdded = isRecentlyAdded(cheapestListing?.orderId);
+
+  useEffect(() => {
+    let disposed = false;
+
+    async function loadFeeEstimate() {
+      if (!cheapestListing || !token) {
+        setFeeEstimate({
+          status: "empty",
+          marketplaceFee: BigInt(0),
+          royaltyFee: BigInt(0),
+          total: BigInt(0),
+        });
+        return;
+      }
+
+      const listingPrice = parseBigInt(cheapestListing.price);
+      if (listingPrice === null) {
+        setFeeEstimate({
+          status: "error",
+          marketplaceFee: BigInt(0),
+          royaltyFee: BigInt(0),
+          total: BigInt(0),
+        });
+        return;
+      }
+
+      setFeeEstimate((current) => ({
+        ...current,
+        status: "loading",
+      }));
+
+      try {
+        const fees =
+          client && typeof client.getFees === "function"
+            ? await client.getFees()
+            : null;
+        const marketplaceFee = calculateMarketplaceFee(listingPrice, {
+          feeNum: fees?.feeNum ?? DEFAULT_MARKETPLACE_FEE_NUM,
+          feeDenominator: fees?.feeDenominator ?? DEFAULT_MARKETPLACE_FEE_DENOMINATOR,
+        });
+
+        const royaltyResponse =
+          client && typeof client.getRoyaltyFee === "function"
+            ? await client.getRoyaltyFee({
+              collection: address,
+              tokenId: formatNumberish(token.token_id) ?? String(token.token_id),
+              amount: listingPrice,
+            })
+            : null;
+
+        if (disposed) {
+          return;
+        }
+
+        const royaltyFee = royaltyResponse?.amount ?? BigInt(0);
+        setFeeEstimate({
+          status: "success",
+          marketplaceFee,
+          royaltyFee,
+          total: listingPrice + marketplaceFee + royaltyFee,
+        });
+      } catch {
+        if (!disposed) {
+          setFeeEstimate({
+            status: "error",
+            marketplaceFee: BigInt(0),
+            royaltyFee: BigInt(0),
+            total: BigInt(0),
+          });
+        }
+      }
+    }
+
+    void loadFeeEstimate();
+
+    return () => {
+      disposed = true;
+    };
+  }, [address, cheapestListing, client, token]);
 
   // If existing listings use a specific currency, adopt it (otherwise keep STRK default).
   useEffect(() => {
@@ -365,6 +460,51 @@ export function TokenDetailView({
 
       {/* Listings section */}
       <div className="space-y-3">
+        <Card className="border-dashed" data-testid="token-fee-card">
+          <CardContent className="space-y-2 p-3">
+            <h2 className="text-sm font-medium tracking-widest uppercase text-muted-foreground">
+              Purchase estimate
+            </h2>
+            {feeEstimate.status === "loading" ? (
+              <p className="text-xs text-muted-foreground" data-testid="token-fee-loading">
+                Loading fee estimate...
+              </p>
+            ) : null}
+            {feeEstimate.status === "empty" ? (
+              <p className="text-xs text-muted-foreground" data-testid="token-fee-empty">
+                No active listing available for estimate.
+              </p>
+            ) : null}
+            {feeEstimate.status === "error" ? (
+              <p className="text-xs text-destructive" data-testid="token-fee-error">
+                Fee estimate unavailable. Try refreshing listings.
+              </p>
+            ) : null}
+            {feeEstimate.status === "success" ? (
+              <div className="space-y-1 text-xs">
+                <div className="flex items-center justify-between">
+                  <span className="text-muted-foreground">Marketplace fee</span>
+                  <span data-testid="token-fee-marketplace">
+                    {formatPriceForDisplay(feeEstimate.marketplaceFee.toString()) ?? feeEstimate.marketplaceFee.toString()}
+                  </span>
+                </div>
+                <div className="flex items-center justify-between">
+                  <span className="text-muted-foreground">Royalty estimate</span>
+                  <span data-testid="token-fee-royalty">
+                    {formatPriceForDisplay(feeEstimate.royaltyFee.toString()) ?? feeEstimate.royaltyFee.toString()}
+                  </span>
+                </div>
+                <div className="flex items-center justify-between font-medium">
+                  <span>Total estimate</span>
+                  <span data-testid="token-fee-total">
+                    {formatPriceForDisplay(feeEstimate.total.toString()) ?? feeEstimate.total.toString()}
+                  </span>
+                </div>
+              </div>
+            ) : null}
+          </CardContent>
+        </Card>
+
         <div className="flex flex-wrap items-center justify-between gap-2">
           <h2 className="text-sm font-medium tracking-widest uppercase text-muted-foreground">Listings</h2>
           <div className="flex items-center gap-2">

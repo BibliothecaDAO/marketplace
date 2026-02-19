@@ -565,4 +565,62 @@ describe("collection row", () => {
     render(<CollectionRow address="0xabc" name="Test" />);
     expect(screen.queryByText("—")).toBeNull();
   });
+
+  it("filters_tokens_when_search_matches_token_name_or_id", () => {
+    mockUseCollectionTokensQuery.mockReturnValue(
+      successResult([
+        token("1", {
+          image: "https://cdn.example/1.png",
+          metadata: { name: "Alpha" },
+        }),
+        token("2", {
+          image: "https://cdn.example/2.png",
+          metadata: { name: "Beta" },
+        }),
+      ]),
+    );
+
+    render(
+      <CollectionRow
+        address="0xabc"
+        name="Searchable Collection"
+        searchQuery="2"
+      />,
+    );
+
+    expect(screen.getByText("Beta")).toBeVisible();
+    expect(screen.queryByText("Alpha")).toBeNull();
+  });
+
+  it("keeps_collection_visible_when_search_matches_collection_name", () => {
+    render(
+      <CollectionRow
+        address="0xabc"
+        name="Cool Cats"
+        searchQuery="cool"
+      />,
+    );
+
+    expect(
+      screen.getByRole("heading", { name: "Cool Cats" }),
+    ).toBeVisible();
+    expect(screen.getByText("Token #1")).toBeVisible();
+    expect(screen.getByText("Token #2")).toBeVisible();
+  });
+
+  it("hides_collection_row_when_search_has_no_match", () => {
+    render(
+      <CollectionRow
+        address="0xabc"
+        name="Cool Cats"
+        searchQuery="not-found"
+      />,
+    );
+
+    expect(
+      screen.queryByRole("heading", { name: "Cool Cats" }),
+    ).toBeNull();
+    expect(screen.queryByText("Token #1")).toBeNull();
+    expect(screen.queryByText("Token #2")).toBeNull();
+  });
 });

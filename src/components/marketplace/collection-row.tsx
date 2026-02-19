@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo } from "react";
+import { useEffect, useMemo } from "react";
 import Link from "next/link";
 import type { NormalizedToken } from "@cartridge/arcade/marketplace";
 import {
@@ -14,8 +14,10 @@ import {
   formatPriceForDisplay,
   listingPriceByTokenId,
   tokenId,
+  tokenName,
   tokenPrice,
 } from "@/lib/marketplace/token-display";
+import { matchesHomeSearch, normalizeHomeSearchQuery } from "@/lib/marketplace/home-search";
 import { MarketplaceTokenCard } from "@/components/marketplace/token-card";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -30,6 +32,8 @@ type CollectionRowProps = {
   address: string;
   name: string;
   projectId?: string;
+  searchQuery?: string;
+  onSearchMatchChange?: (address: string, isMatch: boolean) => void;
 };
 
 function asRecord(value: unknown) {
@@ -125,7 +129,13 @@ function floorPriceFromListings(
   return formatPriceForDisplay(min.toString());
 }
 
-export function CollectionRow({ address, name, projectId }: CollectionRowProps) {
+export function CollectionRow({
+  address,
+  name,
+  projectId,
+  searchQuery = "",
+  onSearchMatchChange,
+}: CollectionRowProps) {
   const { addListingToCart, isRecentlyAdded } = useAddToCartFeedback();
   const collectionQuery = useCollectionQuery({ address, projectId, fetchImages: false });
   const tokenQuery = useCollectionTokensQuery({
@@ -188,6 +198,36 @@ export function CollectionRow({ address, name, projectId }: CollectionRowProps) 
 
     return fallbackTokens.length > 0 ? fallbackTokens : tokens;
   }, [cheapestListings, fallbackTokens, listingPrices, tokens]);
+  const normalizedSearch = normalizeHomeSearchQuery(searchQuery);
+  const collectionMatchesSearch = matchesHomeSearch(normalizedSearch, [name]);
+  const filteredTokens = useMemo(() => {
+    if (!normalizedSearch) {
+      return tokensForDisplay;
+    }
+
+    return tokensForDisplay.filter((token) =>
+      matchesHomeSearch(normalizedSearch, [tokenName(token), displayTokenId(token)]),
+    );
+  }, [normalizedSearch, tokensForDisplay]);
+  const shouldShowLoadingRow = normalizedSearch.length > 0 &&
+    !collectionMatchesSearch &&
+    (tokenQuery.isLoading || listingQuery.isLoading || listedTokensQuery.isLoading);
+  const matchesSearch = normalizedSearch.length === 0 ||
+    collectionMatchesSearch ||
+    filteredTokens.length > 0 ||
+    shouldShowLoadingRow;
+  const visibleTokens =
+    normalizedSearch.length > 0 && !collectionMatchesSearch
+      ? filteredTokens
+      : tokensForDisplay;
+
+  useEffect(() => {
+    onSearchMatchChange?.(address, matchesSearch);
+  }, [address, matchesSearch, onSearchMatchChange]);
+
+  if (!matchesSearch) {
+    return null;
+  }
 
   const totalSupply = collectionQuery.data?.totalSupply;
   const listingCount = Array.isArray(listingQuery.data) ? listingQuery.data.length : 0;
@@ -233,7 +273,7 @@ export function CollectionRow({ address, name, projectId }: CollectionRowProps) 
       ) : null}
 
       {tokenQuery.isSuccess &&
-      tokensForDisplay.length === 0 &&
+      visibleTokens.length === 0 &&
       !listingQuery.isLoading ? (
         <p className="text-sm text-muted-foreground font-mono px-4 sm:px-6 lg:px-8">
           <span className="text-primary mr-1">$</span>
@@ -241,9 +281,9 @@ export function CollectionRow({ address, name, projectId }: CollectionRowProps) 
         </p>
       ) : null}
 
-      {tokenQuery.isSuccess && tokensForDisplay.length > 0 ? (
+      {tokenQuery.isSuccess && visibleTokens.length > 0 ? (
         <div className="flex gap-3 overflow-x-auto pb-2 px-4 sm:px-6 lg:px-8">
-          {tokensForDisplay.map((token) => {
+          {visibleTokens.map((token) => {
             const tokenKey = displayTokenId(token);
             const cheapestListing = cheapestListings.get(tokenKey);
             const isAdded = isRecentlyAdded(cheapestListing?.orderId);

@@ -34,6 +34,54 @@ function hasUsableToken(data: TokenDetails | null): data is TokenDetails {
   return data !== null && data.token !== null && data.token !== undefined;
 }
 
+function errorMessage(error: unknown) {
+  if (typeof error === "string") {
+    return error;
+  }
+
+  if (error instanceof Error) {
+    return error.message;
+  }
+
+  try {
+    return JSON.stringify(error);
+  } catch {
+    return String(error);
+  }
+}
+
+function isTransientCollectionTokenError(error: unknown) {
+  const message = errorMessage(error).toLowerCase();
+  return (
+    message.includes("invalid content type: application/json") ||
+    message.includes("deadline exceeded") ||
+    message.includes("request timeout") ||
+    message.includes("timed out") ||
+    message.includes("timeout")
+  );
+}
+
+async function listCollectionTokensResilient(
+  client: NonNullable<ReturnType<typeof useMarketplaceClient>["client"]>,
+  options: FetchCollectionTokensOptions,
+) {
+  try {
+    return await client.listCollectionTokens(options);
+  } catch (initialError) {
+    const shouldRetryWithoutImages =
+      options.fetchImages === true &&
+      isTransientCollectionTokenError(initialError);
+    if (!shouldRetryWithoutImages) {
+      throw initialError;
+    }
+
+    const fallbackOptions = { ...options, fetchImages: false };
+    const fallbackData = await client.listCollectionTokens(fallbackOptions);
+    logSdkPayload("collection-tokens-fallback-no-images", fallbackOptions, fallbackData);
+    return fallbackData;
+  }
+}
+
 function alternateTokenId(rawTokenId: string) {
   const tokenId = rawTokenId.trim();
   if (!tokenId) {
@@ -98,10 +146,18 @@ export function useCollectionTokensQuery(
         : null,
     ] as const,
     queryFn: async () => {
-      const data = await client!.listCollectionTokens(options);
+      const data = await listCollectionTokensResilient(client!, options);
       logSdkPayload("collection-tokens", options, data);
       return data;
     },
+    retry: (failureCount, error) => {
+      if (isTransientCollectionTokenError(error)) {
+        return failureCount < 2;
+      }
+
+      return failureCount < 1;
+    },
+    retryDelay: () => 0,
     enabled: !!client && !!options.address,
   });
 }

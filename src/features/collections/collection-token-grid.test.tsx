@@ -435,6 +435,43 @@ describe("collection token grid", () => {
     expect(screen.getByRole("button", { name: /added/i })).toBeVisible();
   });
 
+  it("token_grid_opens_cart_when_add_to_cart_is_rejected", async () => {
+    mockCartAddItem.mockReturnValue({ ok: false, error: "Cart only supports a single currency." });
+    mockUseCollectionTokensQuery.mockReturnValue({
+      data: {
+        page: {
+          tokens: [
+            token("1", {
+              image: "https://cdn.example/1.png",
+              metadata: { name: "Token #1" },
+            }),
+          ],
+          nextCursor: null,
+        },
+        error: null,
+      },
+      isLoading: false,
+      isSuccess: true,
+      isError: false,
+      error: null,
+      isFetching: false,
+      refetch: vi.fn(),
+    });
+    mockUseCollectionListingsQuery.mockReturnValue(
+      successListingsResult([
+        { id: 21, tokenId: 1, price: 200, currency: "0xfee", quantity: 1 },
+      ]),
+    );
+
+    const user = userEvent.setup();
+    render(<CollectionTokenGrid address="0xabc" projectId="project-a" />);
+
+    await user.click(screen.getByRole("button", { name: /add to cart/i }));
+
+    expect(mockCartSetOpen).toHaveBeenCalledWith(true);
+    expect(screen.queryByRole("button", { name: /added/i })).toBeNull();
+  });
+
   it("grid_density_selector_updates_grid_columns", async () => {
     mockUseCollectionTokensQuery.mockReturnValue({
       data: {
@@ -535,5 +572,79 @@ describe("collection token grid", () => {
 
     expect(await screen.findByText("Token #20")).toBeVisible();
     expect(screen.queryByText("Token #10")).toBeNull();
+  });
+
+  it("applies_price_ascending_sort_when_requested", async () => {
+    mockUseCollectionTokensQuery.mockReturnValue({
+      data: {
+        page: {
+          tokens: [token("1"), token("2"), token("3")],
+          nextCursor: null,
+        },
+        error: null,
+      },
+      isLoading: false,
+      isSuccess: true,
+      isError: false,
+      error: null,
+      isFetching: false,
+      refetch: vi.fn(),
+    });
+    mockUseCollectionListingsQuery.mockReturnValue(
+      successListingsResult([
+        { id: 1, tokenId: 1, price: 300, currency: "0xfee", quantity: 1 },
+        { id: 2, tokenId: 2, price: 100, currency: "0xfee", quantity: 1 },
+      ]),
+    );
+
+    render(
+      <CollectionTokenGrid
+        address="0xabc"
+        projectId="project-a"
+        sortMode="price-asc"
+      />,
+    );
+
+    await screen.findByRole("article", { name: "token-2" });
+    expect(
+      screen.getAllByRole("article").map((card) => card.getAttribute("aria-label")),
+    ).toEqual(["token-2", "token-1", "token-3"]);
+  });
+
+  it("applies_price_descending_sort_when_requested", async () => {
+    mockUseCollectionTokensQuery.mockReturnValue({
+      data: {
+        page: {
+          tokens: [token("1"), token("2"), token("3")],
+          nextCursor: null,
+        },
+        error: null,
+      },
+      isLoading: false,
+      isSuccess: true,
+      isError: false,
+      error: null,
+      isFetching: false,
+      refetch: vi.fn(),
+    });
+    mockUseCollectionListingsQuery.mockReturnValue(
+      successListingsResult([
+        { id: 1, tokenId: 1, price: 300, currency: "0xfee", quantity: 1 },
+        { id: 2, tokenId: 2, price: 100, currency: "0xfee", quantity: 1 },
+      ]),
+    );
+
+    render(
+      <CollectionTokenGrid
+        address="0xabc"
+        projectId="project-a"
+        sortMode="price-desc"
+      />,
+    );
+
+    await screen.findByRole("article", { name: "token-1" });
+    expect(
+      screen.getAllByRole("article").map((card) => card.getAttribute("aria-label")),
+    ).toEqual(["token-1", "token-2", "token-3"]);
   });
 });

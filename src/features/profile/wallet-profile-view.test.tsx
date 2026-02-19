@@ -1,4 +1,5 @@
 import { render, screen } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const { mockUseWalletPortfolioQuery } = vi.hoisted(() => ({
@@ -74,7 +75,46 @@ describe("WalletProfileView", () => {
     expect(screen.getByText("x2")).toBeVisible();
     const itemLink = screen.getByRole("link", { name: /view token 7/i });
     expect(itemLink).toHaveAttribute("href", "/collections/0xcol1/7");
+    expect(
+      screen.getByRole("textbox", { name: /filter collection or token/i }),
+    ).toBeVisible();
 
     expect(screen.queryByText("0xcol2")).toBeNull();
+  });
+
+  it("filters_items_by_collection_or_token", async () => {
+    const user = userEvent.setup();
+    mockUseWalletPortfolioQuery.mockReturnValue({
+      data: {
+        page: {
+          balances: [
+            {
+              contract_address: "0xcollection-a",
+              token_id: "7",
+              balance: "1",
+            },
+            {
+              contract_address: "0xcollection-b",
+              token_id: "99",
+              balance: "1",
+            },
+          ],
+        },
+      },
+      status: "ready",
+      error: null,
+      isFetching: false,
+      refresh: vi.fn(),
+    });
+
+    render(<WalletProfileView address="0xabc123" />);
+
+    await user.type(
+      screen.getByRole("textbox", { name: /filter collection or token/i }),
+      "99",
+    );
+
+    expect(screen.queryByText("0xcollection-a")).toBeNull();
+    expect(screen.getByText("0xcollection-b")).toBeVisible();
   });
 });

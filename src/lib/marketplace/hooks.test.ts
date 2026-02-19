@@ -110,6 +110,80 @@ describe("marketplace cached hooks", () => {
         fetchImages: true,
       });
     });
+
+    it("retries_without_images_on_invalid_content_type_error", async () => {
+      const page = {
+        page: { tokens: [{ token_id: "1" }], nextCursor: null },
+        error: null,
+      };
+      const listCollectionTokens = vi
+        .fn()
+        .mockRejectedValueOnce(
+          new Error(
+            'failed to get tokens: status: Unknown, message: "invalid content type: application/json; charset=utf-8"',
+          ),
+        )
+        .mockResolvedValueOnce(page);
+      const client = mockClient({ listCollectionTokens });
+      mockUseMarketplaceClient.mockReturnValue({ client, status: "ready" });
+
+      const { useCollectionTokensQuery } = await import(
+        "@/lib/marketplace/hooks"
+      );
+      const { result } = renderHook(
+        () =>
+          useCollectionTokensQuery({
+            address: "0xabc",
+            limit: 12,
+            fetchImages: true,
+          }),
+        { wrapper: makeWrapper() },
+      );
+
+      await waitFor(() => expect(result.current.isSuccess).toBe(true));
+      expect(listCollectionTokens).toHaveBeenNthCalledWith(1, {
+        address: "0xabc",
+        limit: 12,
+        fetchImages: true,
+      });
+      expect(listCollectionTokens).toHaveBeenNthCalledWith(2, {
+        address: "0xabc",
+        limit: 12,
+        fetchImages: false,
+      });
+      expect(result.current.data).toEqual(page);
+    });
+
+    it("retries_transient_timeout_errors", async () => {
+      const page = {
+        page: { tokens: [{ token_id: "2" }], nextCursor: null },
+        error: null,
+      };
+      const listCollectionTokens = vi
+        .fn()
+        .mockRejectedValueOnce(new Error("deadline exceeded"))
+        .mockRejectedValueOnce(new Error("request timeout"))
+        .mockResolvedValueOnce(page);
+      const client = mockClient({ listCollectionTokens });
+      mockUseMarketplaceClient.mockReturnValue({ client, status: "ready" });
+
+      const { useCollectionTokensQuery } = await import(
+        "@/lib/marketplace/hooks"
+      );
+      const { result } = renderHook(
+        () =>
+          useCollectionTokensQuery({
+            address: "0xabc",
+            limit: 12,
+            fetchImages: false,
+          }),
+        { wrapper: makeWrapper() },
+      );
+
+      await waitFor(() => expect(result.current.isSuccess).toBe(true));
+      expect(listCollectionTokens).toHaveBeenCalledTimes(3);
+      expect(result.current.data).toEqual(page);
+    });
   });
 
   describe("useCollectionOrdersQuery", () => {

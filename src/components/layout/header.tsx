@@ -40,9 +40,9 @@ const NAV_LINKS = [
 ] as const;
 
 const SOCIAL_LINKS = [
-  { label: "Twitter / X", href: "#", Icon: Twitter },
-  { label: "Discord", href: "#", Icon: MessageSquare },
-  { label: "GitHub", href: "#", Icon: Github },
+  { label: "Twitter / X", href: "https://x.com/lootrealms", Icon: Twitter },
+  { label: "Discord", href: "https://discord.gg/realmsworld", Icon: MessageSquare },
+  { label: "GitHub", href: "https://github.com/bibliothecaDAO", Icon: Github },
 ] as const;
 
 export function Header() {
@@ -111,6 +111,9 @@ export function Header() {
           </div>
 
           <CartSidebar />
+          <Button size="sm" variant="ghost" asChild>
+            <Link href="/portfolio">Portfolio</Link>
+          </Button>
 
           {isConnected && address ? (
             <>

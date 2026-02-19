@@ -144,4 +144,56 @@ describe("collection market panel", () => {
     expect(screen.getByRole("option", { name: /canceled/i })).toBeVisible();
     expect(screen.getByRole("option", { name: /executed/i })).toBeVisible();
   });
+
+  it("orders_rows_include_actionable_market_context", () => {
+    mockUseCollectionOrdersQuery.mockReturnValue(
+      successQuery([
+        {
+          id: 9,
+          tokenId: 77,
+          price: "150",
+          owner: "0x1234567890abcdef",
+          status: "Executed",
+          updatedAt: "2024-11-16T10:30:00.000Z",
+        },
+      ]),
+    );
+
+    render(<CollectionMarketPanel address="0xabc" />);
+
+    const ordersPanel = screen.getByTestId("orders-panel");
+    expect(within(ordersPanel).getByText(/token #77/i)).toBeVisible();
+    expect(within(ordersPanel).getByText(/150/)).toBeVisible();
+    expect(within(ordersPanel).getByText(/executed/i)).toBeVisible();
+    expect(within(ordersPanel).getByText(/owner/i)).toBeVisible();
+    expect(within(ordersPanel).getByText(/2024/i)).toBeVisible();
+  });
+
+  it("listings_rows_expose_token_detail_navigation", async () => {
+    mockUseCollectionListingsQuery.mockReturnValue(
+      successQuery([
+        {
+          id: 101,
+          tokenId: 42,
+          price: "88",
+          owner: "0x1234567890abcdef",
+          status: "Placed",
+          createdAt: "2024-11-16T10:30:00.000Z",
+        },
+      ]),
+    );
+
+    const user = userEvent.setup();
+    render(<CollectionMarketPanel address="0xabc" />);
+    await user.click(screen.getByRole("tab", { name: /listings/i }));
+
+    const listingsPanel = screen.getByTestId("listings-panel");
+    expect(within(listingsPanel).getByText(/token #42/i)).toBeVisible();
+    expect(within(listingsPanel).getByText(/88/)).toBeVisible();
+    expect(within(listingsPanel).getByText(/owner 0x1234/i)).toBeVisible();
+    expect(within(listingsPanel).getByText(/2024/i)).toBeVisible();
+
+    const tokenLink = within(listingsPanel).getByRole("link", { name: /view token/i });
+    expect(tokenLink).toHaveAttribute("href", "/collections/0xabc/42");
+  });
 });

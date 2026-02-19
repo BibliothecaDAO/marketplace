@@ -1,529 +1,584 @@
 # Biblio Marketplace TDD PRD
 
-Version: 1.1  
-Date: February 18, 2026  
-Target SDK: `@cartridge/arcade@0.3.12` (`@cartridge/arcade/marketplace`, `@cartridge/arcade/marketplace/react`)
+Version: 2.0  
+Date: February 19, 2026  
+Status: Draft for execution  
+Primary focus: Usability, discoverability, ease of purchase
 
 ## 1. Product Intent
 
-Build a production-grade marketplace web app for multiple collections with:
-- Clean, minimal UX using only `shadcn/ui` + Tailwind theme tokens
-- Full feature coverage of the Marketplace SDK surface
-- Strict test-driven development (TDD) from first feature to release
+Build a production-grade NFT marketplace for multiple collections on Arcade SDK with:
+- Fast discovery from home to token detail.
+- Frictionless and trustworthy purchase flow.
+- Clean, minimal UX using only `shadcn/ui` + Tailwind tokens.
+- Strict test-driven delivery where behavior is specified before implementation.
 
-## 2. Goals
+## 2. Problem Statement
 
-1. Deliver full SDK feature parity in user-facing workflows.
-2. Make browsing, filtering, and evaluating tokens fast and low-friction.
-3. Enforce quality gates where no production feature lands without a failing test first.
-4. Keep architecture simple enough for quick iteration across collections and projects.
+The app already supports the core surfaces (home, collection, token detail, cart, profile, ops), but conversion-critical UX still has gaps:
+1. Discovery is strong at collection level but weak globally (search/sort/state continuity).
+2. Cart checkout is safe but fee transparency and failure feedback are incomplete.
+3. Market trust signals (verification/provenance) are minimal.
+4. Test depth is strong in unit/integration, but full purchase funnel e2e coverage is limited.
 
-## 3. Non-Goals
+This PRD defines a phased, test-first path from current state to production-ready UX.
 
-1. Custom design system outside shadcn primitives.
-2. Trading protocol changes outside SDK capabilities.
-3. Server-side indexing pipeline (app will consume SDK data plane only).
+## 3. Goals and Success Metrics
 
-## 4. Users and Core Jobs
+## 3.1 Product Goals
+1. Reduce time-to-first-relevant-token.
+2. Increase add-to-cart to checkout completion.
+3. Make checkout failures actionable and recoverable.
+4. Preserve strict technical quality and release confidence.
 
-1. Collector: browse collections, filter traits, inspect listing details, estimate fees.
-2. Trader: compare active listings, check token-level orders, estimate royalties before action.
-3. Portfolio owner: view token balances across addresses and contracts.
-4. Operator/admin: verify marketplace client health, project config, and runtime errors quickly.
+## 3.2 UX KPIs (Primary)
+1. Discovery speed:
+   - Median time from landing on `/` to opening a token detail page.
+   - Target: -30% from current baseline.
+2. Purchase conversion:
+   - Cart checkout success rate = successful tx / checkout attempts.
+   - Target: >= 85% on healthy network conditions.
+3. Failure recoverability:
+   - Percentage of stale-listing checkout failures that recover to successful checkout within 3 minutes.
+   - Target: >= 60%.
+4. Navigation clarity:
+   - Percentage of user sessions with at least one meaningful discovery action (`search`, `trait`, `sort`, `collection switch`) before exit.
+   - Target: +20%.
 
-## 5. UX Principles (Clean and Minimal)
+## 3.3 Quality KPIs (Guardrails)
+1. Lighthouse accessibility score on `/`, `/collections/[address]`, `/collections/[address]/[tokenId]`: >= 95.
+2. No release with failing unit, integration, or e2e checks.
+3. Zero critical regressions in cart transaction path.
 
-1. Information hierarchy first: collection context, filters, token grid, detail panel.
-2. Fewer clicks: common actions available in one view (filter, sort, detail preview).
-3. State clarity: every async block shows loading, empty, error, success explicitly.
-4. URL as state: selected collection, filters, search, and cursor are shareable links.
-5. Accessibility baseline:
-   - Keyboard navigable controls
-   - Semantic headings/landmarks
-   - Visible focus states
-   - Color contrast meeting WCAG AA
+## 4. Current Baseline (As of February 19, 2026)
+
+Implemented:
+1. Home collection rows with horizontal token discovery and add-to-cart.
+2. Collection route with trait filtering, token grid pagination, market activity tab.
+3. Token detail with listings, ownership-aware action forms, add-to-cart.
+4. Persisted cart store (single currency, 25 max items, stale listing validation, atomic checkout).
+5. Wallet profile route and client ops route.
+
+Gaps to close:
+1. Fee-inclusive checkout totals are not implemented with real fee data.
+2. Add-to-cart rejection feedback can be missed.
+3. Discoverability features are incomplete (global search/sort and URL-canonical state).
+4. Trust and provenance surfaces are limited.
+5. End-to-end tests do not fully cover funnel-critical scenarios.
+
+## 5. Scope
+
+## 5.1 In Scope
+1. UX and behavior improvements on:
+   - `/`
+   - `/collections/[address]`
+   - `/collections/[address]/[tokenId]`
+   - Global cart sidebar
+   - `/portfolio` (new)
+   - `/ops` diagnostics improvements
+2. Full TDD delivery for each behavior.
+3. SDK-based fee/royalty visibility in evaluation and checkout.
+4. Discoverability and purchase funnel analytics instrumentation.
+
+## 5.2 Out of Scope
+1. New protocol mechanics outside SDK support.
+2. Custom design system beyond shadcn primitives and Tailwind tokens.
+3. Custom backend indexing pipeline.
+
+## 6. Users and Core Jobs
+
+1. Collector:
+   - Discover interesting tokens quickly.
+   - Compare price and trait relevance.
+   - Buy safely with clear totals and error handling.
+2. Trader:
+   - Inspect listings/orders efficiently.
+   - Verify listing freshness before transaction.
+3. Portfolio owner:
+   - Inspect holdings by wallet and jump to listed assets.
+4. Operator:
+   - Diagnose client, config, and query health quickly.
+
+## 7. UX Principles
+
+1. Information hierarchy first:
+   - Context -> filters/sort -> token cards -> market actions.
+2. Predictable state:
+   - URL is source of truth for discovery state.
+3. Low-friction purchase:
+   - Clear CTA, visible fees, explicit validation outcomes.
+4. Actionable errors:
+   - Every failure includes what happened and what to do next.
+5. Accessible by default:
+   - Keyboard support, focus visibility, AA contrast, semantic structure.
 6. Performance-first interactions:
-   - Skeletons over blocking spinners
-   - Debounced search/filter updates
-   - Cursor pagination and incremental rendering
+   - Skeleton loading, incremental rendering, no blocking waits.
 
-## 6. Information Architecture and Routes
+## 8. Information Architecture and Routes
 
-1. `/`
-   - Overview dashboard
-   - Collection switcher
-   - Featured tokens/listings snapshot
+1. `/` (Marketplace Home)
+   - Collection discovery rows
+   - Global search entry
+   - Quick sort/filter controls
+   - Featured market stats
 2. `/collections/[address]`
-   - Collection summary
+   - Collection header and stats
    - Trait filter panel
-   - Token grid with cursor pagination
-   - Listing and order tabs
-3. `/collections/[address]/tokens/[tokenId]`
-   - Token metadata and media
-   - Orders/listings history
-   - Fee and royalty estimate card
+   - Token grid with pagination
+   - Sort controls
+   - Market activity tab
+3. `/collections/[address]/[tokenId]`
+   - Token media and metadata
+   - Listings with best-price emphasis
+   - Fee + royalty estimate
+   - Add-to-cart by listing
 4. Global cart sidebar
-   - Header trigger in top-right
-   - Listing-based cart rows keyed by `orderId`
-   - Inline per-item validation error rows
-   - One-click buy-all submit
-5. `/portfolio`
+   - Listing rows keyed by `orderId`
+   - Inline stale validation errors
+   - Fee-inclusive totals
+   - Single transaction checkout
+5. `/portfolio` (new)
    - Address input
-   - Token balances with filters (contracts, token ids, project)
+   - Holdings view with filters
+   - Jump-to-token actions
 6. `/ops`
-   - Client status (`idle/loading/ready/error`)
-   - Config diagnostics and refresh controls
+   - Client status
+   - Error diagnostics
+   - Refresh/retry controls
 
-## 7. Functional Requirements
+## 9. Functional Requirements
 
-## FR-01 Client lifecycle and configuration
+## FR-01 Home Discoverability
 
-1. App initializes marketplace client via provider config (`chainId`, `defaultProject`, optional provider and resolvers).
-2. UI exposes client status and recoverability (`refresh` action).
-3. Invalid env configuration produces visible warnings and safe fallbacks.
-
-Acceptance criteria:
-1. If config is valid, client reaches `ready` and data queries can run.
-2. If config fails, app shows non-blocking error UI with retry.
-
-## FR-02 Collection summary and navigation
-
-1. Load collection by address and optional project.
-2. Show metadata, supply, contract type, and image fallback behavior.
-3. Allow collection switching without full page reload.
+Requirements:
+1. Home must support quick discovery across collections.
+2. Include global search by token name/id and collection name.
+3. Include default sort mode (e.g., `recent`, `floor`, `volume` where supported).
+4. Preserve minimal, readable layout on mobile and desktop.
 
 Acceptance criteria:
-1. Switching collection updates URL and resets token cursor.
-2. Missing collection response renders empty-state card, not crash.
+1. Users can discover and open token detail in <= 3 primary interactions.
+2. Search with no results shows explicit empty state and reset action.
+3. Search and sort selections are reflected in URL when applicable.
 
-## FR-03 Token discovery
+Tests required:
+1. Unit: search query normalization and matching logic.
+2. Integration: home search updates displayed rows deterministically.
+3. E2E: landing -> search -> open token detail.
 
-1. Query collection tokens with cursor, limit, tokenIds, and attributeFilters.
-2. Support optional image resolution strategy (`fetchImages` + custom resolver).
-3. Support local filter fallback with metadata utility functions when needed.
+## FR-02 Collection Discovery and Navigation
 
-Acceptance criteria:
-1. Cursor "next page" loads additional tokens correctly.
-2. Local metadata filter output matches expected active filter semantics.
-
-## FR-04 Orders and listings
-
-1. Query collection orders with category/status/token constraints.
-2. Query collection listings with optional ownership verification.
-3. Expose listing count and order facets in UI.
+Requirements:
+1. Collection switching updates route and resets cursor/filter state correctly.
+2. Collection header must expose supply, listing count, and floor where available.
+3. Collection-level sort controls must be available and URL-stateful.
 
 Acceptance criteria:
-1. Status/category filter changes update results and counts.
-2. Empty listing state is explicit and actionable.
+1. Route updates immediately on collection switch without full reload.
+2. On switch, stale cursor/filter state does not leak from previous collection.
+3. Missing collection returns explicit empty state without crash.
 
-## FR-05 Trait intelligence and filter UX
+Tests required:
+1. Unit: query param parse/serialize helpers.
+2. Integration: collection switch + URL sync + reset semantics.
+3. E2E: navigate across two collections with persistent UX correctness.
 
-1. Fetch trait names summary and trait values by selected filters.
-2. Fetch expanded traits for bulk filter sidebars.
-3. Aggregate metadata pages and derive available filter tree.
-4. Build precomputed filter data for fast rendering and sorting.
+## FR-03 Trait Filtering and URL Canonical State
 
-Acceptance criteria:
-1. Filter counts update when active filters change.
-2. Invalid/missing trait values do not break filter panel.
-
-## FR-06 Token detail experience
-
-1. Query token detail by collection + token id.
-2. Show token metadata, media, and linked orders/listings.
-3. Handle token not found with specific empty state.
+Requirements:
+1. Trait selections must update URL (`trait=Name:Value`).
+2. Refresh and share-link must reconstruct identical filter state.
+3. Trait counts update with active filters.
+4. Clear-all and per-trait clear actions must be supported.
 
 Acceptance criteria:
-1. Deep link to token detail loads correct token and associated market data.
-2. Token view remains interactive during background refresh.
+1. Trait state survives hard refresh.
+2. Copy/paste URL reproduces same filtered results.
+3. Empty trait metadata shows non-blocking fallback state.
 
-## FR-07 Portfolio balances
+Tests required:
+1. Unit: filter flattening, parse, and merge logic.
+2. Integration: sidebar interaction updates grid results + URL.
+3. E2E: apply traits, refresh, and verify stable results.
 
-1. Query balances by account addresses, contracts, and token ids.
-2. Support cursor pagination for large result sets.
-3. Support project/defaultProject behaviors consistently.
+## FR-04 Token Grid Usability
 
-Acceptance criteria:
-1. Multi-address query merges and displays deterministic results.
-2. Cursor paging is stable and does not duplicate rows.
-
-## FR-08 Fees and royalty estimate
-
-1. Query marketplace fees.
-2. Query royalty fee by collection/token/amount.
-3. Display effective fee math clearly.
+Requirements:
+1. Support grid density modes and pagination.
+2. Each card must show image fallback, token id, and best known price.
+3. Add-to-cart CTA must map to cheapest active listing for token.
+4. CTA states must indicate success/failure clearly.
 
 Acceptance criteria:
-1. Fee values show numerator/denominator and receiver.
-2. Royalty estimate handles zero and large amount values safely.
+1. Pagination never duplicates previously loaded tokens.
+2. Add-to-cart success is immediately visible near user action.
+3. Add-to-cart failure is immediately visible with reason and next step.
 
-## FR-09 Error handling, retries, and resilience
+Tests required:
+1. Unit: cheapest listing resolver and token dedupe.
+2. Integration: density switch, cursor pagination, add-to-cart behavior.
+3. E2E: add from collection grid and verify cart row.
 
-1. Every data block has dedicated error rendering and retry.
-2. Failures in one panel do not take down unrelated panels.
-3. Retry does not lose user-selected filters/search state.
+## FR-05 Market Activity Discoverability
 
-Acceptance criteria:
-1. Simulated network failure recovers through retry action.
-2. Error boundary and toasts show meaningful diagnostics.
-
-## FR-10 UX polish and accessibility
-
-1. Responsive layout at mobile, tablet, desktop.
-2. Keyboard operations for all controls and dialogs.
-3. Clear visual hierarchy and spacing system from theme tokens.
-
-Acceptance criteria:
-1. All interactive controls are reachable by keyboard.
-2. Lighthouse accessibility score >= 95 on primary routes.
-
-## FR-11 Cart state and selection model
-
-1. Cart entries represent concrete listings and must include `orderId`, `collection`, `tokenId`, `price`, and `currency`.
-2. Cart add behavior from collection and home surfaces resolves to the cheapest active listing for a token.
-3. Token detail route exposes `Add to cart` as the buy action for this phase.
-4. Cart supports one currency only and blocks mixed-currency additions.
-5. Cart size is capped at 25 items.
-6. Cart persists locally using Zustand persistence.
+Requirements:
+1. Orders/listings tab must show meaningful row summaries:
+   - token id
+   - price
+   - owner/maker
+   - status/time where available
+2. Rows should support direct action:
+   - jump to token detail
+   - add listing to cart where applicable
+3. Filters must include status/category/token id and ownership verification toggle.
 
 Acceptance criteria:
-1. Duplicate `orderId` adds are deduplicated.
-2. Attempting to exceed 25 items is rejected with visible feedback.
-3. Mixed-currency adds are rejected with visible feedback.
-4. Cart state restores after reload from local persistence.
+1. Users can navigate from activity row to token detail in one click.
+2. Empty and error states are explicit for each panel independently.
+3. Filters update results without affecting unrelated tabs.
 
-## FR-12 Atomic cart checkout and validation
+Tests required:
+1. Integration: orders and listings filter behavior isolation.
+2. E2E: collection activity filtering and row navigation.
 
-1. Checkout pre-validates each selected listing before transaction submission.
-2. If any listing is stale, changed, or invalid, checkout is strictly blocked.
-3. Checkout submits a single transaction for all valid selected listings.
-4. Cart totals include marketplace fee values in checkout summary.
-5. Validation failures are rendered per item as inline error rows.
+## FR-06 Token Detail Evaluation and Purchase Readiness
 
-Acceptance criteria:
-1. Any stale listing prevents submission and highlights each failing row.
-2. Successful submission path emits one transaction hash for the entire cart.
-3. Fee-inclusive total updates as cart composition changes.
-
-## FR-13 Sweeper-ready candidate intake
-
-1. Sweeper candidate generation path can auto-add listings to cart.
-2. Auto-add strategy prioritizes lowest-value listings.
-3. Candidate intake respects currency and max-size constraints.
+Requirements:
+1. Token detail page must prioritize:
+   - media
+   - collection context
+   - attributes
+   - best listing and listing table
+2. Listing rows must clearly mark best price and expiration.
+3. Add-to-cart must be available for cheapest and per-row listings.
+4. Token-level fee and royalty estimate card must be shown.
 
 Acceptance criteria:
-1. Candidate intake fills cart in ascending price order.
-2. Intake stops at 25 items or first disallowed currency.
+1. Deep links load deterministically for decimal/hex token ids.
+2. Expired listings are not purchasable.
+3. Fee/royalty values are visible before user adds to cart.
 
-## 8. SDK Coverage Matrix (Must Implement)
+Tests required:
+1. Unit: token id normalization and listing expiration handling.
+2. Integration: best-price selection and per-row add behavior.
+3. E2E: open token detail, add listing, inspect fee/royalty card.
 
-| Capability | SDK API | Product Surface | Required |
-| --- | --- | --- | --- |
-| Client creation | `createMarketplaceClient` | App bootstrap, ops diagnostics | Yes |
-| React provider | `MarketplaceClientProvider` | Global data context | Yes |
-| Client state | `useMarketplaceClient` | Status badges, refresh action | Yes |
-| Collection summary | `useMarketplaceCollection` + `getCollection` | Collection header and metadata | Yes |
-| Collection tokens | `useMarketplaceCollectionTokens` + `listCollectionTokens` + `fetchCollectionTokens` | Token grid, cursor pagination | Yes |
-| Collection orders | `useMarketplaceCollectionOrders` + `getCollectionOrders` | Orders tab, filters | Yes |
-| Collection listings | `useMarketplaceCollectionListings` + `listCollectionListings` | Listings tab, count cards | Yes |
-| Token detail | `useMarketplaceToken` + `getToken` | Token detail route | Yes |
-| Buy execution | `ArcadeProvider.marketplace.execute` + `buildExecuteCalldata` | Cart buy-all single transaction | Yes |
-| Token balances | `useMarketplaceTokenBalances` + `fetchTokenBalances` | Portfolio route | Yes |
-| Marketplace fees | `useMarketplaceFees` + `getFees` | Fees panel | Yes |
-| Royalty estimate | `useMarketplaceRoyaltyFee` + `getRoyaltyFee` | Token pricing card | Yes |
-| Trait names summary | `fetchTraitNamesSummary` + `aggregateTraitNamesSummary` | Filter sidebar sections | Yes |
-| Trait values | `fetchTraitValues` + `aggregateTraitValues` | Filter options and counts | Yes |
-| Expanded trait metadata | `fetchExpandedTraitsMetadata` | Bulk trait fetch | Yes |
-| Trait metadata pages | `fetchCollectionTraitMetadata` + `aggregateTraitMetadata` | Preload full trait index | Yes |
-| Filter state flattening | `flattenActiveFilters` | URL/query serialization | Yes |
-| Filter availability | `buildAvailableFilters` | Dynamic valid options | Yes |
-| Filter precompute | `buildPrecomputedFilters` | Sorted facet rendering | Yes |
-| Token filter matcher | `tokenMatchesFilters` + `filterTokensByMetadata` | Client fallback filtering | Yes |
-| Image resolver support | `resolveTokenImage` + `resolveContractImage` config hooks | Media fallback strategy | Yes |
+## FR-07 Cart State Model and Feedback
 
-## 9. Technical Architecture
+Requirements:
+1. Cart row identity is `orderId`.
+2. Cart enforces one-currency constraint and max 25 items.
+3. Add errors (mixed currency, max reached) must surface immediately in context.
+4. Cart should open only when that improves flow, not hide critical errors.
 
-1. Next.js App Router (RSC default, client islands for interactive marketplace modules).
-2. SDK access through a dedicated service layer:
-   - `src/lib/marketplace/client.ts`
-   - `src/lib/marketplace/queries.ts`
-   - `src/lib/marketplace/traits.ts`
-3. UI feature modules:
-   - `src/features/collections/*`
-   - `src/features/tokens/*`
-   - `src/features/cart/*`
-   - `src/features/portfolio/*`
-   - `src/features/ops/*`
-4. Shared UI primitives only from `src/components/ui/*`.
-5. URL state helpers for filters/cursor/search.
-6. Zustand persisted store for cart state and checkout lifecycle.
+Acceptance criteria:
+1. Duplicate add by same `orderId` is deduped.
+2. Mixed-currency rejection includes explicit reason and remediation.
+3. Max-cap rejection includes current count and cap.
 
-## 10. TDD Governance Rules
+Tests required:
+1. Unit: store constraints and candidate intake ordering.
+2. Integration: add flow feedback from home/grid/detail.
+3. E2E: mixed-currency and max-cap rejection visibility.
 
-1. No production code before a failing test exists for the behavior.
-2. Every PR includes evidence:
-   - Failing test output (RED)
-   - Passing test output (GREEN)
-   - Any refactor notes (REFACTOR)
+## FR-08 Atomic Checkout and Validation
+
+Requirements:
+1. Checkout pre-validates each selected listing against latest market state.
+2. Any stale/changed listing blocks checkout completely.
+3. Validation failures render inline per row with actionable messaging.
+4. Valid checkout submits one transaction only.
+
+Acceptance criteria:
+1. No partial execution when one row is stale.
+2. Success state exposes a single transaction hash.
+3. Retrying after removing invalid rows can proceed successfully.
+
+Tests required:
+1. Unit: listing/cart row match validator.
+2. Integration: stale validation and inline error rendering.
+3. E2E: stale scenario -> recover -> successful checkout.
+
+## FR-09 Fee and Royalty Transparency
+
+Requirements:
+1. Checkout summary must include:
+   - subtotal
+   - marketplace fee
+   - royalty estimate (if available)
+   - total
+2. Totals update reactively as cart changes.
+3. Fee sources must come from SDK queries, not hardcoded zero.
+
+Acceptance criteria:
+1. Non-zero fee contexts display non-zero fee rows correctly.
+2. Fee row units and precision match token currency conventions.
+3. Total equals deterministic sum of row components.
+
+Tests required:
+1. Unit: fee math helpers with bigint-safe arithmetic.
+2. Integration: dynamic total updates on add/remove.
+3. E2E: compare row values and computed total in cart.
+
+## FR-10 Portfolio Discoverability
+
+Requirements:
+1. Add `/portfolio` route with wallet address input.
+2. Portfolio page should support querying arbitrary addresses.
+3. Include filters for collection/token where dataset allows.
+4. Keep existing `/profile/[address]` deep links working.
+
+Acceptance criteria:
+1. User can inspect a wallet without connecting that wallet.
+2. Portfolio list links to token detail routes.
+3. Empty/error states are explicit and non-blocking.
+
+Tests required:
+1. Unit: portfolio payload normalization and filtering.
+2. Integration: address input triggers query and renders results.
+3. E2E: paste address -> open owned token detail.
+
+## FR-11 Trust, Provenance, and Metadata Quality
+
+Requirements:
+1. Collection-level trust markers:
+   - verified status (if available from config/source)
+   - provenance hints
+2. Token/share metadata should be richer:
+   - dynamic OG image title/image where possible
+3. Placeholder social links in header must be replaced with real URLs or removed.
+
+Acceptance criteria:
+1. Trust indicators are visible without cluttering primary actions.
+2. Shared token/collection links produce meaningful previews.
+3. No dead placeholder links in production header.
+
+Tests required:
+1. Integration: trust indicator rendering fallback logic.
+2. E2E: metadata route smoke for token and collection pages.
+
+## FR-12 Reliability and Error Recovery
+
+Requirements:
+1. Every data block must have loading/empty/error/success handling.
+2. Errors should include scoped retry controls when safe.
+3. One panel failure must not crash sibling panels.
+
+Acceptance criteria:
+1. Simulated failure in listings does not break token metadata pane.
+2. Retry path restores successful state without losing user-selected state.
+
+Tests required:
+1. Integration: panel isolation and retry state preservation.
+2. E2E: injected network error and recovery on core routes.
+
+## FR-13 Accessibility and Responsive UX
+
+Requirements:
+1. Full keyboard navigation for all interactive surfaces.
+2. Visible focus states and semantic landmarks.
+3. Mobile-first usability:
+   - filter discoverability on narrow screens
+   - cart readability on small viewports
+
+Acceptance criteria:
+1. No keyboard traps in dialogs/sheets/tabs.
+2. Focus order is logical for primary flows.
+3. Mobile add-to-cart and checkout remain usable without horizontal overflow issues.
+
+Tests required:
+1. Integration: keyboard interaction tests for dialogs and tabs.
+2. E2E: mobile viewport funnel checks.
+
+## 10. Non-Functional Requirements
+
+1. Performance:
+   - Core route interactive under 3s p75 on target network.
+   - Avoid unnecessary refetch loops and duplicate queries.
+2. Scalability:
+   - Cursor pagination for large collections.
+   - Defensive parsing for inconsistent metadata.
+3. Security:
+   - No unsafe transaction assumptions.
+   - Preserve strict stale-listing blocking semantics.
+4. Maintainability:
+   - Business logic in `src/lib` and feature modules.
+   - Keep route files minimal.
+
+## 11. TDD Governance
+
+## 11.1 Core Rules
+1. No production behavior without a failing test first.
+2. Every PR includes RED -> GREEN -> REFACTOR evidence.
 3. One behavior per test.
-4. Mocks only when unavoidable; prefer real integration boundaries via MSW.
-5. Bug fixes must begin with a regression test reproducing the bug.
+4. Prefer integration boundaries over deep mocking.
+5. Bug fixes begin with regression tests.
 
-## 11. Test Stack
+## 11.2 Test Layers
+1. Unit (fast, deterministic):
+   - parsers, normalizers, fee math, filtering helpers.
+2. Integration (component + hooks with MSW):
+   - route-level behavior and state transitions.
+3. E2E (Playwright):
+   - critical funnel and cross-route interactions.
 
-1. Unit and integration:
-   - Vitest
-   - React Testing Library
-   - MSW (network contract simulation)
-2. End-to-end:
-   - Playwright
-3. Static gates:
-   - ESLint
-   - TypeScript (`tsc --noEmit`)
-   - Next build
+## 11.3 Required CI Gates
+1. `npm run lint`
+2. `npm run typecheck`
+3. `npm test`
+4. `npm run build`
+5. `npm run test:e2e`
 
-## 12. TDD Backlog by Epic (Red -> Green -> Refactor)
+## 12. Test Plan and Coverage Matrix
 
-## Epic A: Client bootstrap and config safety
+| Area | Unit | Integration | E2E |
+| --- | --- | --- | --- |
+| Home search/sort | query normalization | result rendering + empty state | land -> search -> detail |
+| Collection filters | URL parse/serialize | sidebar + grid sync | apply filters + refresh |
+| Token detail | token id normalization | listings state + add CTA | detail -> add -> cart |
+| Cart constraints | store rules | feedback rendering | mixed currency / max cap |
+| Checkout | listing match logic | stale block + inline rows | stale -> recover -> success |
+| Fee math | bigint fee/total helpers | cart summary updates | total correctness smoke |
+| Portfolio | payload normalization | address query flow | portfolio -> token link |
+| Accessibility | utility/logic tests | keyboard operations | desktop + mobile smoke |
 
-Tests first:
-1. `config.parses_valid_chain_alias_and_default_project`
-2. `config_falls_back_on_invalid_chain_with_warning`
-3. `provider_reports_ready_state_after_init`
-4. `provider_refresh_recovers_from_init_failure`
+## 13. Epics and Scoped Roadmap
 
-Implementation after red:
-1. Add runtime schema validation and typed warning channel.
-2. Add `/ops` state panel with refresh button.
+## Phase 0: Baseline Hardening (1 sprint)
 
-Refactor:
-1. Extract config parser and error formatter utilities.
+Scope:
+1. Lock current behavior with missing regression tests for cart, detail, and route state.
+2. Add e2e skeleton for full purchase funnel.
+3. Remove dead links/placeholders that reduce trust.
 
-## Epic B: Collection discovery
+Exit criteria:
+1. Existing behavior fully covered by tests before net-new features.
+2. No critical open regression bugs.
 
-Tests first:
-1. `collection_route_loads_summary_for_address`
-2. `collection_switch_updates_url_and_resets_cursor`
-3. `collection_empty_state_shows_when_not_found`
+## Phase 1: Discovery Foundations (1-2 sprints)
 
-Implementation after red:
-1. Route-level loader and stateful collection switcher.
-2. Empty and error state components.
+Scope:
+1. Home global search and collection-level sort.
+2. Canonical URL state for search/sort/filter/cursor.
+3. Improve market activity row usefulness and navigation.
 
-Refactor:
-1. Move route/query param parsing into shared helper.
+Exit criteria:
+1. Users can discover target token in <= 3 interactions (median benchmark).
+2. URL copy/paste fully restores discovery state.
 
-## Epic C: Token grid and pagination
+## Phase 2: Purchase Clarity and Conversion (1-2 sprints)
 
-Tests first:
-1. `token_grid_renders_first_page_with_skeleton_then_data`
-2. `token_grid_loads_next_cursor_page_without_duplicates`
-3. `token_grid_respects_limit_and_tokenIds_filters`
-4. `token_grid_uses_image_fallback_when_missing`
+Scope:
+1. Implement fee-inclusive totals and royalty estimate visibility.
+2. Improve add-to-cart and checkout failure messaging.
+3. Harden stale-listing recovery path UX.
 
-Implementation after red:
-1. Cursor pagination controls.
-2. Deterministic token keying and dedupe.
-3. Image resolver fallback pipeline.
+Exit criteria:
+1. Cart totals include real fee components from SDK.
+2. Checkout failure reasons are explicit and actionable at row level.
 
-Refactor:
-1. Isolate token card presenter and token adapter.
+## Phase 3: Portfolio and Trust Surface (1 sprint)
 
-## Epic D: Orders and listings
+Scope:
+1. Add `/portfolio` with address input and filters.
+2. Add collection trust/provenance markers.
+3. Improve SEO/social share metadata and OG quality.
 
-Tests first:
-1. `orders_tab_filters_by_status_and_category`
-2. `listings_tab_filters_by_token_and_project`
-3. `listings_verify_ownership_flag_changes_query_behavior`
-4. `orders_and_listings_errors_are_isolated_per_panel`
+Exit criteria:
+1. Unconnected users can inspect any wallet address.
+2. Collection/token share links produce useful previews.
 
-Implementation after red:
-1. Tabbed results view with filter controls.
-2. Shared query state with independent retry actions.
+## Phase 4: Funnel QA and Optimization (1 sprint)
 
-Refactor:
-1. Extract order/listing table components and query hooks wrapper.
+Scope:
+1. Expand e2e coverage for full conversion funnel.
+2. Add event instrumentation and funnel dashboards.
+3. Address final performance and accessibility regressions.
 
-## Epic E: Trait filters and metadata
+Exit criteria:
+1. Critical funnel e2e suite stable in CI.
+2. Accessibility target achieved on primary routes.
 
-Tests first:
-1. `trait_summary_aggregates_names_across_projects`
-2. `trait_values_respect_other_active_filters`
-3. `available_filters_exclude_invalid_combinations`
-4. `precomputed_filters_sort_and_count_are_stable`
-5. `flatten_active_filters_round_trips_with_url_params`
-6. `token_matches_filters_and_batch_filter_are_consistent`
+## 14. Priority Backlog
 
-Implementation after red:
-1. Trait sidebar with dynamic facet counts.
-2. Filter chips and clear-all workflow.
+## P0 (must-have)
+1. Fee-inclusive cart totals from SDK.
+2. Immediate add-to-cart rejection feedback.
+3. URL-canonical discovery state.
+4. Full stale-listing recovery UX and tests.
+5. Core funnel e2e coverage.
 
-Refactor:
-1. Consolidate trait state reducer and serialization logic.
+## P1 (high-value)
+1. Home global search/sort.
+2. Actionable market activity rows.
+3. `/portfolio` route with address input.
+4. Trust/provenance indicators.
 
-## Epic F: Token detail, fees, and royalties
+## P2 (nice-to-have)
+1. Enhanced social card visuals.
+2. Advanced portfolio filters and saved views.
+3. Discovery personalization experiments.
 
-Tests first:
-1. `token_detail_route_loads_token_and_related_orders`
-2. `fees_panel_shows_marketplace_fee_components`
-3. `royalty_estimate_updates_when_amount_changes`
-4. `royalty_estimate_handles_zero_and_large_amounts`
+## 15. Analytics and Event Instrumentation
 
-Implementation after red:
-1. Token detail page and market activity cards.
-2. Fee/royalty calculator module.
+Required events:
+1. `home_search_submitted`
+2. `collection_filter_changed`
+3. `token_detail_viewed`
+4. `add_to_cart_attempted`
+5. `add_to_cart_failed`
+6. `checkout_started`
+7. `checkout_blocked_stale`
+8. `checkout_submitted`
+9. `checkout_succeeded`
+10. `checkout_failed`
 
-Refactor:
-1. Monetary formatting utilities with bigint-safe adapters.
+Required properties:
+1. `collection`
+2. `tokenId`
+3. `orderId`
+4. `currency`
+5. `price`
+6. `cartSize`
+7. `errorCode`
+8. `route`
 
-## Epic G: Portfolio balances
+## 16. Risks and Mitigations
 
-Tests first:
-1. `portfolio_queries_by_single_address`
-2. `portfolio_queries_by_multiple_addresses_and_contracts`
-3. `portfolio_cursor_pagination_is_stable`
-4. `portfolio_empty_state_for_no_balances`
+1. SDK payload inconsistencies:
+   - Mitigation: strict normalizers, resilient fallback parsing, regression tests.
+2. Large collection performance:
+   - Mitigation: cursor pagination, lazy loading, lightweight cards.
+3. Transaction failure ambiguity:
+   - Mitigation: explicit error mapping and per-row diagnostics.
+4. State explosion across route params:
+   - Mitigation: centralized URL state helpers and property-based parser tests.
 
-Implementation after red:
-1. Portfolio route and query form.
-2. Balance results table with paging controls.
+## 17. Definition of Done for Each PR
 
-Refactor:
-1. Normalize token balance view model adapter.
+1. Behavior specified by failing tests first.
+2. Implementation merged only after all quality gates pass.
+3. Accessibility impact considered and tested.
+4. No unrelated file modifications.
+5. PR includes:
+   - change rationale
+   - risk assessment
+   - test evidence
+   - screenshots for UI changes
 
-## Epic H: UX quality and accessibility hardening
+## 18. Appendix: Route and Feature Ownership
 
-Tests first:
-1. `all_primary_controls_are_keyboard_reachable`
-2. `focus_order_is_logical_in_filter_drawer`
-3. `mobile_layout_preserves_primary_actions`
-4. `route_state_persists_after_refresh`
+1. Home discovery:
+   - `src/components/marketplace/marketplace-home.tsx`
+   - `src/components/marketplace/collection-row.tsx`
+2. Collection experience:
+   - `src/features/collections/*`
+3. Token detail and purchase prep:
+   - `src/features/token/token-detail-view.tsx`
+4. Cart and checkout:
+   - `src/features/cart/*`
+5. Portfolio:
+   - `src/features/profile/*` (existing), plus new `src/features/portfolio/*`
+6. Ops:
+   - `src/features/ops/*`
 
-Implementation after red:
-1. Keyboard shortcuts and focus management.
-2. Responsive polish and final visual cleanup.
-
-Refactor:
-1. Remove duplicated state patterns and dead code.
-
-## Epic I: Cart store and sidebar UX
-
-Tests first:
-1. `cart_store_dedupes_by_order_id`
-2. `cart_store_rejects_mixed_currency`
-3. `cart_store_enforces_max_25_items`
-4. `cart_store_persists_and_rehydrates`
-5. `header_cart_trigger_opens_top_right_sidebar`
-6. `cart_sidebar_renders_inline_item_errors`
-
-Implementation after red:
-1. Introduce persisted Zustand cart store with selectors.
-2. Add top-right header cart trigger and sidebar.
-3. Render listing rows keyed by `orderId`.
-
-Refactor:
-1. Extract cart selectors and invariant guard helpers.
-
-## Epic J: Cheapest-listing add flows and detail buy UX
-
-Tests first:
-1. `collection_and_home_add_to_cart_resolves_cheapest_listing`
-2. `token_detail_exposes_add_to_cart_only`
-3. `add_to_cart_blocks_mixed_currency_and_surfaces_row_error`
-4. `add_to_cart_blocks_when_cart_at_capacity`
-
-Implementation after red:
-1. Wire add-to-cart controls in collection/home/token detail surfaces.
-2. Resolve cheapest listing using listing query results.
-3. Surface add failure reasons inline in cart rows.
-
-Refactor:
-1. Consolidate listing-to-cart adapter utilities.
-
-## Epic K: Atomic checkout, strict blocking, and fee total
-
-Tests first:
-1. `checkout_blocks_when_any_listing_is_stale`
-2. `checkout_renders_per_item_inline_validation_errors`
-3. `checkout_submits_single_transaction_for_all_items`
-4. `checkout_total_includes_marketplace_fee`
-5. `successful_checkout_clears_purchased_rows`
-
-Implementation after red:
-1. Build preflight validation pass across cart items.
-2. Build execute multicall payload from validated listings.
-3. Submit one transaction and update cart state on success.
-4. Render fee-inclusive summary block in sidebar.
-
-Refactor:
-1. Extract checkout orchestrator from sidebar UI component.
-
-## Epic L: Sweeper candidate auto-add foundation
-
-Tests first:
-1. `sweeper_candidate_intake_adds_lowest_price_first`
-2. `sweeper_candidate_intake_stops_at_25_items`
-3. `sweeper_candidate_intake_respects_single_currency_rule`
-
-Implementation after red:
-1. Add candidate intake API on cart store.
-2. Sort candidate listings by price ascending before insertion.
-3. Reuse cart invariant guards for intake behavior.
-
-Refactor:
-1. Share candidate normalization across sweeper and manual add flows.
-
-## 13. Definition of Done
-
-1. Every SDK capability in Section 8 has:
-   - A user-facing implementation
-   - At least one automated test case
-2. No feature merged without red-green evidence in PR.
-3. CI passes:
-   - unit/integration tests
-   - e2e smoke tests
-   - lint + typecheck + build
-4. Accessibility and performance gates:
-   - Lighthouse accessibility >= 95 on `/`, `/collections/[address]`, `/collections/[address]/tokens/[tokenId]`
-   - Lighthouse performance >= 85 on same routes
-5. Documentation updated:
-   - This PRD
-   - Route-level feature docs
-   - Env and runbook updates
-6. Cart constraints hold under tests:
-   - listing-based `orderId` identity
-   - one currency only
-   - max 25 items
-   - strict stale-block checkout
-   - single transaction submit
-
-## 14. Delivery Plan
-
-1. Milestone M1: Epics A-B-C (foundation browsing)
-2. Milestone M2: Epics D-E (market and trait intelligence)
-3. Milestone M3: Epics F-G (detail economics and portfolio)
-4. Milestone M4: Epic H (UX hardening)
-5. Milestone M5: Epics I-J (cart foundation and add flows)
-6. Milestone M6: Epics K-L (atomic checkout and sweeper intake)
-
-## 15. Risks and Mitigations
-
-1. SDK response variance across projects
-   - Mitigation: strict adapter tests with fixture matrix.
-2. Metadata quality inconsistency
-   - Mitigation: defensive parsing and image/name fallback tests.
-3. Query latency for large collections
-   - Mitigation: cursor pagination, incremental rendering, and precomputed filter slices.
-4. Runtime incompatibilities
-   - Mitigation: lock Node and dependency versions in CI, add startup diagnostics in `/ops`.
-5. Cart transaction failure and stale listings
-   - Mitigation: strict preflight validation, inline row-level errors, and one-transaction submission path.
-6. Currency mismatches in mixed listing sets
-   - Mitigation: invariant guard in store to block mixed-currency cart composition.
-
-## 16. Immediate Next Step
-
-Implement Milestone M5 strictly by TDD:
-1. Add failing tests for Epic I cart invariants and sidebar UX.
-2. Build minimal Zustand persisted store and header/sidebar integration.
-3. Continue with Epic J cheapest-listing add flows.

@@ -20,6 +20,11 @@ const { mockUseTokenOwnershipQuery } = vi.hoisted(() => ({
 const { mockUseTokenHolderQuery } = vi.hoisted(() => ({
   mockUseTokenHolderQuery: vi.fn(),
 }));
+const { mockUseMarketplaceClient, mockGetFees, mockGetRoyaltyFee } = vi.hoisted(() => ({
+  mockUseMarketplaceClient: vi.fn(),
+  mockGetFees: vi.fn(),
+  mockGetRoyaltyFee: vi.fn(),
+}));
 
 vi.mock("@/lib/marketplace/hooks", () => ({
   useTokenDetailQuery: mockUseTokenDetailQuery,
@@ -30,6 +35,10 @@ vi.mock("@/lib/marketplace/hooks", () => ({
 
 vi.mock("@starknet-react/core", () => ({
   useAccount: mockUseAccount,
+}));
+
+vi.mock("@cartridge/arcade/marketplace/react", () => ({
+  useMarketplaceClient: mockUseMarketplaceClient,
 }));
 
 vi.mock("@/features/cart/store/cart-store", () => ({
@@ -122,6 +131,9 @@ describe("token detail view", () => {
     mockCartSetOpen.mockReset();
     mockCartAddItem.mockReturnValue({ ok: true });
     mockUseTokenOwnershipQuery.mockReset();
+    mockUseMarketplaceClient.mockReset();
+    mockGetFees.mockReset();
+    mockGetRoyaltyFee.mockReset();
     mockUseCollectionListingsQuery.mockReturnValue(successListingsQuery([]));
     mockUseAccount.mockReturnValue({
       account: undefined,
@@ -141,6 +153,24 @@ describe("token detail view", () => {
       status: "success",
       error: null,
       isFetching: false,
+      refresh: vi.fn(),
+    });
+    mockGetFees.mockResolvedValue({
+      feeNum: 500,
+      feeDenominator: 10_000,
+      feeReceiver: "0xfee-receiver",
+    });
+    mockGetRoyaltyFee.mockResolvedValue({
+      receiver: "0xroyalty-receiver",
+      amount: BigInt(0),
+    });
+    mockUseMarketplaceClient.mockReturnValue({
+      client: {
+        getFees: mockGetFees,
+        getRoyaltyFee: mockGetRoyaltyFee,
+      },
+      status: "ready",
+      error: null,
       refresh: vi.fn(),
     });
   });
@@ -315,6 +345,116 @@ describe("token detail view", () => {
     render(<TokenDetailView address="0xabc" tokenId="1" />);
 
     expect(screen.getByText("No listings")).toBeVisible();
+    expect(screen.getByTestId("token-fee-empty")).toBeVisible();
+  });
+
+  it("shows_fee_estimate_loading_state", async () => {
+    mockGetFees.mockReturnValue(new Promise(() => {}));
+    mockGetRoyaltyFee.mockReturnValue(new Promise(() => {}));
+    mockUseCollectionListingsQuery.mockReturnValue(
+      successListingsQuery([
+        {
+          id: 11,
+          tokenId: "1",
+          price: "100",
+          currency: "0xfee",
+          quantity: "1",
+          owner: "0xowner",
+          expiration: FAR_FUTURE_EXPIRATION,
+        },
+      ]),
+    );
+    mockUseTokenDetailQuery.mockReturnValue(
+      successQuery({
+        token: {
+          token_id: "1",
+          image: "https://cdn.example/1.png",
+          metadata: { name: "Token #1" },
+        },
+        orders: [],
+        listings: [],
+      }),
+    );
+
+    render(<TokenDetailView address="0xabc" tokenId="1" />);
+
+    expect(await screen.findByTestId("token-fee-loading")).toBeVisible();
+  });
+
+  it("shows_fee_estimate_error_state_when_sdk_calls_fail", async () => {
+    mockGetFees.mockRejectedValue(new Error("fee endpoint unavailable"));
+    mockUseCollectionListingsQuery.mockReturnValue(
+      successListingsQuery([
+        {
+          id: 12,
+          tokenId: "1",
+          price: "100",
+          currency: "0xfee",
+          quantity: "1",
+          owner: "0xowner",
+          expiration: FAR_FUTURE_EXPIRATION,
+        },
+      ]),
+    );
+    mockUseTokenDetailQuery.mockReturnValue(
+      successQuery({
+        token: {
+          token_id: "1",
+          image: "https://cdn.example/1.png",
+          metadata: { name: "Token #1" },
+        },
+        orders: [],
+        listings: [],
+      }),
+    );
+
+    render(<TokenDetailView address="0xabc" tokenId="1" />);
+
+    expect(await screen.findByTestId("token-fee-error")).toBeVisible();
+  });
+
+  it("renders_fee_estimate_breakdown_from_sdk_values", async () => {
+    mockGetFees.mockResolvedValue({
+      feeNum: 250,
+      feeDenominator: 10_000,
+      feeReceiver: "0xfee-receiver",
+    });
+    mockGetRoyaltyFee.mockResolvedValue({
+      receiver: "0xroyalty-receiver",
+      amount: BigInt(7),
+    });
+    mockUseCollectionListingsQuery.mockReturnValue(
+      successListingsQuery([
+        {
+          id: 13,
+          tokenId: "1",
+          price: "100",
+          currency: "0xfee",
+          quantity: "1",
+          owner: "0xowner",
+          expiration: FAR_FUTURE_EXPIRATION,
+        },
+      ]),
+    );
+    mockUseTokenDetailQuery.mockReturnValue(
+      successQuery({
+        token: {
+          token_id: "1",
+          image: "https://cdn.example/1.png",
+          metadata: { name: "Token #1" },
+        },
+        orders: [],
+        listings: [],
+      }),
+    );
+
+    render(<TokenDetailView address="0xabc" tokenId="1" />);
+
+    await waitFor(() => {
+      expect(screen.getByTestId("token-fee-marketplace")).toHaveTextContent("2");
+      expect(screen.getByTestId("token-fee-royalty")).toHaveTextContent("7");
+      expect(screen.getByTestId("token-fee-total")).toHaveTextContent("109");
+    });
   });
 
   it("passes_correct_args_to_hook", () => {

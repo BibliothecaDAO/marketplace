@@ -9,6 +9,7 @@ import {
 import {
   formatPriceForDisplay,
 } from "@/lib/marketplace/token-display";
+import { Button } from "@/components/ui/button";
 import {
   Select,
   SelectContent,
@@ -28,6 +29,7 @@ import { TraitFilterSidebar } from "@/features/collections/trait-filter-sidebar"
 import {
   cheapestListingByTokenId,
 } from "@/features/cart/listing-utils";
+import { type CollectionSortMode } from "@/features/collections/collection-query-params";
 
 const EMPTY_ACTIVE_FILTERS: ActiveFilters = {};
 
@@ -36,9 +38,17 @@ type CollectionRouteViewProps = {
   cursor?: string | null;
   collections?: SeedCollection[];
   activeFilters?: ActiveFilters;
+  sortMode?: CollectionSortMode;
   onActiveFiltersChange?: (filters: ActiveFilters) => void;
+  onSortModeChange?: (sortMode: CollectionSortMode) => void;
   onNavigate?: (href: string) => void;
 };
+
+const SORT_OPTIONS: Array<{ label: string; value: CollectionSortMode }> = [
+  { label: "Recent", value: "recent" },
+  { label: "Price Low to High", value: "price-asc" },
+  { label: "Price High to Low", value: "price-desc" },
+];
 
 function collectionName(metadata: unknown, fallbackAddress: string) {
   if (metadata && typeof metadata === "object") {
@@ -76,10 +86,11 @@ function floorPriceFromListings(
 
 export function CollectionRouteView({
   address,
-  cursor: _cursor,
   collections,
   activeFilters,
+  sortMode = "recent",
   onActiveFiltersChange,
+  onSortModeChange,
   onNavigate,
 }: CollectionRouteViewProps) {
   const runtimeCollections = useMemo(
@@ -169,6 +180,20 @@ export function CollectionRouteView({
           )}
         </div>
 
+        <div className="flex flex-wrap items-center gap-2" role="group" aria-label="Sort tokens">
+          {SORT_OPTIONS.map((option) => (
+            <Button
+              key={option.value}
+              onClick={() => onSortModeChange?.(option.value)}
+              size="sm"
+              type="button"
+              variant={sortMode === option.value ? "default" : "outline"}
+            >
+              {option.label}
+            </Button>
+          ))}
+        </div>
+
         {collection.isSuccess && !collection.data ? (
           <p className="text-sm text-muted-foreground font-mono">
             <span className="text-primary mr-1">$</span>
@@ -198,6 +223,7 @@ export function CollectionRouteView({
               activeFilters={resolvedActiveFilters}
               address={address}
               projectId={projectId}
+              sortMode={sortMode}
             />
           </TabsContent>
           <TabsContent value="market-activity">
