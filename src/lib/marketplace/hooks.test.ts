@@ -2,15 +2,13 @@ import { renderHook, waitFor } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { createElement, type ReactNode } from "react";
 import type { CollectionOrdersOptions } from "@cartridge/arcade/marketplace";
-import { describe, expect, it, vi, beforeEach } from "vitest";
+import { describe, expect, it, vi, beforeEach, afterEach } from "vitest";
 
-const { mockUseMarketplaceClient, mockUseMarketplaceTokenBalances } = vi.hoisted(() => ({
-  mockUseMarketplaceClient: vi.fn(),
+const { mockUseMarketplaceTokenBalances } = vi.hoisted(() => ({
   mockUseMarketplaceTokenBalances: vi.fn(),
 }));
 
 vi.mock("@cartridge/arcade/marketplace/react", () => ({
-  useMarketplaceClient: mockUseMarketplaceClient,
   useMarketplaceTokenBalances: mockUseMarketplaceTokenBalances,
 }));
 
@@ -25,56 +23,63 @@ function makeWrapper() {
   return QueryWrapper;
 }
 
-function mockClient(overrides: Record<string, unknown> = {}) {
-  return {
-    getCollection: vi.fn().mockResolvedValue(null),
-    listCollectionTokens: vi.fn().mockResolvedValue({ page: null, error: null }),
-    getCollectionOrders: vi.fn().mockResolvedValue([]),
-    listCollectionListings: vi.fn().mockResolvedValue([]),
-    getToken: vi.fn().mockResolvedValue(null),
-    ...overrides,
-  };
+function jsonResponse(body: unknown, status = 200) {
+  return Promise.resolve(
+    new Response(JSON.stringify(body), {
+      status,
+      headers: { "content-type": "application/json" },
+    }),
+  );
 }
 
 describe("marketplace cached hooks", () => {
+  const fetchMock = vi.fn();
+
   beforeEach(() => {
-    mockUseMarketplaceClient.mockReset();
+    fetchMock.mockReset();
+    vi.stubGlobal("fetch", fetchMock);
     mockUseMarketplaceTokenBalances.mockReset();
     mockUseMarketplaceTokenBalances.mockReturnValue({ data: [], isLoading: false });
   });
 
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
   describe("useCollectionQuery", () => {
-    it("fetches_collection_via_client", async () => {
+    it("fetches_collection_from_internal_api", async () => {
       const collection = { address: "0xabc", contractType: "erc721" };
-      const client = mockClient({
-        getCollection: vi.fn().mockResolvedValue(collection),
-      });
-      mockUseMarketplaceClient.mockReturnValue({ client, status: "ready" });
+      fetchMock.mockImplementation(() => jsonResponse(collection));
 
       const { useCollectionQuery } = await import("@/lib/marketplace/hooks");
       const { result } = renderHook(
-        () => useCollectionQuery({ address: "0xabc", fetchImages: true }),
+        () =>
+          useCollectionQuery({
+            address: "0xabc",
+            projectId: "project-a",
+            fetchImages: true,
+          }),
         { wrapper: makeWrapper() },
       );
 
       await waitFor(() => expect(result.current.isSuccess).toBe(true));
       expect(result.current.data).toEqual(collection);
-      expect(client.getCollection).toHaveBeenCalledWith({
-        address: "0xabc",
-        fetchImages: true,
-      });
+      expect(fetchMock).toHaveBeenCalledTimes(1);
+      const requestUrl = String(fetchMock.mock.calls[0][0]);
+      expect(requestUrl).toContain("/api/marketplace/collection?");
+      expect(requestUrl).toContain("address=0xabc");
+      expect(requestUrl).toContain("projectId=project-a");
+      expect(requestUrl).toContain("fetchImages=true");
     });
 
-    it("stays_disabled_when_client_not_ready", async () => {
-      mockUseMarketplaceClient.mockReturnValue({ client: null, status: "idle" });
-
+    it("stays_disabled_when_address_missing", async () => {
       const { useCollectionQuery } = await import("@/lib/marketplace/hooks");
-      const { result } = renderHook(
-        () => useCollectionQuery({ address: "0xabc" }),
-        { wrapper: makeWrapper() },
-      );
+      const { result } = renderHook(() => useCollectionQuery({ address: "" }), {
+        wrapper: makeWrapper(),
+      });
 
       expect(result.current.fetchStatus).toBe("idle");
+      expect(fetchMock).not.toHaveBeenCalled();
     });
   });
 
@@ -84,10 +89,7 @@ describe("marketplace cached hooks", () => {
         page: { tokens: [{ token_id: "1" }], nextCursor: "abc" },
         error: null,
       };
-      const client = mockClient({
-        listCollectionTokens: vi.fn().mockResolvedValue(page),
-      });
-      mockUseMarketplaceClient.mockReturnValue({ client, status: "ready" });
+      fetchMock.mockImplementation(() => jsonResponse(page));
 
       const { useCollectionTokensQuery } = await import(
         "@/lib/marketplace/hooks"
@@ -98,60 +100,23 @@ describe("marketplace cached hooks", () => {
             address: "0xabc",
             limit: 12,
             fetchImages: true,
+            tokenIds: ["7", "2"],
+            attributeFilters: {
+              Background: new Set(["Blue", "Red"]),
+            },
           }),
         { wrapper: makeWrapper() },
       );
 
       await waitFor(() => expect(result.current.isSuccess).toBe(true));
       expect(result.current.data?.page?.tokens).toHaveLength(1);
-      expect(client.listCollectionTokens).toHaveBeenCalledWith({
-        address: "0xabc",
-        limit: 12,
-        fetchImages: true,
-      });
-    });
-
-    it("retries_without_images_on_invalid_content_type_error", async () => {
-      const page = {
-        page: { tokens: [{ token_id: "1" }], nextCursor: null },
-        error: null,
-      };
-      const listCollectionTokens = vi
-        .fn()
-        .mockRejectedValueOnce(
-          new Error(
-            'failed to get tokens: status: Unknown, message: "invalid content type: application/json; charset=utf-8"',
-          ),
-        )
-        .mockResolvedValueOnce(page);
-      const client = mockClient({ listCollectionTokens });
-      mockUseMarketplaceClient.mockReturnValue({ client, status: "ready" });
-
-      const { useCollectionTokensQuery } = await import(
-        "@/lib/marketplace/hooks"
-      );
-      const { result } = renderHook(
-        () =>
-          useCollectionTokensQuery({
-            address: "0xabc",
-            limit: 12,
-            fetchImages: true,
-          }),
-        { wrapper: makeWrapper() },
-      );
-
-      await waitFor(() => expect(result.current.isSuccess).toBe(true));
-      expect(listCollectionTokens).toHaveBeenNthCalledWith(1, {
-        address: "0xabc",
-        limit: 12,
-        fetchImages: true,
-      });
-      expect(listCollectionTokens).toHaveBeenNthCalledWith(2, {
-        address: "0xabc",
-        limit: 12,
-        fetchImages: false,
-      });
-      expect(result.current.data).toEqual(page);
+      const requestUrl = String(fetchMock.mock.calls[0][0]);
+      expect(requestUrl).toContain("/api/marketplace/collection-tokens?");
+      expect(requestUrl).toContain("address=0xabc");
+      expect(requestUrl).toContain("limit=12");
+      expect(requestUrl).toContain("fetchImages=true");
+      expect(requestUrl).toContain("tokenIds=2%2C7");
+      expect(requestUrl).toContain("attributeFilters=");
     });
 
     it("retries_transient_timeout_errors", async () => {
@@ -159,13 +124,10 @@ describe("marketplace cached hooks", () => {
         page: { tokens: [{ token_id: "2" }], nextCursor: null },
         error: null,
       };
-      const listCollectionTokens = vi
-        .fn()
+      fetchMock
         .mockRejectedValueOnce(new Error("deadline exceeded"))
         .mockRejectedValueOnce(new Error("request timeout"))
-        .mockResolvedValueOnce(page);
-      const client = mockClient({ listCollectionTokens });
-      mockUseMarketplaceClient.mockReturnValue({ client, status: "ready" });
+        .mockImplementationOnce(() => jsonResponse(page));
 
       const { useCollectionTokensQuery } = await import(
         "@/lib/marketplace/hooks"
@@ -181,7 +143,7 @@ describe("marketplace cached hooks", () => {
       );
 
       await waitFor(() => expect(result.current.isSuccess).toBe(true));
-      expect(listCollectionTokens).toHaveBeenCalledTimes(3);
+      expect(fetchMock).toHaveBeenCalledTimes(3);
       expect(result.current.data).toEqual(page);
     });
   });
@@ -189,36 +151,33 @@ describe("marketplace cached hooks", () => {
   describe("useCollectionOrdersQuery", () => {
     it("fetches_orders_for_collection", async () => {
       const orders = [{ id: 1, tokenId: 5 }];
-      const client = mockClient({
-        getCollectionOrders: vi.fn().mockResolvedValue(orders),
-      });
-      mockUseMarketplaceClient.mockReturnValue({ client, status: "ready" });
+      fetchMock.mockImplementation(() => jsonResponse(orders));
 
       const { useCollectionOrdersQuery } = await import(
         "@/lib/marketplace/hooks"
       );
       const { result } = renderHook(
         () =>
-          useCollectionOrdersQuery({ collection: "0xabc", status: "Placed" as CollectionOrdersOptions["status"] }),
+          useCollectionOrdersQuery({
+            collection: "0xabc",
+            status: "Placed" as CollectionOrdersOptions["status"],
+          }),
         { wrapper: makeWrapper() },
       );
 
       await waitFor(() => expect(result.current.isSuccess).toBe(true));
       expect(result.current.data).toEqual(orders);
-      expect(client.getCollectionOrders).toHaveBeenCalledWith({
-        collection: "0xabc",
-        status: "Placed",
-      });
+      const requestUrl = String(fetchMock.mock.calls[0][0]);
+      expect(requestUrl).toContain("/api/marketplace/collection-orders?");
+      expect(requestUrl).toContain("collection=0xabc");
+      expect(requestUrl).toContain("status=Placed");
     });
   });
 
   describe("useCollectionListingsQuery", () => {
     it("fetches_listings_for_collection", async () => {
       const listings = [{ id: 2, tokenId: 3 }];
-      const client = mockClient({
-        listCollectionListings: vi.fn().mockResolvedValue(listings),
-      });
-      mockUseMarketplaceClient.mockReturnValue({ client, status: "ready" });
+      fetchMock.mockImplementation(() => jsonResponse(listings));
 
       const { useCollectionListingsQuery } = await import(
         "@/lib/marketplace/hooks"
@@ -235,25 +194,22 @@ describe("marketplace cached hooks", () => {
 
       await waitFor(() => expect(result.current.isSuccess).toBe(true));
       expect(result.current.data).toEqual(listings);
-      expect(client.listCollectionListings).toHaveBeenCalledWith({
-        collection: "0xabc",
-        tokenId: "5",
-        projectId: "proj-a",
-      });
+      const requestUrl = String(fetchMock.mock.calls[0][0]);
+      expect(requestUrl).toContain("/api/marketplace/collection-listings?");
+      expect(requestUrl).toContain("collection=0xabc");
+      expect(requestUrl).toContain("tokenId=5");
+      expect(requestUrl).toContain("projectId=proj-a");
     });
   });
 
   describe("useTokenDetailQuery", () => {
-    it("fetches_token_detail_via_get_token", async () => {
+    it("fetches_token_detail_from_internal_api", async () => {
       const detail = {
         token: { token_id: "42", metadata: { name: "Dragon" } },
         orders: [],
         listings: [],
       };
-      const client = mockClient({
-        getToken: vi.fn().mockResolvedValue(detail),
-      });
-      mockUseMarketplaceClient.mockReturnValue({ client, status: "ready" });
+      fetchMock.mockImplementation(() => jsonResponse(detail));
 
       const { useTokenDetailQuery } = await import("@/lib/marketplace/hooks");
       const { result } = renderHook(
@@ -268,17 +224,14 @@ describe("marketplace cached hooks", () => {
 
       await waitFor(() => expect(result.current.isSuccess).toBe(true));
       expect(result.current.data).toEqual(detail);
-      expect(client.getToken).toHaveBeenCalledWith({
-        collection: "0xabc",
-        tokenId: "42",
-        fetchImages: true,
-      });
+      const requestUrl = String(fetchMock.mock.calls[0][0]);
+      expect(requestUrl).toContain("/api/marketplace/token-detail?");
+      expect(requestUrl).toContain("collection=0xabc");
+      expect(requestUrl).toContain("tokenId=42");
+      expect(requestUrl).toContain("fetchImages=true");
     });
 
     it("stays_disabled_when_no_token_id", async () => {
-      const client = mockClient();
-      mockUseMarketplaceClient.mockReturnValue({ client, status: "ready" });
-
       const { useTokenDetailQuery } = await import("@/lib/marketplace/hooks");
       const { result } = renderHook(
         () => useTokenDetailQuery({ collection: "0xabc", tokenId: "" }),
@@ -286,128 +239,38 @@ describe("marketplace cached hooks", () => {
       );
 
       expect(result.current.fetchStatus).toBe("idle");
-      expect(client.getToken).not.toHaveBeenCalled();
+      expect(fetchMock).not.toHaveBeenCalled();
     });
+  });
 
-    it("retries_with_hex_token_id_when_decimal_lookup_returns_null", async () => {
-      const detail = {
-        token: { token_id: "0x935", metadata: { name: "Loot Chest #2357" } },
-        orders: [],
-        listings: [],
-      };
-      const getToken = vi
-        .fn()
-        .mockResolvedValueOnce(null)
-        .mockResolvedValueOnce(detail);
-      const client = mockClient({ getToken });
-      mockUseMarketplaceClient.mockReturnValue({ client, status: "ready" });
+  describe("useCollectionTraitMetadataQuery", () => {
+    it("fetches_trait_metadata_from_internal_api", async () => {
+      const data = [{ traitName: "Background", traitValue: "Blue", count: 8 }];
+      fetchMock.mockImplementation(() => jsonResponse(data));
 
-      const { useTokenDetailQuery } = await import("@/lib/marketplace/hooks");
+      const { useCollectionTraitMetadataQuery } = await import(
+        "@/lib/marketplace/hooks"
+      );
       const { result } = renderHook(
         () =>
-          useTokenDetailQuery({
-            collection: "0xloot",
-            tokenId: "2357",
-            fetchImages: true,
+          useCollectionTraitMetadataQuery({
+            address: "0xabc",
+            projectId: "project-a",
           }),
         { wrapper: makeWrapper() },
       );
 
       await waitFor(() => expect(result.current.isSuccess).toBe(true));
-      expect(result.current.data).toEqual(detail);
-      expect(getToken).toHaveBeenNthCalledWith(1, {
-        collection: "0xloot",
-        tokenId: "2357",
-        fetchImages: true,
-      });
-      expect(getToken).toHaveBeenNthCalledWith(2, {
-        collection: "0xloot",
-        tokenId: "0x935",
-        fetchImages: true,
-      });
-    });
-
-    it("retries_with_decimal_token_id_when_hex_lookup_returns_null", async () => {
-      const detail = {
-        token: { token_id: "2357", metadata: { name: "Loot Chest #2357" } },
-        orders: [],
-        listings: [],
-      };
-      const getToken = vi
-        .fn()
-        .mockResolvedValueOnce(null)
-        .mockResolvedValueOnce(detail);
-      const client = mockClient({ getToken });
-      mockUseMarketplaceClient.mockReturnValue({ client, status: "ready" });
-
-      const { useTokenDetailQuery } = await import("@/lib/marketplace/hooks");
-      const { result } = renderHook(
-        () =>
-          useTokenDetailQuery({
-            collection: "0xloot",
-            tokenId: "0x935",
-            fetchImages: true,
-          }),
-        { wrapper: makeWrapper() },
-      );
-
-      await waitFor(() => expect(result.current.isSuccess).toBe(true));
-      expect(result.current.data).toEqual(detail);
-      expect(getToken).toHaveBeenNthCalledWith(1, {
-        collection: "0xloot",
-        tokenId: "0x935",
-        fetchImages: true,
-      });
-      expect(getToken).toHaveBeenNthCalledWith(2, {
-        collection: "0xloot",
-        tokenId: "2357",
-        fetchImages: true,
-      });
-    });
-
-    it("retries_with_alternate_token_id_when_first_lookup_throws", async () => {
-      const detail = {
-        token: { token_id: "0x935", metadata: { name: "Loot Chest #2357" } },
-        orders: [],
-        listings: [],
-      };
-      const getToken = vi
-        .fn()
-        .mockRejectedValueOnce(new Error("invalid token format"))
-        .mockResolvedValueOnce(detail);
-      const client = mockClient({ getToken });
-      mockUseMarketplaceClient.mockReturnValue({ client, status: "ready" });
-
-      const { useTokenDetailQuery } = await import("@/lib/marketplace/hooks");
-      const { result } = renderHook(
-        () =>
-          useTokenDetailQuery({
-            collection: "0xloot",
-            tokenId: "2357",
-            fetchImages: true,
-          }),
-        { wrapper: makeWrapper() },
-      );
-
-      await waitFor(() => expect(result.current.isSuccess).toBe(true));
-      expect(result.current.data).toEqual(detail);
-      expect(getToken).toHaveBeenNthCalledWith(1, {
-        collection: "0xloot",
-        tokenId: "2357",
-        fetchImages: true,
-      });
-      expect(getToken).toHaveBeenNthCalledWith(2, {
-        collection: "0xloot",
-        tokenId: "0x935",
-        fetchImages: true,
-      });
+      expect(result.current.data).toEqual(data);
+      const requestUrl = String(fetchMock.mock.calls[0][0]);
+      expect(requestUrl).toContain("/api/marketplace/collection-trait-metadata?");
+      expect(requestUrl).toContain("address=0xabc");
+      expect(requestUrl).toContain("projectId=project-a");
     });
   });
 
   describe("useTokenOwnershipQuery", () => {
     it("passes_both_decimal_and_hex_token_ids_when_given_decimal", async () => {
-      mockUseMarketplaceClient.mockReturnValue({ client: {}, status: "ready" });
-
       const { useTokenOwnershipQuery } = await import("@/lib/marketplace/hooks");
       renderHook(
         () =>
@@ -424,76 +287,12 @@ describe("marketplace cached hooks", () => {
           tokenIds: expect.arrayContaining(["2648", "0xa58"]),
         }),
         true,
-      );
-    });
-
-    it("passes_both_hex_and_decimal_token_ids_when_given_hex", async () => {
-      mockUseMarketplaceClient.mockReturnValue({ client: {}, status: "ready" });
-
-      const { useTokenOwnershipQuery } = await import("@/lib/marketplace/hooks");
-      renderHook(
-        () =>
-          useTokenOwnershipQuery({
-            collection: "0xcol",
-            tokenId: "0xa58",
-            accountAddress: "0xabc",
-          }),
-        { wrapper: makeWrapper() },
-      );
-
-      expect(mockUseMarketplaceTokenBalances).toHaveBeenCalledWith(
-        expect.objectContaining({
-          tokenIds: expect.arrayContaining(["0xa58", "2648"]),
-        }),
-        true,
-      );
-    });
-
-    it("stays_disabled_when_no_account_address", async () => {
-      mockUseMarketplaceClient.mockReturnValue({ client: {}, status: "ready" });
-
-      const { useTokenOwnershipQuery } = await import("@/lib/marketplace/hooks");
-      renderHook(
-        () =>
-          useTokenOwnershipQuery({
-            collection: "0xcol",
-            tokenId: "2648",
-          }),
-        { wrapper: makeWrapper() },
-      );
-
-      expect(mockUseMarketplaceTokenBalances).toHaveBeenCalledWith(
-        expect.anything(),
-        false,
       );
     });
   });
 
   describe("useTokenHolderQuery", () => {
-    it("passes_both_decimal_and_hex_token_ids_when_given_decimal", async () => {
-      mockUseMarketplaceClient.mockReturnValue({ client: {}, status: "ready" });
-
-      const { useTokenHolderQuery } = await import("@/lib/marketplace/hooks");
-      renderHook(
-        () =>
-          useTokenHolderQuery({
-            collection: "0xcol",
-            tokenId: "2648",
-          }),
-        { wrapper: makeWrapper() },
-      );
-
-      expect(mockUseMarketplaceTokenBalances).toHaveBeenCalledWith(
-        expect.objectContaining({
-          tokenIds: expect.arrayContaining(["2648", "0xa58"]),
-        }),
-        true,
-      );
-    });
-
     it("passes_both_hex_and_decimal_token_ids_when_given_hex", async () => {
-      mockUseMarketplaceClient.mockReturnValue({ client: {}, status: "ready" });
-
       const { useTokenHolderQuery } = await import("@/lib/marketplace/hooks");
       renderHook(
         () =>
@@ -511,24 +310,23 @@ describe("marketplace cached hooks", () => {
         true,
       );
     });
+  });
 
-    it("stays_disabled_when_collection_missing", async () => {
-      mockUseMarketplaceClient.mockReturnValue({ client: {}, status: "ready" });
-
-      const { useTokenHolderQuery } = await import("@/lib/marketplace/hooks");
-      renderHook(
-        () =>
-          useTokenHolderQuery({
-            collection: "",
-            tokenId: "2648",
-          }),
-        { wrapper: makeWrapper() },
-      );
+  describe("useWalletPortfolioQuery", () => {
+    it("keeps_wallet_portfolio_reads_on_token_balances", async () => {
+      const { useWalletPortfolioQuery } = await import("@/lib/marketplace/hooks");
+      renderHook(() => useWalletPortfolioQuery("0xwallet"), {
+        wrapper: makeWrapper(),
+      });
 
       expect(mockUseMarketplaceTokenBalances).toHaveBeenCalledWith(
-        expect.anything(),
-        false,
+        expect.objectContaining({
+          accountAddresses: ["0xwallet"],
+          limit: 200,
+        }),
+        true,
       );
+      expect(fetchMock).not.toHaveBeenCalled();
     });
   });
 });

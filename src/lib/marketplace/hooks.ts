@@ -6,10 +6,34 @@ import type {
   CollectionOrdersOptions,
   CollectionSummaryOptions,
   FetchCollectionTokensOptions,
+  NormalizedToken,
   TokenDetails,
   TokenDetailsOptions,
 } from "@cartridge/arcade/marketplace";
-import { useMarketplaceClient, useMarketplaceTokenBalances } from "@cartridge/arcade/marketplace/react";
+import { useMarketplaceTokenBalances } from "@cartridge/arcade/marketplace/react";
+import { MARKETPLACE_CACHE_TTL_SECONDS } from "@/lib/marketplace/cache-policy";
+import {
+  normalizeAttributeFilters,
+  normalizeTokenIds,
+  stableCacheKey,
+} from "@/lib/marketplace/cache-keys";
+import {
+  marketplaceApiGet,
+  marketplaceReadParams,
+} from "@/lib/marketplace/read-api";
+
+type CollectionSummaryResult = {
+  totalSupply?: string | number;
+  metadata?: unknown;
+} | null;
+
+type CollectionTokensResult = {
+  page?: {
+    tokens?: NormalizedToken[];
+    nextCursor?: string | null;
+  } | null;
+  error?: unknown;
+} | null;
 
 function logSdkPayload(label: string, options: object, payload: unknown) {
   if (process.env.NODE_ENV !== "development") {
@@ -23,15 +47,11 @@ function logSdkPayload(label: string, options: object, payload: unknown) {
       : undefined;
   const preview = Array.isArray(payload) ? payload.slice(0, 3) : payload;
 
-  console.info(`[marketplace-sdk] ${label}`, {
+  console.info(`[marketplace-api] ${label}`, {
     options,
     count,
     preview,
   });
-}
-
-function hasUsableToken(data: TokenDetails | null): data is TokenDetails {
-  return data !== null && data.token !== null && data.token !== undefined;
 }
 
 function errorMessage(error: unknown) {
@@ -61,27 +81,6 @@ function isTransientCollectionTokenError(error: unknown) {
   );
 }
 
-async function listCollectionTokensResilient(
-  client: NonNullable<ReturnType<typeof useMarketplaceClient>["client"]>,
-  options: FetchCollectionTokensOptions,
-) {
-  try {
-    return await client.listCollectionTokens(options);
-  } catch (initialError) {
-    const shouldRetryWithoutImages =
-      options.fetchImages === true &&
-      isTransientCollectionTokenError(initialError);
-    if (!shouldRetryWithoutImages) {
-      throw initialError;
-    }
-
-    const fallbackOptions = { ...options, fetchImages: false };
-    const fallbackData = await client.listCollectionTokens(fallbackOptions);
-    logSdkPayload("collection-tokens-fallback-no-images", fallbackOptions, fallbackData);
-    return fallbackData;
-  }
-}
-
 function alternateTokenId(rawTokenId: string) {
   const tokenId = rawTokenId.trim();
   if (!tokenId) {
@@ -108,45 +107,57 @@ function alternateTokenId(rawTokenId: string) {
 }
 
 export function useCollectionQuery(options: CollectionSummaryOptions) {
-  const { client } = useMarketplaceClient();
-
-  return useQuery({
+  return useQuery<CollectionSummaryResult>({
     queryKey: ["collection", options.address, options.projectId] as const,
     queryFn: async () => {
-      const data = await client!.getCollection(options);
+      const data = await marketplaceApiGet<CollectionSummaryResult>("/api/marketplace/collection", {
+        address: options.address,
+        projectId: options.projectId,
+        fetchImages: options.fetchImages,
+      });
       logSdkPayload("collection", options, data);
       return data;
     },
-    enabled: !!client && !!options.address,
+    enabled: !!options.address,
+    staleTime: MARKETPLACE_CACHE_TTL_SECONDS.collection * 1000,
   });
 }
 
 export function useCollectionTokensQuery(
   options: FetchCollectionTokensOptions,
 ) {
-  const { client } = useMarketplaceClient();
+  const normalizedTokenIds = normalizeTokenIds(options.tokenIds);
+  const normalizedAttributeFilters = normalizeAttributeFilters(
+    options.attributeFilters,
+  );
 
-  return useQuery({
+  return useQuery<CollectionTokensResult>({
     queryKey: [
       "collection-tokens",
       options.address,
       options.project,
       options.cursor,
-      options.tokenIds,
+      normalizedTokenIds,
       options.limit,
-      options.attributeFilters
-        ? JSON.stringify(
-            Object.fromEntries(
-              Object.entries(options.attributeFilters).map(([k, v]) => [
-                k,
-                Array.from(v as Iterable<unknown>).sort(),
-              ]),
-            ),
-          )
-        : null,
+      stableCacheKey(normalizedAttributeFilters ?? null),
     ] as const,
     queryFn: async () => {
-      const data = await listCollectionTokensResilient(client!, options);
+      const normalizedParams = marketplaceReadParams({
+        tokenIds: options.tokenIds,
+        attributeFilters: options.attributeFilters,
+      });
+      const data = await marketplaceApiGet<CollectionTokensResult>(
+        "/api/marketplace/collection-tokens",
+        {
+          address: options.address,
+          project: options.project,
+          cursor: options.cursor,
+          limit: options.limit,
+          fetchImages: options.fetchImages,
+          tokenIds: normalizedParams.tokenIds,
+          attributeFilters: normalizedParams.attributeFilters,
+        },
+      );
       logSdkPayload("collection-tokens", options, data);
       return data;
     },
@@ -158,13 +169,12 @@ export function useCollectionTokensQuery(
       return failureCount < 1;
     },
     retryDelay: () => 0,
-    enabled: !!client && !!options.address,
+    enabled: !!options.address,
+    staleTime: MARKETPLACE_CACHE_TTL_SECONDS.collection * 1000,
   });
 }
 
 export function useCollectionOrdersQuery(options: CollectionOrdersOptions) {
-  const { client } = useMarketplaceClient();
-
   return useQuery({
     queryKey: [
       "collection-orders",
@@ -174,17 +184,25 @@ export function useCollectionOrdersQuery(options: CollectionOrdersOptions) {
       options.tokenId,
     ] as const,
     queryFn: async () => {
-      const data = await client!.getCollectionOrders(options);
+      const data = await marketplaceApiGet<unknown[]>(
+        "/api/marketplace/collection-orders",
+        {
+          collection: options.collection,
+          status: options.status,
+          category: options.category,
+          tokenId: options.tokenId,
+          limit: options.limit,
+        },
+      );
       logSdkPayload("collection-orders", options, data);
       return data;
     },
-    enabled: !!client && !!options.collection,
+    enabled: !!options.collection,
+    staleTime: MARKETPLACE_CACHE_TTL_SECONDS.collection * 1000,
   });
 }
 
 export function useCollectionListingsQuery(options: CollectionListingsOptions) {
-  const { client } = useMarketplaceClient();
-
   return useQuery({
     queryKey: [
       "collection-listings",
@@ -192,19 +210,28 @@ export function useCollectionListingsQuery(options: CollectionListingsOptions) {
       options.tokenId,
       options.projectId,
       options.verifyOwnership,
+      options.limit,
     ] as const,
     queryFn: async () => {
-      const data = await client!.listCollectionListings(options);
+      const data = await marketplaceApiGet<unknown[]>(
+        "/api/marketplace/collection-listings",
+        {
+          collection: options.collection,
+          tokenId: options.tokenId,
+          projectId: options.projectId,
+          verifyOwnership: options.verifyOwnership,
+          limit: options.limit,
+        },
+      );
       logSdkPayload("collection-listings", options, data);
       return data;
     },
-    enabled: !!client && !!options.collection,
+    enabled: !!options.collection,
+    staleTime: MARKETPLACE_CACHE_TTL_SECONDS.collection * 1000,
   });
 }
 
 export function useTokenDetailQuery(options: TokenDetailsOptions) {
-  const { client } = useMarketplaceClient();
-
   return useQuery({
     queryKey: [
       "token-detail",
@@ -213,45 +240,21 @@ export function useTokenDetailQuery(options: TokenDetailsOptions) {
       options.projectId,
     ] as const,
     queryFn: async (): Promise<TokenDetails | null> => {
-      let data: TokenDetails | null = null;
-      let initialError: unknown = null;
+      const data = await marketplaceApiGet<TokenDetails | null>(
+        "/api/marketplace/token-detail",
+        {
+          collection: options.collection,
+          tokenId: options.tokenId,
+          projectId: options.projectId,
+          fetchImages: options.fetchImages,
+        },
+      );
 
-      try {
-        data = await client!.getToken(options);
-        logSdkPayload("token-detail", options, data);
-      } catch (error) {
-        initialError = error;
-      }
-
-      if (hasUsableToken(data)) {
-        return data;
-      }
-
-      const fallbackTokenId = alternateTokenId(String(options.tokenId));
-      if (!fallbackTokenId || fallbackTokenId === String(options.tokenId)) {
-        if (initialError) {
-          throw initialError;
-        }
-        return data;
-      }
-
-      const fallbackOptions = {
-        ...options,
-        tokenId: fallbackTokenId,
-      };
-      try {
-        const fallbackData = await client!.getToken(fallbackOptions);
-        logSdkPayload("token-detail-fallback", fallbackOptions, fallbackData);
-        return fallbackData;
-      } catch (fallbackError) {
-        if (initialError) {
-          throw initialError;
-        }
-
-        throw fallbackError;
-      }
+      logSdkPayload("token-detail", options, data);
+      return data;
     },
-    enabled: !!client && !!options.collection && !!options.tokenId,
+    enabled: !!options.collection && !!options.tokenId,
+    staleTime: MARKETPLACE_CACHE_TTL_SECONDS.collection * 1000,
   });
 }
 
@@ -280,16 +283,15 @@ export function useCollectionTraitMetadataQuery(options: {
   return useQuery({
     queryKey: ["collection-trait-metadata", options.address, options.projectId] as const,
     queryFn: async () => {
-      const { fetchCollectionTraitMetadata, aggregateTraitMetadata } =
-        await import("@cartridge/arcade/marketplace");
-      const result = await fetchCollectionTraitMetadata({
+      return await marketplaceApiGet<
+        Array<{ traitName: string; traitValue: string; count: number }>
+      >("/api/marketplace/collection-trait-metadata", {
         address: options.address,
-        projects: options.projectId ? [options.projectId] : undefined,
-        defaultProjectId: options.projectId,
+        projectId: options.projectId,
       });
-      return aggregateTraitMetadata(result.pages);
     },
     enabled: !!options.address,
+    staleTime: MARKETPLACE_CACHE_TTL_SECONDS.traitMetadata * 1000,
   });
 }
 

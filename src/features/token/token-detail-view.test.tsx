@@ -1,6 +1,6 @@
 import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { describe, expect, it, vi, beforeEach } from "vitest";
+import { describe, expect, it, vi, beforeEach, afterEach } from "vitest";
 import { TokenDetailView } from "@/features/token/token-detail-view";
 
 const { mockUseTokenDetailQuery, mockUseCollectionListingsQuery } = vi.hoisted(() => ({
@@ -20,10 +20,8 @@ const { mockUseTokenOwnershipQuery } = vi.hoisted(() => ({
 const { mockUseTokenHolderQuery } = vi.hoisted(() => ({
   mockUseTokenHolderQuery: vi.fn(),
 }));
-const { mockUseMarketplaceClient, mockGetFees, mockGetRoyaltyFee } = vi.hoisted(() => ({
-  mockUseMarketplaceClient: vi.fn(),
-  mockGetFees: vi.fn(),
-  mockGetRoyaltyFee: vi.fn(),
+const { mockFetch } = vi.hoisted(() => ({
+  mockFetch: vi.fn(),
 }));
 
 vi.mock("@/lib/marketplace/hooks", () => ({
@@ -35,10 +33,6 @@ vi.mock("@/lib/marketplace/hooks", () => ({
 
 vi.mock("@starknet-react/core", () => ({
   useAccount: mockUseAccount,
-}));
-
-vi.mock("@cartridge/arcade/marketplace/react", () => ({
-  useMarketplaceClient: mockUseMarketplaceClient,
 }));
 
 vi.mock("@/features/cart/store/cart-store", () => ({
@@ -124,6 +118,8 @@ function ownershipLoadingQuery() {
 
 describe("token detail view", () => {
   beforeEach(() => {
+    mockFetch.mockReset();
+    vi.stubGlobal("fetch", mockFetch);
     mockUseTokenDetailQuery.mockReset();
     mockUseCollectionListingsQuery.mockReset();
     mockUseAccount.mockReset();
@@ -131,9 +127,6 @@ describe("token detail view", () => {
     mockCartSetOpen.mockReset();
     mockCartAddItem.mockReturnValue({ ok: true });
     mockUseTokenOwnershipQuery.mockReset();
-    mockUseMarketplaceClient.mockReset();
-    mockGetFees.mockReset();
-    mockGetRoyaltyFee.mockReset();
     mockUseCollectionListingsQuery.mockReturnValue(successListingsQuery([]));
     mockUseAccount.mockReturnValue({
       account: undefined,
@@ -155,25 +148,30 @@ describe("token detail view", () => {
       isFetching: false,
       refresh: vi.fn(),
     });
-    mockGetFees.mockResolvedValue({
-      feeNum: 500,
-      feeDenominator: 10_000,
-      feeReceiver: "0xfee-receiver",
-    });
-    mockGetRoyaltyFee.mockResolvedValue({
-      receiver: "0xroyalty-receiver",
-      amount: BigInt(0),
-    });
-    mockUseMarketplaceClient.mockReturnValue({
-      client: {
-        getFees: mockGetFees,
-        getRoyaltyFee: mockGetRoyaltyFee,
-      },
-      status: "ready",
-      error: null,
-      refresh: vi.fn(),
-    });
+    mockFetch.mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          marketplaceFee: "0",
+          royaltyFee: "0",
+          total: "100",
+        }),
+        {
+          status: 200,
+          headers: { "content-type": "application/json" },
+        },
+      ),
+    );
   });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  function pendingFeeResponse() {
+    return new Promise<Response>(() => {
+      // intentionally unresolved
+    });
+  }
 
   it("renders_token_name_and_image", () => {
     mockUseTokenDetailQuery.mockReturnValue(
@@ -349,8 +347,7 @@ describe("token detail view", () => {
   });
 
   it("shows_fee_estimate_loading_state", async () => {
-    mockGetFees.mockReturnValue(new Promise(() => {}));
-    mockGetRoyaltyFee.mockReturnValue(new Promise(() => {}));
+    mockFetch.mockReturnValue(pendingFeeResponse());
     mockUseCollectionListingsQuery.mockReturnValue(
       successListingsQuery([
         {
@@ -382,7 +379,7 @@ describe("token detail view", () => {
   });
 
   it("shows_fee_estimate_error_state_when_sdk_calls_fail", async () => {
-    mockGetFees.mockRejectedValue(new Error("fee endpoint unavailable"));
+    mockFetch.mockRejectedValue(new Error("fee endpoint unavailable"));
     mockUseCollectionListingsQuery.mockReturnValue(
       successListingsQuery([
         {
@@ -413,16 +410,20 @@ describe("token detail view", () => {
     expect(await screen.findByTestId("token-fee-error")).toBeVisible();
   });
 
-  it("renders_fee_estimate_breakdown_from_sdk_values", async () => {
-    mockGetFees.mockResolvedValue({
-      feeNum: 250,
-      feeDenominator: 10_000,
-      feeReceiver: "0xfee-receiver",
-    });
-    mockGetRoyaltyFee.mockResolvedValue({
-      receiver: "0xroyalty-receiver",
-      amount: BigInt(7),
-    });
+  it("renders_fee_estimate_breakdown_from_api_values", async () => {
+    mockFetch.mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          marketplaceFee: "2",
+          royaltyFee: "7",
+          total: "109",
+        }),
+        {
+          status: 200,
+          headers: { "content-type": "application/json" },
+        },
+      ),
+    );
     mockUseCollectionListingsQuery.mockReturnValue(
       successListingsQuery([
         {

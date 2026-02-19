@@ -4,7 +4,6 @@ import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useAccount } from "@starknet-react/core";
 import type { NormalizedToken } from "@cartridge/arcade/marketplace";
-import { useMarketplaceClient } from "@cartridge/arcade/marketplace/react";
 import {
   useCollectionListingsQuery,
   useTokenDetailQuery,
@@ -30,6 +29,7 @@ import {
   formatPriceForDisplay,
 } from "@/lib/marketplace/token-display";
 import { calculateMarketplaceFee, parseBigInt } from "@/lib/marketplace/fees";
+import { marketplaceApiGet } from "@/lib/marketplace/read-api";
 import type { CheapestListing } from "@/features/cart/listing-utils";
 import {
   cartItemFromTokenListing,
@@ -127,7 +127,6 @@ export function TokenDetailView({
   const normalizedTokenId = formatNumberish(tokenId) ?? tokenId;
   const { addListingToCart, isRecentlyAdded } = useAddToCartFeedback();
   const { account, address: walletAddress, isConnected } = useAccount();
-  const { client } = useMarketplaceClient();
   const { collections } = getMarketplaceRuntimeConfig();
   const collectionName = collections.find((c) => c.address === address)?.name ?? address;
   const [verifyOwnership, setVerifyOwnership] = useState(false);
@@ -240,42 +239,45 @@ export function TokenDetailView({
       }));
 
       try {
-        const fees =
-          client && typeof client.getFees === "function"
-            ? await client.getFees()
-            : null;
-        const marketplaceFee = calculateMarketplaceFee(listingPrice, {
-          feeNum: fees?.feeNum ?? DEFAULT_MARKETPLACE_FEE_NUM,
-          feeDenominator: fees?.feeDenominator ?? DEFAULT_MARKETPLACE_FEE_DENOMINATOR,
+        const feeResponse = await marketplaceApiGet<{
+          marketplaceFee: string;
+          royaltyFee: string;
+          total: string;
+        }>("/api/marketplace/token-fees", {
+          collection: address,
+          tokenId: formatNumberish(token.token_id) ?? String(token.token_id),
+          amount: listingPrice.toString(),
         });
-
-        const royaltyResponse =
-          client && typeof client.getRoyaltyFee === "function"
-            ? await client.getRoyaltyFee({
-              collection: address,
-              tokenId: formatNumberish(token.token_id) ?? String(token.token_id),
-              amount: listingPrice,
-            })
-            : null;
 
         if (disposed) {
           return;
         }
 
-        const royaltyFee = royaltyResponse?.amount ?? BigInt(0);
+        const marketplaceFee = parseBigInt(feeResponse.marketplaceFee);
+        const royaltyFee = parseBigInt(feeResponse.royaltyFee);
+        const total = parseBigInt(feeResponse.total);
+        if (marketplaceFee === null || royaltyFee === null || total === null) {
+          throw new Error("Invalid fee response.");
+        }
+
         setFeeEstimate({
           status: "success",
           marketplaceFee,
           royaltyFee,
-          total: listingPrice + marketplaceFee + royaltyFee,
+          total,
         });
       } catch {
+        const fallbackMarketplaceFee = calculateMarketplaceFee(listingPrice, {
+          feeNum: DEFAULT_MARKETPLACE_FEE_NUM,
+          feeDenominator: DEFAULT_MARKETPLACE_FEE_DENOMINATOR,
+        });
+
         if (!disposed) {
           setFeeEstimate({
             status: "error",
-            marketplaceFee: BigInt(0),
+            marketplaceFee: fallbackMarketplaceFee,
             royaltyFee: BigInt(0),
-            total: BigInt(0),
+            total: listingPrice + fallbackMarketplaceFee,
           });
         }
       }
@@ -286,7 +288,7 @@ export function TokenDetailView({
     return () => {
       disposed = true;
     };
-  }, [address, cheapestListing, client, token]);
+  }, [address, cheapestListing, token]);
 
   // If existing listings use a specific currency, adopt it (otherwise keep STRK default).
   useEffect(() => {
