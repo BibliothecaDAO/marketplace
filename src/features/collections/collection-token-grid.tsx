@@ -22,7 +22,7 @@ import {
   cartItemFromTokenListing,
   cheapestListingByTokenId,
 } from "@/features/cart/listing-utils";
-import { useCartStore } from "@/features/cart/store/cart-store";
+import { useAddToCartFeedback } from "@/features/cart/hooks/use-add-to-cart-feedback";
 
 type CollectionTokenGridProps = {
   address: string;
@@ -101,7 +101,7 @@ export function CollectionTokenGrid({
   activeFilters,
   onTokensChange,
 }: CollectionTokenGridProps) {
-  const addItem = useCartStore((state) => state.addItem);
+  const { addListingToCart, isRecentlyAdded } = useAddToCartFeedback();
   const tokenIdsKey = useMemo(() => tokenIds?.join(",") ?? "", [tokenIds]);
   const activeFiltersKey = useMemo(
     () =>
@@ -211,6 +211,7 @@ export function CollectionTokenGrid({
           {visibleTokens.map((token) => {
             const tokenKey = displayTokenId(token);
             const cheapestListing = listingPrices.get(tokenKey);
+            const isAdded = isRecentlyAdded(cheapestListing?.orderId);
             const price =
               cheapestListing?.price ??
               listingPriceMap.get(tokenKey) ??
@@ -234,7 +235,7 @@ export function CollectionTokenGrid({
                       return;
                     }
 
-                    addItem(
+                    addListingToCart(
                       cartItemFromTokenListing(
                         token,
                         address,
@@ -245,9 +246,9 @@ export function CollectionTokenGrid({
                   }}
                   size="sm"
                   type="button"
-                  variant="outline"
+                  variant={isAdded ? "default" : "outline"}
                 >
-                  Add to cart
+                  {isAdded ? "Added" : "Add to cart"}
                 </Button>
               </div>
             );

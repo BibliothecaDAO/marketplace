@@ -10,8 +10,9 @@ const { mockUseTokenDetailQuery, mockUseCollectionListingsQuery } = vi.hoisted((
 const { mockUseAccount } = vi.hoisted(() => ({
   mockUseAccount: vi.fn(),
 }));
-const { mockCartAddItem } = vi.hoisted(() => ({
+const { mockCartAddItem, mockCartSetOpen } = vi.hoisted(() => ({
   mockCartAddItem: vi.fn(),
+  mockCartSetOpen: vi.fn(),
 }));
 const { mockUseTokenOwnershipQuery } = vi.hoisted(() => ({
   mockUseTokenOwnershipQuery: vi.fn(),
@@ -32,8 +33,9 @@ vi.mock("@starknet-react/core", () => ({
 }));
 
 vi.mock("@/features/cart/store/cart-store", () => ({
-  useCartStore: (selector: (state: { addItem: typeof mockCartAddItem }) => unknown) =>
-    selector({ addItem: mockCartAddItem }),
+  useCartStore: (
+    selector: (state: { addItem: typeof mockCartAddItem; setOpen: typeof mockCartSetOpen }) => unknown,
+  ) => selector({ addItem: mockCartAddItem, setOpen: mockCartSetOpen }),
 }));
 
 vi.mock("@/lib/marketplace/config", () => ({
@@ -83,6 +85,8 @@ function successListingsQuery(data: Array<Record<string, unknown>>) {
   };
 }
 
+const FAR_FUTURE_EXPIRATION = 4_102_444_800; // year 2100
+
 function ownershipQuery(ownsToken: boolean) {
   return {
     data: ownsToken ? {
@@ -115,6 +119,8 @@ describe("token detail view", () => {
     mockUseCollectionListingsQuery.mockReset();
     mockUseAccount.mockReset();
     mockCartAddItem.mockReset();
+    mockCartSetOpen.mockReset();
+    mockCartAddItem.mockReturnValue({ ok: true });
     mockUseTokenOwnershipQuery.mockReset();
     mockUseCollectionListingsQuery.mockReturnValue(successListingsQuery([]));
     mockUseAccount.mockReturnValue({
@@ -204,13 +210,13 @@ describe("token detail view", () => {
           id: 1,
           price: "150000000000000000000",
           owner: "0xowner1",
-          expiration: 1735689600,
+          expiration: FAR_FUTURE_EXPIRATION,
         },
         {
           id: 2,
           price: "500000000000000000",
           owner: "0xowner2",
-          expiration: 1735689600,
+          expiration: FAR_FUTURE_EXPIRATION,
         },
       ]),
     );
@@ -236,9 +242,61 @@ describe("token detail view", () => {
     expect(screen.getByText("0.5")).toBeVisible();
     expect(screen.queryByText("150000000000000000000")).toBeNull();
     // Expiration should NOT show raw timestamp
-    expect(screen.queryByText("1735689600")).toBeNull();
+    expect(screen.queryByText(String(FAR_FUTURE_EXPIRATION))).toBeNull();
     // Expiration should show as a date string
     expect(screen.getAllByText(/jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec|\d{4}/i).length).toBeGreaterThan(0);
+  });
+
+  it("hides_expired_listings_and_excludes_them_from_cheapest_add", async () => {
+    const now = Math.floor(Date.now() / 1000);
+    mockUseCollectionListingsQuery.mockReturnValue(
+      successListingsQuery([
+        {
+          id: 1,
+          tokenId: "1",
+          price: "100000000000000000",
+          currency: "0xstrk",
+          quantity: "1",
+          owner: "0xexpired",
+          expiration: now - 60,
+        },
+        {
+          id: 2,
+          tokenId: "1",
+          price: "200000000000000000",
+          currency: "0xstrk",
+          quantity: "1",
+          owner: "0xactive",
+          expiration: now + 3600,
+        },
+      ]),
+    );
+
+    mockUseTokenDetailQuery.mockReturnValue(
+      successQuery({
+        token: {
+          token_id: "1",
+          image: "https://cdn.example/1.png",
+          metadata: { name: "Token #1" },
+        },
+        orders: [],
+        listings: [],
+      }),
+    );
+
+    const user = userEvent.setup();
+    render(<TokenDetailView address="0xabc" tokenId="1" />);
+
+    expect(screen.queryByText("0xexpired")).toBeNull();
+    expect(screen.getByText("0xactive")).toBeVisible();
+
+    await user.click(screen.getByRole("button", { name: /add cheapest to cart/i }));
+
+    expect(mockCartAddItem).toHaveBeenCalledWith(
+      expect.objectContaining({
+        orderId: "2",
+      }),
+    );
   });
 
   it("shows_empty_listings_message", () => {
@@ -430,6 +488,8 @@ describe("token detail view", () => {
         currency: "0xfee",
       }),
     );
+    expect(mockCartSetOpen).toHaveBeenCalledWith(true);
+    expect(screen.getAllByRole("button", { name: /added/i }).length).toBeGreaterThan(0);
     expect(screen.queryByRole("button", { name: /buy cheapest/i })).toBeNull();
   });
 
@@ -660,7 +720,7 @@ describe("token detail view", () => {
           id: 1,
           price: "500000000000000000",
           owner: longAddress,
-          expiration: 1735689600,
+          expiration: FAR_FUTURE_EXPIRATION,
         },
       ]),
     );
@@ -691,7 +751,7 @@ describe("token detail view", () => {
           id: 1,
           price: "500000000000000000",
           owner: "0xowner1",
-          expiration: 1735689600,
+          expiration: FAR_FUTURE_EXPIRATION,
         },
       ]),
     );
@@ -710,7 +770,7 @@ describe("token detail view", () => {
     render(<TokenDetailView address="0xabc" tokenId="1" />);
 
     // Raw timestamp should NOT appear
-    expect(screen.queryByText("1735689600")).toBeNull();
+    expect(screen.queryByText(String(FAR_FUTURE_EXPIRATION))).toBeNull();
     // A date string should appear (matches month name or year)
     expect(screen.getAllByText(/jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec|\d{4}/i).length).toBeGreaterThan(0);
   });
@@ -725,7 +785,7 @@ describe("token detail view", () => {
           currency: "0xstrk",
           quantity: "1",
           owner: "0xowner1",
-          expiration: 1735689600,
+          expiration: FAR_FUTURE_EXPIRATION,
         },
         {
           id: 2,
@@ -734,7 +794,7 @@ describe("token detail view", () => {
           currency: "0xstrk",
           quantity: "1",
           owner: "0xowner2",
-          expiration: 1735689600,
+          expiration: FAR_FUTURE_EXPIRATION,
         },
       ]),
     );
@@ -1021,7 +1081,7 @@ describe("token detail view", () => {
           id: 1,
           price: "500000000000000000",
           owner: ownerAddress,
-          expiration: 1735689600,
+          expiration: FAR_FUTURE_EXPIRATION,
         },
       ]),
     );

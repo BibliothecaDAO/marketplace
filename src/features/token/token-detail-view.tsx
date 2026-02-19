@@ -33,7 +33,7 @@ import {
   cartItemFromTokenListing,
   cheapestListingByTokenId,
 } from "@/features/cart/listing-utils";
-import { useCartStore } from "@/features/cart/store/cart-store";
+import { useAddToCartFeedback } from "@/features/cart/hooks/use-add-to-cart-feedback";
 
 
 type TokenDetailViewProps = {
@@ -61,7 +61,7 @@ type ListingRow = {
   price: number | string;
   currency?: string;
   owner: string;
-  expiration?: number;
+  expiration?: number | string;
 };
 
 function getTokenName(token: NormalizedToken) {
@@ -88,6 +88,28 @@ function truncateAddress(addr: string) {
   return addr.length > 14 ? addr.slice(0, 6) + "..." + addr.slice(-4) : addr;
 }
 
+function parseExpiration(value: ListingRow["expiration"]) {
+  const normalized = formatNumberish(value);
+  if (!normalized) {
+    return null;
+  }
+
+  try {
+    return Number(BigInt(normalized));
+  } catch {
+    return null;
+  }
+}
+
+function isExpiredListing(listing: ListingRow, nowEpochSeconds: number) {
+  const expiration = parseExpiration(listing.expiration);
+  if (!expiration || expiration <= 0) {
+    return false;
+  }
+
+  return expiration <= nowEpochSeconds;
+}
+
 // Arcade Marketplace contract address (same on SN_MAIN and SN_SEPOLIA per SDK manifest)
 const MARKETPLACE_CONTRACT = "0x6bbf16b6c67b1bef27a187b499b2f3a14af31646c2c90d64f11b9087c3f527c";
 // STRK token address on Starknet mainnet / testnet
@@ -99,7 +121,7 @@ export function TokenDetailView({
   projectId,
 }: TokenDetailViewProps) {
   const normalizedTokenId = formatNumberish(tokenId) ?? tokenId;
-  const addItem = useCartStore((state) => state.addItem);
+  const { addListingToCart, isRecentlyAdded } = useAddToCartFeedback();
   const { account, address: walletAddress, isConnected } = useAccount();
   const { collections } = getMarketplaceRuntimeConfig();
   const collectionName = collections.find((c) => c.address === address)?.name ?? address;
@@ -129,6 +151,7 @@ export function TokenDetailView({
     projectId,
     verifyOwnership,
   });
+  const nowEpochSeconds = Math.floor(Date.now() / 1000);
 
   const { holderAddress, isOwner, effectiveIsOwner, ownershipQuery } = useTokenOwnership({
     collection: address,
@@ -138,14 +161,20 @@ export function TokenDetailView({
   });
 
   const token = detailQuery.data?.token ?? null;
-  const listings = useMemo(
+  const rawListings = useMemo(
     () => listingQuery.data ?? detailQuery.data?.listings ?? [],
     [detailQuery.data?.listings, listingQuery.data],
   );
-  const listingRows = listings as ListingRow[];
+  const listingRows = useMemo(
+    () =>
+      (rawListings as ListingRow[]).filter(
+        (listing) => !isExpiredListing(listing, nowEpochSeconds),
+      ),
+    [nowEpochSeconds, rawListings],
+  );
   const cheapestListings = useMemo(
-    () => cheapestListingByTokenId(listings as unknown[]),
-    [listings],
+    () => cheapestListingByTokenId(listingRows as unknown[]),
+    [listingRows],
   );
   const cheapestListing = useMemo(() => {
     if (!token) {
@@ -162,6 +191,7 @@ export function TokenDetailView({
       ) ?? null
     );
   }, [listingRows, walletAddress]);
+  const isCheapestAdded = isRecentlyAdded(cheapestListing?.orderId);
 
   // If existing listings use a specific currency, adopt it (otherwise keep STRK default).
   useEffect(() => {
@@ -174,7 +204,7 @@ export function TokenDetailView({
     if (listedCurrency) {
       setCurrencyInput(listedCurrency);
     }
-  }, [listingRows]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [listingRows]);
 
   // Convert human-readable STRK price to wei string
   function priceToWei(humanPrice: string): string {
@@ -345,14 +375,15 @@ export function TokenDetailView({
                   return;
                 }
 
-                addItem(
+                addListingToCart(
                   cartItemFromTokenListing(token, address, cheapestListing, projectId),
                 );
               }}
               size="sm"
               type="button"
+              variant={isCheapestAdded ? "default" : "outline"}
             >
-              Add cheapest to cart
+              {isCheapestAdded ? "Added" : "Add cheapest to cart"}
             </Button>
             <div className="flex items-center gap-2">
               <Switch
@@ -556,17 +587,20 @@ export function TokenDetailView({
           <Badge variant="outline">Refreshing...</Badge>
         ) : null}
 
-        {listings.length === 0 ? (
+        {listingRows.length === 0 ? (
           <p className="text-sm text-muted-foreground">No listings</p>
         ) : (
           <div className="space-y-2">
             {listingRows.map((listing) => {
               const isCheapest = cheapestListing?.orderId === String(listing.id);
+              const rowOrderId = String(listing.id);
+              const isRowAdded = isRecentlyAdded(rowOrderId);
               const hasFullCartData =
                 listing.id !== undefined &&
                 listing.price !== undefined &&
                 listing.currency !== undefined &&
                 listing.quantity !== undefined;
+              const expiration = parseExpiration(listing.expiration);
               return (
                 <Card key={listing.id}>
                   <CardContent className="flex items-center justify-between p-3">
@@ -587,16 +621,16 @@ export function TokenDetailView({
                       </Link>
                     </div>
                     <div className="flex items-center gap-2">
-                      {listing.expiration ? (
+                      {expiration ? (
                         <Badge variant="secondary">
-                          {new Date(listing.expiration * 1000).toLocaleDateString()}
+                          {new Date(expiration * 1000).toLocaleDateString()}
                         </Badge>
                       ) : null}
                       <Button
                         disabled={!hasFullCartData}
                         onClick={() => {
                           if (!token || !hasFullCartData) return;
-                          addItem(
+                          addListingToCart(
                             cartItemFromTokenListing(
                               token,
                               address,
@@ -607,9 +641,9 @@ export function TokenDetailView({
                         }}
                         size="sm"
                         type="button"
-                        variant="outline"
+                        variant={isRowAdded ? "default" : "outline"}
                       >
-                        Add to cart
+                        {isRowAdded ? "Added" : "Add to cart"}
                       </Button>
                     </div>
                   </CardContent>

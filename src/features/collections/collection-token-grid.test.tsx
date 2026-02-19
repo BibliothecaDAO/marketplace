@@ -8,8 +8,9 @@ const { mockUseCollectionTokensQuery, mockUseCollectionListingsQuery } = vi.hois
   mockUseCollectionTokensQuery: vi.fn(),
   mockUseCollectionListingsQuery: vi.fn(),
 }));
-const { mockCartAddItem } = vi.hoisted(() => ({
+const { mockCartAddItem, mockCartSetOpen } = vi.hoisted(() => ({
   mockCartAddItem: vi.fn(),
+  mockCartSetOpen: vi.fn(),
 }));
 
 vi.mock("@/lib/marketplace/hooks", () => ({
@@ -18,8 +19,9 @@ vi.mock("@/lib/marketplace/hooks", () => ({
 }));
 
 vi.mock("@/features/cart/store/cart-store", () => ({
-  useCartStore: (selector: (state: { addItem: typeof mockCartAddItem }) => unknown) =>
-    selector({ addItem: mockCartAddItem }),
+  useCartStore: (
+    selector: (state: { addItem: typeof mockCartAddItem; setOpen: typeof mockCartSetOpen }) => unknown,
+  ) => selector({ addItem: mockCartAddItem, setOpen: mockCartSetOpen }),
 }));
 
 function token(tokenId: string, overrides?: Record<string, unknown>) {
@@ -47,6 +49,8 @@ describe("collection token grid", () => {
     mockUseCollectionTokensQuery.mockReset();
     mockUseCollectionListingsQuery.mockReset();
     mockCartAddItem.mockReset();
+    mockCartSetOpen.mockReset();
+    mockCartAddItem.mockReturnValue({ ok: true });
     mockUseCollectionListingsQuery.mockReturnValue(successListingsResult([]));
   });
 
@@ -427,6 +431,8 @@ describe("collection token grid", () => {
         price: "120",
       }),
     );
+    expect(mockCartSetOpen).toHaveBeenCalledWith(true);
+    expect(screen.getByRole("button", { name: /added/i })).toBeVisible();
   });
 
   it("grid_density_selector_updates_grid_columns", async () => {
