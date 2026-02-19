@@ -4,6 +4,15 @@ function normalizeMetadata(token: NormalizedToken) {
   return token.metadata as Record<string, unknown> | null;
 }
 
+function asRecord(value: unknown) {
+  return value && typeof value === "object"
+    ? (value as Record<string, unknown>)
+    : null;
+}
+
+const WEI_DECIMALS = 18;
+const MIN_AUTO_SCALE_DIGITS = 15;
+
 export function tokenId(token: NormalizedToken) {
   return String(token.token_id ?? "unknown");
 }
@@ -14,7 +23,7 @@ export function formatNumberish(value: unknown) {
   }
 
   if (typeof value === "number" && Number.isFinite(value)) {
-    return Math.trunc(value).toString();
+    return Math.trunc(value).toLocaleString("fullwide", { useGrouping: false });
   }
 
   if (typeof value === "string") {
@@ -31,6 +40,44 @@ export function formatNumberish(value: unknown) {
   }
 
   return null;
+}
+
+export function formatPriceForDisplay(value: unknown) {
+  const normalized = formatNumberish(value);
+  if (!normalized) {
+    return null;
+  }
+
+  if (!/^-?\d+$/.test(normalized)) {
+    return normalized;
+  }
+
+  if (normalized.replace("-", "").length < MIN_AUTO_SCALE_DIGITS) {
+    return normalized;
+  }
+
+  try {
+    const parsed = BigInt(normalized);
+    const isNegative = parsed < BigInt(0);
+    const absolute = isNegative ? -parsed : parsed;
+    const divisor = BigInt(10) ** BigInt(WEI_DECIMALS);
+    const whole = absolute / divisor;
+    const remainder = absolute % divisor;
+    const sign = isNegative ? "-" : "";
+
+    if (remainder === BigInt(0)) {
+      return `${sign}${whole.toString()}`;
+    }
+
+    const fractional = remainder
+      .toString()
+      .padStart(WEI_DECIMALS, "0")
+      .replace(/0+$/, "");
+
+    return `${sign}${whole.toString()}.${fractional}`;
+  } catch {
+    return normalized;
+  }
 }
 
 export function displayTokenId(token: NormalizedToken) {
@@ -52,6 +99,13 @@ export function tokenImage(token: NormalizedToken) {
   const metadata = normalizeMetadata(token);
   const source = metadata?.image ?? metadata?.image_url;
   return typeof source === "string" && source.length > 0 ? source : null;
+}
+
+export function formatAddress(address: string) {
+  if (/^0x[0-9a-fA-F]{9,}$/i.test(address)) {
+    return `${address.slice(0, 6)}...${address.slice(-4)}`;
+  }
+  return address;
 }
 
 export function tokenPrice(token: NormalizedToken) {
@@ -81,13 +135,24 @@ export function listingPriceByTokenId(listings: unknown[] | undefined) {
   const prices = new Map<string, string>();
 
   for (const listing of listings ?? []) {
-    if (!listing || typeof listing !== "object") {
+    const fields = asRecord(listing);
+    if (!fields) {
       continue;
     }
 
-    const fields = listing as Record<string, unknown>;
-    const listingTokenId = formatNumberish(fields.tokenId);
-    const listingPrice = formatNumberish(fields.price);
+    const nestedOrder = asRecord(fields.order);
+    const listingTokenId =
+      formatNumberish(fields.tokenId) ??
+      formatNumberish(fields.token_id) ??
+      formatNumberish(nestedOrder?.tokenId) ??
+      formatNumberish(nestedOrder?.token_id);
+    const listingPrice =
+      formatNumberish(fields.price) ??
+      formatNumberish(fields.listing_price) ??
+      formatNumberish(fields.listingPrice) ??
+      formatNumberish(nestedOrder?.price) ??
+      formatNumberish(nestedOrder?.listing_price) ??
+      formatNumberish(nestedOrder?.listingPrice);
     if (!listingTokenId || !listingPrice) {
       continue;
     }

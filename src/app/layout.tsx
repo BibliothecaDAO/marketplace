@@ -15,8 +15,8 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Biblio Marketplace",
-  description: "Minimal marketplace scaffold with shadcn/ui, Tailwind, and the Arcade SDK.",
+  title: "Realms.market",
+  description: "The Realms ecosystem marketplace",
 };
 
 export default function RootLayout({

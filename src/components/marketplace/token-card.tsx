@@ -4,6 +4,7 @@ import Link from "next/link";
 import type { NormalizedToken } from "@cartridge/arcade/marketplace";
 import {
   displayTokenId,
+  formatPriceForDisplay,
   tokenImage,
   tokenName,
 } from "@/lib/marketplace/token-display";
@@ -34,6 +35,7 @@ export function MarketplaceTokenCard({
   cardContentRole,
 }: MarketplaceTokenCardProps) {
   const image = tokenImage(token);
+  const displayPrice = formatPriceForDisplay(price);
 
   return (
     <Link
@@ -69,7 +71,9 @@ export function MarketplaceTokenCard({
         >
           <p className="text-sm font-medium">{tokenName(token)}</p>
           <p className="text-xs text-muted-foreground">#{displayTokenId(token)}</p>
-          <p className="text-xs text-muted-foreground">Price: {price ?? "—"}</p>
+          {displayPrice ? (
+            <p className="text-xs text-primary font-medium">{displayPrice}</p>
+          ) : null}
         </CardContent>
       </Card>
     </Link>

@@ -6,9 +6,15 @@ import {
   useCollectionListingsQuery,
   useCollectionOrdersQuery,
 } from "@/lib/marketplace/hooks";
-import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
@@ -20,10 +26,15 @@ type CollectionMarketPanelProps = {
 const ORDER_STATUS_VALUES = ["None", "Placed", "Canceled", "Executed"] as const;
 const ORDER_CATEGORY_VALUES = ["None", "Buy", "Sell"] as const;
 
+// Sentinel used in the Select UI for the "Any / unfiltered" option.
+// Radix Select does not allow value="" for SelectItem.
+const ANY_VALUE = "__any__";
+
 type OrderStatusFilter = Exclude<CollectionOrdersOptions["status"], undefined>;
 type OrderCategoryFilter = Exclude<CollectionOrdersOptions["category"], undefined>;
 
 function parseOrderStatus(value: string): OrderStatusFilter | undefined {
+  if (value === ANY_VALUE || value === "") return undefined;
   const trimmed = value.trim();
   if ((ORDER_STATUS_VALUES as readonly string[]).includes(trimmed)) {
     return trimmed as OrderStatusFilter;
@@ -33,6 +44,7 @@ function parseOrderStatus(value: string): OrderStatusFilter | undefined {
 }
 
 function parseOrderCategory(value: string): OrderCategoryFilter | undefined {
+  if (value === ANY_VALUE || value === "") return undefined;
   const trimmed = value.trim();
   if ((ORDER_CATEGORY_VALUES as readonly string[]).includes(trimmed)) {
     return trimmed as OrderCategoryFilter;
@@ -54,8 +66,8 @@ export function CollectionMarketPanel({
   address,
   projectId,
 }: CollectionMarketPanelProps) {
-  const [orderStatus, setOrderStatus] = useState("");
-  const [orderCategory, setOrderCategory] = useState("");
+  const [orderStatus, setOrderStatus] = useState(ANY_VALUE);
+  const [orderCategory, setOrderCategory] = useState(ANY_VALUE);
   const [listingTokenId, setListingTokenId] = useState("");
   const [verifyOwnership, setVerifyOwnership] = useState(false);
 
@@ -91,10 +103,6 @@ export function CollectionMarketPanel({
       <CardHeader className="space-y-3">
         <div className="flex items-center justify-between gap-3">
           <CardTitle className="text-sm font-medium tracking-widest uppercase">Market Activity</CardTitle>
-          <div className="flex gap-2">
-            <Badge variant="outline">Orders: {orders.status}</Badge>
-            <Badge variant="outline">Listings: {listings.status}</Badge>
-          </div>
         </div>
       </CardHeader>
       <CardContent>
@@ -111,23 +119,32 @@ export function CollectionMarketPanel({
                   <label className="text-xs text-muted-foreground" htmlFor="order-status">
                     Order status
                   </label>
-                  <Input
-                    id="order-status"
-                    onChange={(event) => setOrderStatus(event.target.value)}
-                    placeholder="Placed | Canceled | Executed"
-                    value={orderStatus}
-                  />
+                  <Select value={orderStatus} onValueChange={setOrderStatus}>
+                    <SelectTrigger id="order-status" aria-label="Order status">
+                      <SelectValue placeholder="Any status" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value={ANY_VALUE}>Any</SelectItem>
+                      <SelectItem value="Placed">Placed</SelectItem>
+                      <SelectItem value="Canceled">Canceled</SelectItem>
+                      <SelectItem value="Executed">Executed</SelectItem>
+                    </SelectContent>
+                  </Select>
                 </div>
                 <div className="space-y-1">
                   <label className="text-xs text-muted-foreground" htmlFor="order-category">
                     Order category
                   </label>
-                  <Input
-                    id="order-category"
-                    onChange={(event) => setOrderCategory(event.target.value)}
-                    placeholder="Buy | Sell"
-                    value={orderCategory}
-                  />
+                  <Select value={orderCategory} onValueChange={setOrderCategory}>
+                    <SelectTrigger id="order-category" aria-label="Order category">
+                      <SelectValue placeholder="Any category" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value={ANY_VALUE}>Any</SelectItem>
+                      <SelectItem value="Buy">Buy</SelectItem>
+                      <SelectItem value="Sell">Sell</SelectItem>
+                    </SelectContent>
+                  </Select>
                 </div>
               </div>
 

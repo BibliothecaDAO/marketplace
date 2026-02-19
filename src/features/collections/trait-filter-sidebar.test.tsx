@@ -2,18 +2,10 @@ import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 import { TraitFilterSidebar } from "@/features/collections/trait-filter-sidebar";
-import type { ActiveFilters } from "@/lib/marketplace/traits";
+import type { ActiveFilters, TraitMetadataRow } from "@/lib/marketplace/traits";
 
-function token(name: string, background: string, eyes: string) {
-  return {
-    metadata: {
-      name,
-      attributes: [
-        { trait_type: "Background", value: background },
-        { trait_type: "Eyes", value: eyes },
-      ],
-    },
-  };
+function row(traitName: string, traitValue: string, count = 1): TraitMetadataRow {
+  return { traitName, traitValue, count };
 }
 
 describe("trait filter sidebar", () => {
@@ -26,11 +18,16 @@ describe("trait filter sidebar", () => {
       <TraitFilterSidebar
         activeFilters={activeFilters}
         onActiveFiltersChange={onActiveFiltersChange}
-        tokens={[token("Token #1", "Blue", "Big"), token("Token #2", "Red", "Small")]}
+        traitMetadata={[
+          row("Background", "Blue"),
+          row("Background", "Red"),
+          row("Eyes", "Big"),
+          row("Eyes", "Small"),
+        ]}
       />,
     );
 
-    expect(screen.getByText("Traits")).toBeVisible();
+    expect(screen.getByText("Filters")).toBeVisible();
     expect(screen.getByText("Background")).toBeVisible();
     expect(screen.getByRole("button", { name: "Blue (1)" })).toBeVisible();
 
@@ -45,30 +42,35 @@ describe("trait filter sidebar", () => {
       <TraitFilterSidebar
         activeFilters={{}}
         onActiveFiltersChange={vi.fn()}
-        tokens={[]}
+        traitMetadata={[]}
       />,
     );
 
-    expect(screen.getByText(/No trait data yet/i)).toBeVisible();
+    expect(screen.getByText(/No trait data/i)).toBeVisible();
   });
 
-  it("renders_trait_values_from_token_attributes", () => {
-    const tokens = [
-      {
-        metadata: {
-          attributes: [
-            { trait_type: "Background", value: "Blue" },
-            { trait_type: "Eyes", value: "Red" },
-          ],
-        },
-      },
-    ];
-
+  it("loading_state_shows_loading_message", () => {
     render(
       <TraitFilterSidebar
         activeFilters={{}}
         onActiveFiltersChange={vi.fn()}
-        tokens={tokens}
+        traitMetadata={[]}
+        isLoading
+      />,
+    );
+
+    expect(screen.getByText(/loading/i)).toBeVisible();
+  });
+
+  it("renders_trait_values_from_metadata_rows", () => {
+    render(
+      <TraitFilterSidebar
+        activeFilters={{}}
+        onActiveFiltersChange={vi.fn()}
+        traitMetadata={[
+          row("Background", "Blue"),
+          row("Eyes", "Red"),
+        ]}
       />,
     );
 
@@ -86,7 +88,7 @@ describe("trait filter sidebar", () => {
       <TraitFilterSidebar
         activeFilters={{}}
         onActiveFiltersChange={onActiveFiltersChange}
-        tokens={[token("Token #1", "Blue", "Big")]}
+        traitMetadata={[row("Background", "Blue")]}
       />,
     );
 
@@ -106,14 +108,13 @@ describe("trait filter sidebar", () => {
       <TraitFilterSidebar
         activeFilters={activeFilters}
         onActiveFiltersChange={onActiveFiltersChange}
-        tokens={[token("Token #1", "Blue", "Big")]}
+        traitMetadata={[row("Background", "Blue")]}
       />,
     );
 
     await user.click(screen.getByRole("button", { name: "Blue (1)" }));
 
     const nextFilters = onActiveFiltersChange.mock.calls[0][0] as ActiveFilters;
-    // After toggling off the only value, the key should be removed entirely
     expect(nextFilters.Background).toBeUndefined();
   });
 
@@ -126,7 +127,7 @@ describe("trait filter sidebar", () => {
       <TraitFilterSidebar
         activeFilters={activeFilters}
         onActiveFiltersChange={onActiveFiltersChange}
-        tokens={[token("Token #1", "Blue", "Big")]}
+        traitMetadata={[row("Background", "Blue")]}
       />,
     );
 
@@ -143,10 +144,22 @@ describe("trait filter sidebar", () => {
       <TraitFilterSidebar
         activeFilters={{}}
         onActiveFiltersChange={vi.fn()}
-        tokens={[token("Token #1", "Blue", "Big")]}
+        traitMetadata={[row("Background", "Blue")]}
       />,
     );
 
     expect(screen.queryByRole("button", { name: /clear/i })).toBeNull();
+  });
+
+  it("shows_count_from_metadata_row", () => {
+    render(
+      <TraitFilterSidebar
+        activeFilters={{}}
+        onActiveFiltersChange={vi.fn()}
+        traitMetadata={[row("Background", "Blue", 42)]}
+      />,
+    );
+
+    expect(screen.getByRole("button", { name: "Blue (42)" })).toBeVisible();
   });
 });

@@ -8,6 +8,7 @@ import {
 } from "@/lib/marketplace/hooks";
 import {
   displayTokenId,
+  listingPriceByTokenId,
   tokenId,
   tokenPrice,
 } from "@/lib/marketplace/token-display";
@@ -15,10 +16,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { MarketplaceTokenCard } from "@/components/marketplace/token-card";
 import { Skeleton } from "@/components/ui/skeleton";
-import {
-  type ActiveFilters,
-  filterTokensByActiveFilters,
-} from "@/lib/marketplace/traits";
+import type { ActiveFilters } from "@/lib/marketplace/traits";
 import { cn } from "@/lib/utils";
 import {
   cartItemFromTokenListing,
@@ -73,6 +71,23 @@ export function CollectionTokenGrid({
 }: CollectionTokenGridProps) {
   const addItem = useCartStore((state) => state.addItem);
   const tokenIdsKey = useMemo(() => tokenIds?.join(",") ?? "", [tokenIds]);
+  const activeFiltersKey = useMemo(
+    () =>
+      activeFilters
+        ? Object.entries(activeFilters)
+            .sort(([a], [b]) => a.localeCompare(b))
+            .map(([k, v]) => `${k}:${Array.from(v).sort().join(",")}`)
+            .join("|")
+        : "",
+    [activeFilters],
+  );
+  const attributeFilters = useMemo(
+    () =>
+      activeFilters && Object.keys(activeFilters).length > 0
+        ? Object.fromEntries(Object.entries(activeFilters))
+        : undefined,
+    [activeFilters],
+  );
   const [cursor, setCursor] = useState<string | null | undefined>(undefined);
   const [tokens, setTokens] = useState<NormalizedToken[]>([]);
   const [gridDensity, setGridDensity] = useState<GridDensity>("standard");
@@ -84,6 +99,7 @@ export function CollectionTokenGrid({
     tokenIds,
     cursor,
     fetchImages: true,
+    attributeFilters,
   });
   const listingQuery = useCollectionListingsQuery({
     collection: address,
@@ -94,7 +110,9 @@ export function CollectionTokenGrid({
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect
     setTokens([]);
-  }, [address, projectId, limit, tokenIdsKey]);
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setCursor(undefined);
+  }, [address, projectId, limit, tokenIdsKey, activeFiltersKey]);
 
   useEffect(() => {
     if (!tokenQuery.isSuccess) {
@@ -118,14 +136,9 @@ export function CollectionTokenGrid({
 
   const nextCursor = tokenQuery.data?.page?.nextCursor ?? null;
   const canLoadMore = Boolean(nextCursor);
-  const visibleTokens = useMemo(
-    () =>
-      activeFilters && Object.keys(activeFilters).length > 0
-        ? filterTokensByActiveFilters(tokens, activeFilters)
-        : tokens,
-    [activeFilters, tokens],
-  );
+  const visibleTokens = tokens;
   const listingPrices = cheapestListingByTokenId(listingQuery.data);
+  const listingPriceMap = listingPriceByTokenId(listingQuery.data);
 
   return (
     <section className="space-y-4">
@@ -174,37 +187,50 @@ export function CollectionTokenGrid({
           className={cn("grid gap-3", GRID_DENSITY_CLASSES[gridDensity])}
           data-testid="collection-token-grid-cards"
         >
-          {visibleTokens.map((token) => (
-            <div key={tokenId(token)} className="space-y-2">
-              <MarketplaceTokenCard
-                cardContentAriaLabel={`token-${displayTokenId(token)}`}
-                cardContentRole="article"
-                href={`/collections/${address}/${tokenId(token)}`}
-                linkAriaLabel={`token-${displayTokenId(token)}`}
-                price={listingPrices.get(displayTokenId(token))?.price ?? tokenPrice(token)}
-                token={token}
-              />
-              <Button
-                className="w-full"
-                disabled={!listingPrices.get(displayTokenId(token))}
-                onClick={() => {
-                  const listing = listingPrices.get(displayTokenId(token));
-                  if (!listing) {
-                    return;
-                  }
+          {visibleTokens.map((token) => {
+            const tokenKey = displayTokenId(token);
+            const cheapestListing = listingPrices.get(tokenKey);
+            const price =
+              cheapestListing?.price ??
+              listingPriceMap.get(tokenKey) ??
+              tokenPrice(token);
 
-                  addItem(
-                    cartItemFromTokenListing(token, address, listing, projectId),
-                  );
-                }}
-                size="sm"
-                type="button"
-                variant="outline"
-              >
-                Add to cart
-              </Button>
-            </div>
-          ))}
+            return (
+              <div key={tokenId(token)} className="space-y-2">
+                <MarketplaceTokenCard
+                  cardContentAriaLabel={`token-${tokenKey}`}
+                  cardContentRole="article"
+                  href={`/collections/${address}/${tokenId(token)}`}
+                  linkAriaLabel={`token-${tokenKey}`}
+                  price={price}
+                  token={token}
+                />
+                <Button
+                  className="w-full"
+                  disabled={!cheapestListing}
+                  onClick={() => {
+                    if (!cheapestListing) {
+                      return;
+                    }
+
+                    addItem(
+                      cartItemFromTokenListing(
+                        token,
+                        address,
+                        cheapestListing,
+                        projectId,
+                      ),
+                    );
+                  }}
+                  size="sm"
+                  type="button"
+                  variant="outline"
+                >
+                  Add to cart
+                </Button>
+              </div>
+            );
+          })}
         </div>
       ) : null}
 

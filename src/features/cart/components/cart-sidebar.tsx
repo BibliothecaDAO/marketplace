@@ -2,6 +2,7 @@
 
 import { useMemo } from "react";
 import { Button } from "@/components/ui/button";
+import { formatAddress, formatPriceForDisplay } from "@/lib/marketplace/token-display";
 import {
   Sheet,
   SheetContent,
@@ -72,16 +73,30 @@ export function CartSidebar() {
                   key={item.orderId}
                   className="rounded-sm border border-border/70 p-3"
                 >
-                  <div className="flex items-start justify-between gap-2">
-                    <div>
-                      <p className="text-sm font-medium">
+                  <div className="flex items-start gap-3">
+                    <div className="h-14 w-14 shrink-0 overflow-hidden rounded-sm bg-muted">
+                      {item.tokenImage ? (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img
+                          alt={item.tokenName ?? `Token #${item.tokenId}`}
+                          className="h-full w-full object-cover"
+                          src={item.tokenImage}
+                        />
+                      ) : (
+                        <span className="flex h-full w-full items-center justify-center text-[10px] text-muted-foreground">
+                          No img
+                        </span>
+                      )}
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <p className="truncate text-sm font-medium">
                         {item.tokenName ?? `Token #${item.tokenId}`}
                       </p>
                       <p className="text-xs text-muted-foreground">
-                        Order #{item.orderId}
+                        #{item.tokenId}
                       </p>
-                      <p className="text-xs text-muted-foreground">
-                        {item.price} {item.currency}
+                      <p className="text-xs text-primary font-medium">
+                        {formatPriceForDisplay(item.price) ?? item.price} {formatAddress(item.currency)}
                       </p>
                     </div>
                     <Button
@@ -89,6 +104,7 @@ export function CartSidebar() {
                       size="sm"
                       type="button"
                       variant="ghost"
+                      className="shrink-0"
                     >
                       Remove
                     </Button>
@@ -108,15 +124,15 @@ export function CartSidebar() {
             <div className="w-full space-y-1 rounded-sm border border-border/70 p-3 text-xs">
               <div className="flex items-center justify-between">
                 <span className="text-muted-foreground">Subtotal</span>
-                <span>{subtotal.toString()}</span>
+                <span>{formatPriceForDisplay(subtotal.toString()) ?? subtotal.toString()}</span>
               </div>
               <div className="flex items-center justify-between">
                 <span className="text-muted-foreground">Marketplace Fee</span>
-                <span>{fee.toString()}</span>
+                <span>{formatPriceForDisplay(fee.toString()) ?? fee.toString()}</span>
               </div>
               <div className="flex items-center justify-between font-medium">
                 <span>Total</span>
-                <span>{total.toString()}</span>
+                <span>{formatPriceForDisplay(total.toString()) ?? total.toString()}</span>
               </div>
             </div>
             <div className="flex w-full gap-2">

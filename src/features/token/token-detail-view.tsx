@@ -1,12 +1,14 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { ArcadeProvider } from "@cartridge/arcade";
+import Link from "next/link";
 import { useAccount } from "@starknet-react/core";
 import type { NormalizedToken } from "@cartridge/arcade/marketplace";
 import {
   useCollectionListingsQuery,
   useTokenDetailQuery,
+  useTokenHolderQuery,
+  useTokenOwnershipQuery,
 } from "@/lib/marketplace/hooks";
 import { getMarketplaceRuntimeConfig } from "@/lib/marketplace/config";
 import { Button } from "@/components/ui/button";
@@ -14,12 +16,26 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
-import { displayTokenId } from "@/lib/marketplace/token-display";
+import { Switch } from "@/components/ui/switch";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import {
+  displayTokenId,
+  formatNumberish,
+  formatPriceForDisplay,
+} from "@/lib/marketplace/token-display";
+import type { CheapestListing } from "@/features/cart/listing-utils";
 import {
   cartItemFromTokenListing,
   cheapestListingByTokenId,
 } from "@/features/cart/listing-utils";
 import { useCartStore } from "@/features/cart/store/cart-store";
+
 
 type TokenDetailViewProps = {
   address: string;
@@ -69,27 +85,32 @@ function getTokenAttributes(token: NormalizedToken): TokenAttribute[] {
   return Array.isArray(meta?.attributes) ? meta.attributes : [];
 }
 
+function truncateAddress(addr: string) {
+  return addr.length > 14 ? addr.slice(0, 6) + "..." + addr.slice(-4) : addr;
+}
+
 export function TokenDetailView({
   address,
   tokenId,
   projectId,
 }: TokenDetailViewProps) {
+  // Arcade Marketplace contract address (same on SN_MAIN and SN_SEPOLIA per SDK manifest)
+  const MARKETPLACE_CONTRACT = "0x6bbf16b6c67b1bef27a187b499b2f3a14af31646c2c90d64f11b9087c3f527c";
+  // STRK token address on Starknet mainnet / testnet
+  const STRK_ADDRESS = "0x04718f5a0fc34cc1af16a1cdee98ffb20c31f5cd61d6ab07201858f4287c938d";
+
+  const normalizedTokenId = formatNumberish(tokenId) ?? tokenId;
   const addItem = useCartStore((state) => state.addItem);
   const { account, address: walletAddress, isConnected } = useAccount();
-  const {
-    sdkConfig: { chainId },
-  } = getMarketplaceRuntimeConfig();
-  const marketplaceProvider = useMemo(
-    () => new ArcadeProvider(chainId),
-    [chainId],
-  );
+  const { collections } = getMarketplaceRuntimeConfig();
+  const collectionName = collections.find((c) => c.address === address)?.name ?? address;
   const [verifyOwnership, setVerifyOwnership] = useState(false);
-  const [priceInput, setPriceInput] = useState("1000000000000000000");
+  // Human-readable price in STRK (1 STRK = 1e18 wei)
+  const [priceInput, setPriceInput] = useState("1");
   const [quantityInput, setQuantityInput] = useState("1");
-  const [currencyInput, setCurrencyInput] = useState("0x0");
-  const [expirationInput, setExpirationInput] = useState(() =>
-    String(Math.floor(Date.now() / 1000) + 60 * 60 * 24),
-  );
+  const [currencyInput, setCurrencyInput] = useState(STRK_ADDRESS);
+  // Expiration as a preset duration in seconds (default: 24 hours)
+  const [expirationPreset, setExpirationPreset] = useState("86400");
   const [txStatus, setTxStatus] = useState<{
     tone: "idle" | "success" | "error";
     message: string;
@@ -99,16 +120,60 @@ export function TokenDetailView({
   >(null);
   const detailQuery = useTokenDetailQuery({
     collection: address,
-    tokenId,
+    tokenId: normalizedTokenId,
     projectId,
     fetchImages: true,
   });
   const listingQuery = useCollectionListingsQuery({
     collection: address,
-    tokenId,
+    tokenId: normalizedTokenId,
     projectId,
     verifyOwnership,
   });
+
+  const ownershipQuery = useTokenOwnershipQuery({
+    collection: address,
+    tokenId: normalizedTokenId,
+    accountAddress: walletAddress,
+  });
+
+  const holderQuery = useTokenHolderQuery({
+    collection: address,
+    tokenId: normalizedTokenId,
+  });
+
+  const holderAddress = useMemo(() => {
+    const balances = (holderQuery.data as { page?: { balances?: Array<{ account_address: string; balance: string }> } } | null)?.page?.balances ?? [];
+    const holder = balances.find((b) => {
+      try { return BigInt(b.balance) > BigInt(0); } catch { return false; }
+    });
+    return holder?.account_address ?? null;
+  }, [holderQuery.data]);
+
+  const isOwner = useMemo(() => {
+    if (!walletAddress || !isConnected) return false;
+    const balances = (ownershipQuery.data as { page?: { balances?: Array<{ balance: string }> } } | null)?.page?.balances ?? [];
+    return balances.some((b) => {
+      try {
+        return BigInt(b.balance) > BigInt(0);
+      } catch {
+        return false;
+      }
+    });
+  }, [ownershipQuery.data, walletAddress, isConnected]);
+
+  // Use holderAddress for ownership detection when available (more reliable than token balance API).
+  // Compare via BigInt to handle leading-zero padding differences in Starknet addresses.
+  // Falls back to `isOwner` from ownershipQuery when holderAddress is not yet known.
+  const isOwnerByHolder = useMemo(() => {
+    if (holderAddress === null || walletAddress === undefined) return false;
+    try {
+      return BigInt(holderAddress) === BigInt(walletAddress);
+    } catch {
+      return holderAddress.toLowerCase() === walletAddress.toLowerCase();
+    }
+  }, [holderAddress, walletAddress]);
+  const effectiveIsOwner = holderAddress !== null ? isOwnerByHolder : isOwner;
 
   const token = detailQuery.data?.token ?? null;
   const listings = useMemo(
@@ -136,18 +201,28 @@ export function TokenDetailView({
     );
   }, [listingRows, walletAddress]);
 
+  // If existing listings use a specific currency, adopt it (otherwise keep STRK default).
   useEffect(() => {
-    if (currencyInput !== "0x0") return;
-
     const listedCurrency = listingRows.find(
       (listing) =>
-        typeof listing.currency === "string" && listing.currency.trim().length > 0,
+        typeof listing.currency === "string" &&
+        listing.currency.trim().length > 0 &&
+        listing.currency !== "0x0",
     )?.currency;
-
     if (listedCurrency) {
       setCurrencyInput(listedCurrency);
     }
-  }, [currencyInput, listingRows]);
+  }, [listingRows]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Convert human-readable STRK price to wei string
+  function priceToWei(humanPrice: string): string {
+    return String(BigInt(Math.round(parseFloat(humanPrice) * 1e18)));
+  }
+
+  // Compute expiration unix timestamp from preset duration
+  function computeExpiration(): string {
+    return String(Math.floor(Date.now() / 1000) + parseInt(expirationPreset));
+  }
 
   async function runTransaction(
     action: "list" | "offer" | "cancel",
@@ -217,6 +292,23 @@ export function TokenDetailView({
 
   return (
     <div className="space-y-8">
+      {/* Breadcrumbs */}
+      <nav aria-label="breadcrumb">
+        <ol className="flex items-center gap-1.5 text-xs text-muted-foreground">
+          <li>
+            <Link href="/" className="hover:text-foreground transition-colors">Home</Link>
+          </li>
+          <li aria-hidden>/</li>
+          <li>
+            <Link href={`/collections/${address}`} className="hover:text-foreground transition-colors">
+              {collectionName}
+            </Link>
+          </li>
+          <li aria-hidden>/</li>
+          <li className="text-foreground truncate max-w-[200px]">{name}</li>
+        </ol>
+      </nav>
+
       <div className="grid gap-6 lg:grid-cols-2">
         {/* Token image */}
         <div className="flex aspect-square items-center justify-center bg-muted">
@@ -237,25 +329,42 @@ export function TokenDetailView({
           <div>
             <h1 className="text-2xl font-bold tracking-wide">{name}</h1>
             <p className="text-sm text-primary font-mono">
-              #{String(token.token_id ?? "unknown")}
+              #{displayTokenId(token)}
             </p>
+            {holderAddress ? (
+              <Link
+                href={`/profile/${holderAddress}`}
+                aria-label="owner"
+                className="mt-1 inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors"
+              >
+                <span className="uppercase tracking-wide">Owner</span>
+                <span className="font-mono">{truncateAddress(holderAddress)}</span>
+              </Link>
+            ) : null}
           </div>
 
           {/* Attributes */}
           {attributes.length > 0 ? (
             <div className="space-y-2">
               <h2 className="text-sm font-medium tracking-widest uppercase text-muted-foreground">Attributes</h2>
-              <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
-                {attributes.map((attr) => (
-                  <Card key={`${attr.trait_type}-${attr.value}`} className="border-border/70">
-                    <CardContent className="p-3">
-                      <p className="text-xs text-muted-foreground uppercase tracking-wide">
+              <div className="grid grid-cols-2 gap-1.5 sm:grid-cols-3">
+                {attributes.map((attr) => {
+                  const params = new URLSearchParams();
+                  params.append("trait", `${attr.trait_type}:${attr.value}`);
+                  return (
+                    <Link
+                      key={`${attr.trait_type}-${attr.value}`}
+                      href={`/collections/${address}?${params.toString()}`}
+                      aria-label={`${attr.trait_type} ${attr.value}`}
+                      className="rounded border border-border/60 bg-muted/30 px-2 py-1.5 hover:border-primary/40 hover:bg-muted/60 transition-colors"
+                    >
+                      <p className="text-[10px] text-muted-foreground uppercase tracking-wide leading-none mb-0.5">
                         {attr.trait_type}
                       </p>
-                      <p className="text-sm font-medium text-primary">{attr.value}</p>
-                    </CardContent>
-                  </Card>
-                ))}
+                      <p className="text-xs font-medium text-primary truncate">{attr.value}</p>
+                    </Link>
+                  );
+                })}
               </div>
             </div>
           ) : null}
@@ -283,14 +392,15 @@ export function TokenDetailView({
             >
               Add cheapest to cart
             </Button>
-            <Button
-              onClick={() => setVerifyOwnership((current) => !current)}
-              size="sm"
-              type="button"
-              variant="outline"
-            >
-              {verifyOwnership ? "Ownership verified" : "Ownership unverified"}
-            </Button>
+            <div className="flex items-center gap-2">
+              <Switch
+                aria-label="Verify ownership"
+                checked={verifyOwnership}
+                id="verify-ownership-detail"
+                onCheckedChange={setVerifyOwnership}
+              />
+              <label htmlFor="verify-ownership-detail">Verify ownership</label>
+            </div>
             <Button
               disabled={listingQuery.isFetching}
               onClick={() => {
@@ -305,125 +415,176 @@ export function TokenDetailView({
           </div>
         </div>
 
-        <Card className="border-dashed">
-          <CardContent className="space-y-3 p-3">
-            <div className="grid gap-2 sm:grid-cols-2">
-              <Input
-                aria-label="Listing price"
-                onChange={(event) => setPriceInput(event.target.value)}
-                placeholder="Price"
-                value={priceInput}
-              />
-              <Input
-                aria-label="Quantity"
-                onChange={(event) => setQuantityInput(event.target.value)}
-                placeholder="Quantity"
-                value={quantityInput}
-              />
-              <Input
-                aria-label="Currency"
-                onChange={(event) => setCurrencyInput(event.target.value)}
-                placeholder="Currency"
-                value={currencyInput}
-              />
-              <Input
-                aria-label="Expiration"
-                onChange={(event) => setExpirationInput(event.target.value)}
-                placeholder="Expiration"
-                value={expirationInput}
-              />
-            </div>
+        {/* Ownership indicator */}
+        {isConnected && (ownershipQuery as { isFetching?: boolean }).isFetching ? (
+          <p className="text-xs text-muted-foreground">Checking ownership...</p>
+        ) : null}
+        {isConnected && !(ownershipQuery as { isFetching?: boolean }).isFetching && isOwner ? (
+          <Badge variant="outline" className="self-start">You own this token</Badge>
+        ) : null}
 
-            <div className="flex flex-wrap gap-2">
-              <Button
-                disabled={!isConnected || pendingAction !== null}
-                onClick={() => {
-                  void runTransaction("list", () =>
-                    marketplaceProvider.marketplace.list(
-                      account!,
-                      address,
-                      tokenId,
-                      quantityInput,
-                      priceInput,
-                      currencyInput,
-                      expirationInput,
-                      true,
-                    ),
-                  );
-                }}
-                size="sm"
-                type="button"
-              >
-                List token
-              </Button>
-              <Button
-                disabled={!isConnected || pendingAction !== null}
-                onClick={() => {
-                  void runTransaction("offer", () =>
-                    marketplaceProvider.marketplace.offer(
-                      account!,
-                      address,
-                      tokenId,
-                      quantityInput,
-                      priceInput,
-                      currencyInput,
-                      expirationInput,
-                    ),
-                  );
-                }}
-                size="sm"
-                type="button"
-                variant="secondary"
-              >
-                Make offer
-              </Button>
-              <Button
-                disabled={!isConnected || pendingAction !== null || !ownListing}
-                onClick={() => {
-                  if (!ownListing) {
-                    setTxStatus({
-                      tone: "error",
-                      message: "No owned listing available to cancel.",
+        {/* Sell form — shown to confirmed owners (or when ownership still unknown) */}
+        {isConnected && effectiveIsOwner ? (
+          <Card className="border-dashed">
+            <CardContent className="space-y-3 p-3">
+              <div className="grid gap-2 sm:grid-cols-2">
+                <div className="flex items-center gap-1">
+                  <Input
+                    aria-label="Price (STRK)"
+                    min="0"
+                    onChange={(event) => setPriceInput(event.target.value)}
+                    placeholder="Price"
+                    step="any"
+                    type="number"
+                    value={priceInput}
+                  />
+                  <span className="text-sm text-muted-foreground shrink-0">STRK</span>
+                </div>
+                <Input
+                  aria-label="Quantity"
+                  onChange={(event) => setQuantityInput(event.target.value)}
+                  placeholder="Quantity"
+                  value={quantityInput}
+                />
+                <div className="flex flex-col gap-1">
+                  <label className="text-xs text-muted-foreground" htmlFor="expiration-preset">Expires in</label>
+                  <Select onValueChange={setExpirationPreset} value={expirationPreset}>
+                    <SelectTrigger aria-label="Expires in" id="expiration-preset">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="3600">1 hour</SelectItem>
+                      <SelectItem value="86400">24 hours</SelectItem>
+                      <SelectItem value="604800">7 days</SelectItem>
+                      <SelectItem value="2592000">30 days</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+              <div className="flex flex-wrap gap-2">
+                <Button
+                  disabled={pendingAction !== null}
+                  onClick={() => {
+                    void runTransaction("list", () => {
+                      const big = BigInt(normalizedTokenId);
+                      const low = (big & BigInt("0xffffffffffffffffffffffffffffffff")).toString();
+                      const high = (big >> BigInt(128)).toString();
+                      return account!.execute([{
+                        contractAddress: MARKETPLACE_CONTRACT,
+                        entrypoint: "list",
+                        calldata: [address, low, high, quantityInput, priceToWei(priceInput), currencyInput, computeExpiration(), "1"],
+                      }]);
                     });
-                    return;
-                  }
+                  }}
+                  size="sm"
+                  type="button"
+                >
+                  List token
+                </Button>
+                <Button
+                  disabled={pendingAction !== null || !ownListing}
+                  onClick={() => {
+                    if (!ownListing) return;
+                    void runTransaction("cancel", () => {
+                      const big = BigInt(normalizedTokenId);
+                      const low = (big & BigInt("0xffffffffffffffffffffffffffffffff")).toString();
+                      const high = (big >> BigInt(128)).toString();
+                      return account!.execute([{
+                        contractAddress: MARKETPLACE_CONTRACT,
+                        entrypoint: "cancel",
+                        calldata: [String(ownListing.id), address, low, high],
+                      }]);
+                    });
+                  }}
+                  size="sm"
+                  type="button"
+                  variant="destructive"
+                >
+                  Cancel mine
+                </Button>
+              </div>
+              {txStatus.message ? (
+                <p className={txStatus.tone === "error" ? "text-xs text-destructive" : "text-xs text-primary"}>
+                  {txStatus.message}
+                </p>
+              ) : null}
+            </CardContent>
+          </Card>
+        ) : null}
 
-                  void runTransaction("cancel", () =>
-                    marketplaceProvider.marketplace.cancel(
-                      account!,
-                      ownListing.id,
-                      address,
-                      tokenId,
-                    ),
-                  );
-                }}
-                size="sm"
-                type="button"
-                variant="destructive"
-              >
-                Cancel mine
-              </Button>
-            </div>
+        {/* Offer form — shown to confirmed non-owners */}
+        {isConnected && !effectiveIsOwner && !(ownershipQuery as { isLoading?: boolean }).isLoading ? (
+          <Card className="border-dashed">
+            <CardContent className="space-y-3 p-3">
+              <div className="grid gap-2 sm:grid-cols-2">
+                <div className="flex items-center gap-1">
+                  <Input
+                    aria-label="Price (STRK)"
+                    min="0"
+                    onChange={(event) => setPriceInput(event.target.value)}
+                    placeholder="Price"
+                    step="any"
+                    type="number"
+                    value={priceInput}
+                  />
+                  <span className="text-sm text-muted-foreground shrink-0">STRK</span>
+                </div>
+                <Input
+                  aria-label="Quantity"
+                  onChange={(event) => setQuantityInput(event.target.value)}
+                  placeholder="Quantity"
+                  value={quantityInput}
+                />
+                <div className="flex flex-col gap-1">
+                  <label className="text-xs text-muted-foreground" htmlFor="offer-expiration-preset">Expires in</label>
+                  <Select onValueChange={setExpirationPreset} value={expirationPreset}>
+                    <SelectTrigger aria-label="Expires in" id="offer-expiration-preset">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="3600">1 hour</SelectItem>
+                      <SelectItem value="86400">24 hours</SelectItem>
+                      <SelectItem value="604800">7 days</SelectItem>
+                      <SelectItem value="2592000">30 days</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+              <div className="flex flex-wrap gap-2">
+                <Button
+                  disabled={pendingAction !== null}
+                  onClick={() => {
+                    void runTransaction("offer", () => {
+                      const big = BigInt(normalizedTokenId);
+                      const low = (big & BigInt("0xffffffffffffffffffffffffffffffff")).toString();
+                      const high = (big >> BigInt(128)).toString();
+                      return account!.execute([{
+                        contractAddress: MARKETPLACE_CONTRACT,
+                        entrypoint: "offer",
+                        calldata: [address, low, high, quantityInput, priceToWei(priceInput), currencyInput, computeExpiration()],
+                      }]);
+                    });
+                  }}
+                  size="sm"
+                  type="button"
+                  variant="secondary"
+                >
+                  Make offer
+                </Button>
+              </div>
+              {txStatus.message ? (
+                <p className={txStatus.tone === "error" ? "text-xs text-destructive" : "text-xs text-primary"}>
+                  {txStatus.message}
+                </p>
+              ) : null}
+            </CardContent>
+          </Card>
+        ) : null}
 
-            {!isConnected ? (
-              <p className="text-xs text-muted-foreground">
-                Connect wallet to transact.
-              </p>
-            ) : null}
-
-            {txStatus.message ? (
-              <p
-                className={
-                  txStatus.tone === "error"
-                    ? "text-xs text-destructive"
-                    : "text-xs text-primary"
-                }
-              >
-                {txStatus.message}
-              </p>
-            ) : null}
-          </CardContent>
-        </Card>
+        {/* Not connected prompt */}
+        {!isConnected ? (
+          <p className="text-xs text-muted-foreground">Connect wallet to transact.</p>
+        ) : null}
 
         {listingQuery.isError ? (
           <p className="text-sm text-destructive">Listings failed to load.</p>
@@ -437,23 +598,62 @@ export function TokenDetailView({
           <p className="text-sm text-muted-foreground">No listings</p>
         ) : (
           <div className="space-y-2">
-            {listings.map((listing: { id: number; price: number; owner: string; expiration?: number }) => (
-              <Card key={listing.id}>
-                <CardContent className="flex items-center justify-between p-3">
-                  <div>
-                    <p className="text-sm font-medium text-primary font-mono">
-                      {listing.price}
-                    </p>
-                    <p className="text-xs text-muted-foreground">
-                      {listing.owner}
-                    </p>
-                  </div>
-                  {listing.expiration ? (
-                    <Badge variant="secondary">{listing.expiration}</Badge>
-                  ) : null}
-                </CardContent>
-              </Card>
-            ))}
+            {listings.map((listing: { id: number; price: number | string; owner: string; expiration?: number; currency?: string; quantity?: number | string; tokenId?: number | string }) => {
+              const isCheapest = cheapestListing?.orderId === String(listing.id);
+              const hasFullCartData =
+                listing.id !== undefined &&
+                listing.price !== undefined &&
+                listing.currency !== undefined &&
+                listing.quantity !== undefined;
+              return (
+                <Card key={listing.id}>
+                  <CardContent className="flex items-center justify-between p-3">
+                    <div>
+                      <div className="flex items-center gap-2">
+                        <p className="text-sm font-medium text-primary font-mono">
+                          {formatPriceForDisplay(listing.price) ?? String(listing.price)}
+                        </p>
+                        {isCheapest ? (
+                          <Badge variant="secondary">Best Price</Badge>
+                        ) : null}
+                      </div>
+                      <Link
+                        href={`/profile/${listing.owner}`}
+                        className="text-xs text-muted-foreground hover:underline"
+                      >
+                        {truncateAddress(listing.owner)}
+                      </Link>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      {listing.expiration ? (
+                        <Badge variant="secondary">
+                          {new Date(listing.expiration * 1000).toLocaleDateString()}
+                        </Badge>
+                      ) : null}
+                      <Button
+                        disabled={!hasFullCartData}
+                        onClick={() => {
+                          if (!token || !hasFullCartData) return;
+                          addItem(
+                            cartItemFromTokenListing(
+                              token,
+                              address,
+                              listing as unknown as CheapestListing,
+                              projectId,
+                            ),
+                          );
+                        }}
+                        size="sm"
+                        type="button"
+                        variant="outline"
+                      >
+                        Add to cart
+                      </Button>
+                    </div>
+                  </CardContent>
+                </Card>
+              );
+            })}
           </div>
         )}
       </div>

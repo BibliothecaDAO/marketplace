@@ -51,8 +51,13 @@ describe("collection market panel", () => {
     const user = userEvent.setup();
     render(<CollectionMarketPanel address="0xabc" projectId="project-a" />);
 
-    await user.type(screen.getByLabelText(/order status/i), "Placed");
-    await user.type(screen.getByLabelText(/order category/i), "Buy");
+    // Open order status select and pick "Placed"
+    await user.click(screen.getByRole("combobox", { name: /order status/i }));
+    await user.click(await screen.findByRole("option", { name: "Placed" }));
+
+    // Open order category select and pick "Buy"
+    await user.click(screen.getByRole("combobox", { name: /order category/i }));
+    await user.click(await screen.findByRole("option", { name: "Buy" }));
 
     await waitFor(() => {
       const latest = mockUseCollectionOrdersQuery.mock.calls.at(-1)?.[0];
@@ -123,5 +128,20 @@ describe("collection market panel", () => {
     const listingsPanel = screen.getByTestId("listings-panel");
     expect(within(listingsPanel).queryByText(/orders failed to load/i)).toBeNull();
     expect(within(listingsPanel).getByText(/#10/)).toBeVisible();
+  });
+
+  it("debug_status_badges_not_shown", () => {
+    render(<CollectionMarketPanel address="0xabc" />);
+    expect(screen.queryByText(/orders:/i)).toBeNull();
+    expect(screen.queryByText(/listings:/i)).toBeNull();
+  });
+
+  it("order_status_select_has_options", async () => {
+    const user = userEvent.setup();
+    render(<CollectionMarketPanel address="0xabc" />);
+    await user.click(screen.getByRole("combobox", { name: /order status/i }));
+    expect(await screen.findByRole("option", { name: /placed/i })).toBeVisible();
+    expect(screen.getByRole("option", { name: /canceled/i })).toBeVisible();
+    expect(screen.getByRole("option", { name: /executed/i })).toBeVisible();
   });
 });

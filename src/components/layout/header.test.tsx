@@ -51,7 +51,7 @@ describe("Header", () => {
   it("renders_app_name", () => {
     render(<Header />);
 
-    expect(screen.getByText("Biblio")).toBeVisible();
+    expect(screen.getByText("Realms.market")).toBeVisible();
   });
 
   it("header_is_a_nav_landmark", () => {
@@ -64,9 +64,38 @@ describe("Header", () => {
   it("links_logo_to_home", () => {
     render(<Header />);
 
-    const homeLink = screen.getByRole("link", { name: /biblio/i });
+    const homeLink = screen.getByRole("link", { name: /realms\.market home/i });
     expect(homeLink).toBeVisible();
     expect(homeLink).toHaveAttribute("href", "/");
+  });
+
+  it("renders_nav_links", () => {
+    render(<Header />);
+
+    const stakingLinks = screen.getAllByRole("link", { name: /staking/i });
+    expect(stakingLinks.length).toBeGreaterThan(0);
+    expect(stakingLinks[0]).toHaveAttribute("href", "https://account.realms.world");
+
+    const ecosystemLinks = screen.getAllByRole("link", { name: /ecosystem/i });
+    expect(ecosystemLinks.length).toBeGreaterThan(0);
+    expect(ecosystemLinks[0]).toHaveAttribute("href", "https://realms.world");
+
+    const eternumLinks = screen.getAllByRole("link", { name: /eternum/i });
+    expect(eternumLinks.length).toBeGreaterThan(0);
+    expect(eternumLinks[0]).toHaveAttribute("href", "https://blitz.realms.world");
+  });
+
+  it("renders_social_icon_links", () => {
+    render(<Header />);
+
+    const twitterLinks = screen.getAllByRole("link", { name: /twitter/i });
+    expect(twitterLinks.length).toBeGreaterThan(0);
+
+    const discordLinks = screen.getAllByRole("link", { name: /discord/i });
+    expect(discordLinks.length).toBeGreaterThan(0);
+
+    const githubLinks = screen.getAllByRole("link", { name: /github/i });
+    expect(githubLinks.length).toBeGreaterThan(0);
   });
 
   it("shows_login_button_when_disconnected", () => {
@@ -112,6 +141,44 @@ describe("Header", () => {
 
     expect(screen.getByTestId("wallet-address")).toHaveTextContent("0x1234...cdef");
     expect(mockDisconnect).toHaveBeenCalledTimes(1);
+  });
+
+  it("profile_button_links_to_wallet_profile_page", () => {
+    mockUseAccount.mockReturnValue({
+      status: "connected",
+      isConnected: true,
+      isDisconnected: false,
+      address: "0x1234567890abcdef",
+    });
+
+    render(<Header />);
+
+    const profileLink = screen.getByRole("link", { name: /profile/i });
+    expect(profileLink).toBeVisible();
+    expect(profileLink).toHaveAttribute("href", "/profile/0x1234567890abcdef");
+  });
+
+  it("wallet_address_links_to_profile_page", () => {
+    mockUseAccount.mockReturnValue({
+      status: "connected",
+      isConnected: true,
+      isDisconnected: false,
+      address: "0x1234567890abcdef",
+    });
+
+    render(<Header />);
+
+    const addressEl = screen.getByTestId("wallet-address");
+    // The address element should be inside a link to the profile page
+    const link = addressEl.closest("a");
+    expect(link).not.toBeNull();
+    expect(link).toHaveAttribute("href", "/profile/0x1234567890abcdef");
+  });
+
+  it("profile_button_not_shown_when_disconnected", () => {
+    render(<Header />);
+
+    expect(screen.queryByRole("link", { name: /profile/i })).toBeNull();
   });
 
   it("handles_connect_errors_without_throwing", async () => {

@@ -1,10 +1,14 @@
 "use client";
 
-import { useMemo, useState } from "react";
-import type { NormalizedToken } from "@cartridge/arcade/marketplace";
-import { useCollectionQuery } from "@/lib/marketplace/hooks";
-import { Badge } from "@/components/ui/badge";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { useMemo } from "react";
+import {
+  useCollectionListingsQuery,
+  useCollectionQuery,
+  useCollectionTraitMetadataQuery,
+} from "@/lib/marketplace/hooks";
+import {
+  formatPriceForDisplay,
+} from "@/lib/marketplace/token-display";
 import {
   Select,
   SelectContent,
@@ -21,6 +25,9 @@ import type { ActiveFilters } from "@/lib/marketplace/traits";
 import { CollectionMarketPanel } from "@/features/collections/collection-market-panel";
 import { CollectionTokenGrid } from "@/features/collections/collection-token-grid";
 import { TraitFilterSidebar } from "@/features/collections/trait-filter-sidebar";
+import {
+  cheapestListingByTokenId,
+} from "@/features/cart/listing-utils";
 
 const EMPTY_ACTIVE_FILTERS: ActiveFilters = {};
 
@@ -44,15 +51,37 @@ function collectionName(metadata: unknown, fallbackAddress: string) {
   return fallbackAddress;
 }
 
+function floorPriceFromListings(
+  cheapestListings: Map<string, { price: string }>,
+): string | null {
+  let min: bigint | null = null;
+
+  for (const { price } of cheapestListings.values()) {
+    try {
+      const val = BigInt(price);
+      if (min === null || val < min) {
+        min = val;
+      }
+    } catch {
+      // skip
+    }
+  }
+
+  if (min === null) {
+    return null;
+  }
+
+  return formatPriceForDisplay(min.toString());
+}
+
 export function CollectionRouteView({
   address,
-  cursor,
+  cursor: _cursor,
   collections,
   activeFilters,
   onActiveFiltersChange,
   onNavigate,
 }: CollectionRouteViewProps) {
-  const [loadedTokens, setLoadedTokens] = useState<NormalizedToken[]>([]);
   const runtimeCollections = useMemo(
     () => collections ?? getMarketplaceRuntimeConfig().collections,
     [collections],
@@ -67,6 +96,20 @@ export function CollectionRouteView({
   );
   const projectId = selectedCollection?.projectId;
   const collection = useCollectionQuery({ address, projectId, fetchImages: true });
+  const traitMetadataQuery = useCollectionTraitMetadataQuery({ address, projectId });
+  const listingQuery = useCollectionListingsQuery({
+    collection: address,
+    projectId,
+    verifyOwnership: false,
+  });
+
+  const cheapestListings = cheapestListingByTokenId(listingQuery.data);
+  const listingCount = Array.isArray(listingQuery.data) ? listingQuery.data.length : 0;
+  const floorPrice = floorPriceFromListings(cheapestListings);
+  const totalSupply = collection.data?.totalSupply;
+  const displayName = collection.isSuccess && collection.data
+    ? collectionName(collection.data.metadata, address)
+    : null;
 
   function handleChange(nextAddress: string) {
     if (onNavigate) {
@@ -76,14 +119,11 @@ export function CollectionRouteView({
 
   return (
     <section className="w-full space-y-6">
-      <Card>
-        <CardHeader className="space-y-3">
-          <div className="flex items-center justify-between gap-3">
-            <CardTitle className="text-sm font-medium tracking-widest uppercase">Collection</CardTitle>
-            <Badge variant="outline">Cursor: {cursor ?? "none"}</Badge>
-          </div>
+      {/* Collection header */}
+      <div className="space-y-3 border-b border-border/60 pb-4">
+        {runtimeCollections.length > 1 && (
           <Select value={address} onValueChange={handleChange}>
-            <SelectTrigger aria-label="Collection">
+            <SelectTrigger aria-label="Collection" className="w-64">
               <SelectValue placeholder="Select collection" />
             </SelectTrigger>
             <SelectContent>
@@ -97,36 +137,53 @@ export function CollectionRouteView({
               ))}
             </SelectContent>
           </Select>
-        </CardHeader>
-        <CardContent className="space-y-2">
-          <p className="text-sm text-muted-foreground">{address}</p>
-          {collection.isSuccess && collection.data ? (
-            <div className="space-y-1">
-              <p className="text-lg font-medium">
-                {collectionName(collection.data.metadata, address)}
-              </p>
-              <p className="text-sm text-muted-foreground">
-                Contract Type: {collection.data.contractType}
-              </p>
-            </div>
-          ) : null}
+        )}
 
-          {collection.isSuccess && !collection.data ? (
-            <Card className="border-dashed">
-              <CardContent className="pt-6 text-sm text-muted-foreground font-mono">
-                <span className="text-primary mr-1">$</span>
-                find collection -- not found
-              </CardContent>
-            </Card>
-          ) : null}
-        </CardContent>
-      </Card>
+        {displayName ? (
+          <h1 className="text-2xl font-semibold tracking-tight">{displayName}</h1>
+        ) : (
+          <h1 className="text-2xl font-semibold tracking-tight text-muted-foreground">
+            {selectedCollection?.name ?? address}
+          </h1>
+        )}
+
+        {/* Stats row */}
+        <div className="flex flex-wrap items-center gap-x-5 gap-y-1 text-sm text-muted-foreground">
+          {totalSupply !== undefined && (
+            <span>
+              <span className="text-foreground font-medium">{Number(totalSupply).toLocaleString()}</span>
+              {" "}items
+            </span>
+          )}
+          {listingCount > 0 && (
+            <span>
+              <span className="text-foreground font-medium">{listingCount}</span>
+              {" "}listed
+            </span>
+          )}
+          {floorPrice && (
+            <span>
+              Floor{" "}
+              <span className="text-foreground font-medium">{floorPrice}</span>
+            </span>
+          )}
+        </div>
+
+        {collection.isSuccess && !collection.data ? (
+          <p className="text-sm text-muted-foreground font-mono">
+            <span className="text-primary mr-1">$</span>
+            find collection -- not found
+          </p>
+        ) : null}
+      </div>
+
       <div className="grid gap-6 xl:grid-cols-[280px_1fr]">
         <div className="sticky top-20 self-start" data-testid="trait-sidebar-container">
           <TraitFilterSidebar
             activeFilters={resolvedActiveFilters}
             onActiveFiltersChange={onActiveFiltersChange}
-            tokens={loadedTokens}
+            traitMetadata={traitMetadataQuery.data ?? []}
+            isLoading={traitMetadataQuery.isLoading}
           />
         </div>
 
@@ -140,7 +197,6 @@ export function CollectionRouteView({
               key={`${address}-${projectId ?? "default"}`}
               activeFilters={resolvedActiveFilters}
               address={address}
-              onTokensChange={setLoadedTokens}
               projectId={projectId}
             />
           </TabsContent>
