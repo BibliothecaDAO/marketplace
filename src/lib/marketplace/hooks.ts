@@ -97,9 +97,12 @@ export function useCollectionQuery(options: CollectionSummaryOptions) {
   });
 }
 
-export function useCollectionTokensQuery(options: FetchCollectionTokensOptions) {
+export function useCollectionTokensQuery(
+  options: FetchCollectionTokensOptions,
+  queryOptions?: { enabled?: boolean },
+) {
   return useMarketplaceCollectionTokens(options, {
-    enabled: !!options.address,
+    enabled: (queryOptions?.enabled ?? true) && !!options.address,
   });
 }
 

@@ -9,6 +9,7 @@ import {
 import {
   formatPriceForDisplay,
 } from "@/lib/marketplace/token-display";
+import { TokenSymbol } from "@/components/ui/token-symbol";
 import {
   Select,
   SelectContent,
@@ -60,16 +61,18 @@ function collectionName(metadata: unknown, fallbackAddress: string) {
   return fallbackAddress;
 }
 
-function floorPriceFromListings(
-  cheapestListings: Map<string, { price: string }>,
-): string | null {
+function floorFromListings(
+  cheapestListings: Map<string, { price: string; currency: string }>,
+): { price: string; currency: string } | null {
   let min: bigint | null = null;
+  let currency = "";
 
-  for (const { price } of cheapestListings.values()) {
+  for (const listing of cheapestListings.values()) {
     try {
-      const val = BigInt(price);
+      const val = BigInt(listing.price);
       if (min === null || val < min) {
         min = val;
+        currency = listing.currency;
       }
     } catch {
       // skip
@@ -80,7 +83,8 @@ function floorPriceFromListings(
     return null;
   }
 
-  return formatPriceForDisplay(min.toString());
+  const price = formatPriceForDisplay(min.toString());
+  return price ? { price, currency } : null;
 }
 
 export function CollectionRouteView({
@@ -115,7 +119,7 @@ export function CollectionRouteView({
 
   const cheapestListings = cheapestListingByTokenId(listingQuery.data);
   const listingCount = Array.isArray(listingQuery.data) ? listingQuery.data.length : 0;
-  const floorPrice = floorPriceFromListings(cheapestListings);
+  const floor = floorFromListings(cheapestListings);
   const totalSupply = collection.data?.totalSupply;
   const displayName = collection.isSuccess && collection.data
     ? collectionName(collection.data.metadata, address)
@@ -171,10 +175,11 @@ export function CollectionRouteView({
               {" "}listed
             </span>
           )}
-          {floorPrice && (
-            <span>
+          {floor && (
+            <span className="flex items-center gap-1">
               Floor{" "}
-              <span className="text-foreground font-medium">{floorPrice}</span>
+              <span className="text-foreground font-medium">{floor.price}</span>
+              <TokenSymbol address={floor.currency} className="text-foreground font-medium" />
             </span>
           )}
         </div>

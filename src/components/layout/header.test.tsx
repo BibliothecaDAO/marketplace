@@ -3,19 +3,21 @@ import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { Header } from "./header";
 
-const { mockUseAccount, mockUseConnect, mockUseDisconnect, mockConnect, mockDisconnect } =
+const { mockUseAccount, mockUseConnect, mockUseDisconnect, mockConnect, mockDisconnect, mockUseBalance } =
   vi.hoisted(() => ({
     mockUseAccount: vi.fn(),
     mockUseConnect: vi.fn(),
     mockUseDisconnect: vi.fn(),
     mockConnect: vi.fn(),
     mockDisconnect: vi.fn(),
+    mockUseBalance: vi.fn(),
   }));
 
 vi.mock("@starknet-react/core", () => ({
   useAccount: mockUseAccount,
   useConnect: mockUseConnect,
   useDisconnect: mockUseDisconnect,
+  useBalance: mockUseBalance,
 }));
 
 vi.mock("@/features/cart/components/cart-sidebar", () => ({
@@ -26,6 +28,7 @@ describe("Header", () => {
   beforeEach(() => {
     mockConnect.mockReset();
     mockDisconnect.mockReset();
+    mockUseBalance.mockReturnValue({ data: undefined, isLoading: false });
 
     mockUseAccount.mockReturnValue({
       status: "disconnected",

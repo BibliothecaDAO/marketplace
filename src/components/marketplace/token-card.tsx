@@ -10,11 +10,13 @@ import {
 } from "@/lib/marketplace/token-display";
 import { cn } from "@/lib/utils";
 import { Card, CardContent } from "@/components/ui/card";
+import { TokenSymbol } from "@/components/ui/token-symbol";
 
 type MarketplaceTokenCardProps = {
   token: NormalizedToken;
   href: string;
   price?: string | null;
+  currency?: string | null;
   cardClassName?: string;
   contentClassName?: string;
   linkClassName?: string;
@@ -86,6 +88,7 @@ export function MarketplaceTokenCard({
   token,
   href,
   price,
+  currency,
   cardClassName,
   contentClassName,
   linkClassName,
@@ -132,7 +135,10 @@ export function MarketplaceTokenCard({
           <p className="text-sm font-medium">{tokenName(token)}</p>
           <p className="text-xs text-muted-foreground">#{displayTokenId(token)}</p>
           {displayPrice ? (
-            <p className="text-xs text-primary font-medium">{displayPrice}</p>
+            <p className="text-xs text-primary font-medium flex items-center gap-1">
+              {displayPrice}
+              {currency ? <TokenSymbol address={currency} className="text-muted-foreground" /> : null}
+            </p>
           ) : null}
         </CardContent>
         <div

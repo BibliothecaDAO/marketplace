@@ -6,7 +6,7 @@ import {
 
 export type CollectionSortMode = "recent" | "price-asc" | "price-desc";
 
-const DEFAULT_SORT_MODE: CollectionSortMode = "recent";
+const DEFAULT_SORT_MODE: CollectionSortMode = "price-asc";
 const SORT_MODES = new Set<CollectionSortMode>([
   "recent",
   "price-asc",

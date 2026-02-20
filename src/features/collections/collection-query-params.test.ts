@@ -7,10 +7,10 @@ import {
 } from "@/features/collections/collection-query-params";
 
 describe("collection query params", () => {
-  it("parses_sort_mode_with_recent_as_default", () => {
+  it("parses_sort_mode_with_price_asc_as_default", () => {
     expect(sortModeFromSearchParams(new URLSearchParams("sort=price-asc"))).toBe("price-asc");
-    expect(sortModeFromSearchParams(new URLSearchParams("sort=unknown"))).toBe("recent");
-    expect(sortModeFromSearchParams(new URLSearchParams())).toBe("recent");
+    expect(sortModeFromSearchParams(new URLSearchParams("sort=unknown"))).toBe("price-asc");
+    expect(sortModeFromSearchParams(new URLSearchParams())).toBe("price-asc");
   });
 
   it("serializes_filters_and_sort_and_resets_cursor", () => {
@@ -32,12 +32,12 @@ describe("collection query params", () => {
     });
   });
 
-  it("omits_sort_param_when_sort_mode_is_recent", () => {
+  it("omits_sort_param_when_sort_mode_is_price_asc", () => {
     const params = collectionDiscoveryStateToSearchParams(
       new URLSearchParams("sort=price-asc"),
       {
         activeFilters: {},
-        sortMode: "recent",
+        sortMode: "price-asc",
       },
     );
 

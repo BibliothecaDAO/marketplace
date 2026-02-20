@@ -69,7 +69,7 @@ describe("collection route container url sync", () => {
     await user.click(screen.getByRole("button", { name: /apply-filters/i }));
 
     expect(mockPush).toHaveBeenCalledWith(
-      "/collections/0xabc?foo=bar&trait=Background%3ABlue&sort=price-asc",
+      "/collections/0xabc?foo=bar&trait=Background%3ABlue",
     );
   });
 

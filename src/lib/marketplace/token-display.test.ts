@@ -439,8 +439,8 @@ describe("getTokenIconUrl", () => {
     expect(getTokenIconUrl("0xdeadbeef1234567890abcdef")).toBeNull();
   });
 
-  it("returns null for STRK (no icon registered)", () => {
-    expect(getTokenIconUrl("0x04718f5a0fc34cc1af16a1cdee98ffb20c31f5cd61d6ab07201858f4287c938d")).toBeNull();
+  it("returns local SVG path for STRK", () => {
+    expect(getTokenIconUrl("0x04718f5a0fc34cc1af16a1cdee98ffb20c31f5cd61d6ab07201858f4287c938d")).toBe("/tokens/strk.svg");
   });
 
   it("returns local path for SURVIVO", () => {
