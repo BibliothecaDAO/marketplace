@@ -135,6 +135,76 @@ function normalizeStatus(value: unknown): string | null {
   return normalizeStatus(record.value ?? record.status ?? record.state);
 }
 
+function parseBoolLike(value: unknown): boolean | null {
+  if (typeof value === "boolean") {
+    return value;
+  }
+
+  if (typeof value === "number" && Number.isFinite(value)) {
+    if (value === 0) return false;
+    if (value === 1) return true;
+  }
+
+  if (typeof value === "bigint") {
+    if (value === BigInt(0)) return false;
+    if (value === BigInt(1)) return true;
+  }
+
+  if (typeof value === "string") {
+    const normalized = value.trim().toLowerCase();
+    if (normalized === "0" || normalized === "0x0" || normalized === "false") {
+      return false;
+    }
+    if (normalized === "1" || normalized === "0x1" || normalized === "true") {
+      return true;
+    }
+  }
+
+  return null;
+}
+
+function extractValidityFlag(value: unknown): boolean | null {
+  const direct = parseBoolLike(value);
+  if (direct !== null) {
+    return direct;
+  }
+
+  if (Array.isArray(value) && value.length > 0) {
+    return parseBoolLike(value[0]);
+  }
+
+  const record = asRecord(value);
+  if (!record) {
+    return null;
+  }
+
+  const keyed =
+    parseBoolLike(record.valid) ??
+    parseBoolLike(record.isValid) ??
+    parseBoolLike(record.is_valid) ??
+    parseBoolLike(record.value) ??
+    parseBoolLike(record.result) ??
+    parseBoolLike(record["0"]);
+  if (keyed !== null) {
+    return keyed;
+  }
+
+  for (const candidate of Object.values(record)) {
+    const parsed = parseBoolLike(candidate);
+    if (parsed !== null) {
+      return parsed;
+    }
+    if (Array.isArray(candidate) && candidate.length > 0) {
+      const nested = parseBoolLike(candidate[0]);
+      if (nested !== null) {
+        return nested;
+      }
+    }
+  }
+
+  return null;
+}
+
 function listingMatchesCartItem(
   listing: unknown,
   item: {
@@ -389,6 +459,19 @@ export function CartSidebar() {
     setCheckoutStatus({ kind: "idle", tone: "idle", message: "" });
 
     try {
+      const validateOnChainValidity = async (item: (typeof items)[number]) => {
+        try {
+          const validityResult = await arcadeProvider.marketplace.getValidity(
+            item.orderId,
+            item.collection,
+            item.tokenId,
+          );
+          return extractValidityFlag(validityResult) === true;
+        } catch {
+          return false;
+        }
+      };
+
       const validateItem = async (item: (typeof items)[number]) => {
         try {
           const listings = await client.listCollectionListings({
@@ -397,7 +480,12 @@ export function CartSidebar() {
             projectId: item.projectId,
             verifyOwnership: true,
           });
-          return listings.some((listing) => listingMatchesCartItem(listing, item));
+          const hasMatchingListing = listings.some((listing) => listingMatchesCartItem(listing, item));
+          if (!hasMatchingListing) {
+            return false;
+          }
+
+          return await validateOnChainValidity(item);
         } catch {
           return false;
         }
@@ -478,7 +566,21 @@ export function CartSidebar() {
         projectId: item.projectId,
         verifyOwnership: true,
       });
-      const isValid = listings.some((listing) => listingMatchesCartItem(listing, item));
+      const hasMatchingListing = listings.some((listing) => listingMatchesCartItem(listing, item));
+      let isOnChainValid = false;
+      if (hasMatchingListing) {
+        try {
+          const validityResult = await arcadeProvider.marketplace.getValidity(
+            item.orderId,
+            item.collection,
+            item.tokenId,
+          );
+          isOnChainValid = extractValidityFlag(validityResult) === true;
+        } catch {
+          isOnChainValid = false;
+        }
+      }
+      const isValid = hasMatchingListing && isOnChainValid;
       if (isValid) {
         clearItemError(item.orderId);
         setCheckoutStatus({
