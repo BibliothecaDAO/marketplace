@@ -1,5 +1,4 @@
 import { NextResponse } from "next/server";
-import { addAddressPadding } from "starknet";
 import { getMarketplaceRuntimeConfig } from "@/lib/marketplace/config";
 import type { TraitMetadataRow } from "@/lib/marketplace/traits";
 
@@ -50,8 +49,22 @@ function resolveProjectId(address: string, requestedProjectId: string | undefine
   return fromCollection || config.sdkConfig.defaultProject || DEFAULT_PROJECT_ID;
 }
 
+function padHexAddress(value: string) {
+  const normalized = value.trim().toLowerCase();
+  if (!/^0x[0-9a-f]+$/.test(normalized)) {
+    return value;
+  }
+
+  const hex = normalized.slice(2).replace(/^0+/, "") || "0";
+  if (hex.length >= 64) {
+    return `0x${hex}`;
+  }
+
+  return `0x${hex.padStart(64, "0")}`;
+}
+
 function buildTraitMetadataQuery(address: string) {
-  const paddedAddress = addAddressPadding(address);
+  const paddedAddress = padHexAddress(address);
   // Aggregating over the full dataset frequently times out on larger collections.
   // Pull a bounded sample of raw rows, then aggregate in-process for predictable latency.
   return `SELECT trait_name, trait_value

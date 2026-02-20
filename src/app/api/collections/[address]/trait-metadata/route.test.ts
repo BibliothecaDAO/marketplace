@@ -38,6 +38,13 @@ describe("collection trait metadata api route", () => {
         body: expect.stringContaining("LIMIT"),
       }),
     );
+    expect(fetchMock.mock.calls[0]?.[1]).toEqual(
+      expect.objectContaining({
+        body: expect.stringContaining(
+          "token_id LIKE '0x0000000000000000000000000000000000000000000000000000000000000abc:%'",
+        ),
+      }),
+    );
     expect(response.status).toBe(200);
     expect(response.headers.get("cache-control")).toBe(
       "public, s-maxage=300, stale-while-revalidate=900",
