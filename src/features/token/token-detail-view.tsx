@@ -181,6 +181,14 @@ export function TokenDetailView({
     walletAddress,
     isConnected: isConnected ?? false,
   });
+  const isOwnershipLoading = Boolean(
+    (ownershipQuery as { isLoading?: boolean; isFetching?: boolean; status?: string })
+      .isLoading ||
+      (ownershipQuery as { isLoading?: boolean; isFetching?: boolean; status?: string })
+        .isFetching ||
+      (ownershipQuery as { isLoading?: boolean; isFetching?: boolean; status?: string })
+        .status === "loading",
+  );
 
   const token = detailQuery.data?.token ?? null;
   const rawListings = useMemo(
@@ -441,6 +449,12 @@ export function TokenDetailView({
             <p className="text-sm text-primary font-mono">
               #{displayTokenId(token)}
             </p>
+            {isConnected && isOwnershipLoading ? (
+              <p className="mt-1 text-xs text-muted-foreground">Checking ownership...</p>
+            ) : null}
+            {isConnected && !isOwnershipLoading && effectiveIsOwner ? (
+              <p className="mt-1 text-xs text-primary">You own this token</p>
+            ) : null}
             {holderAddress ? (
               <Link
                 href={`/profile/${holderAddress}`}
@@ -699,7 +713,7 @@ export function TokenDetailView({
 
 
         {/* Offer form — shown to confirmed non-owners */}
-        {isConnected && !effectiveIsOwner && !(ownershipQuery as { isLoading?: boolean }).isLoading ? (
+        {isConnected && !effectiveIsOwner && !isOwnershipLoading ? (
           <Card className="border-dashed">
             <CardContent className="space-y-3 p-3">
               <h2 className="text-sm font-medium tracking-widest uppercase text-muted-foreground">Make an offer</h2>
