@@ -14,7 +14,9 @@ test.describe("purchase funnel skeleton", () => {
     await expect(collectionLinks.first()).toBeVisible();
 
     await collectionLinks.first().click();
-    await expect(page).toHaveURL(/\/collections\//);
+    // Use waitForURL with full navigationTimeout – Next.js may need time to compile the
+    // [address] route on first access in CI.
+    await page.waitForURL(/\/collections\//, { timeout: 30_000 });
 
     const addButtons = page
       .getByRole("button", { name: "Add to cart" })
@@ -35,7 +37,7 @@ test.describe("purchase funnel skeleton", () => {
     await expect(collectionLinks.first()).toBeVisible();
 
     await collectionLinks.first().click();
-    await expect(page).toHaveURL(/\/collections\//);
+    await page.waitForURL(/\/collections\//, { timeout: 30_000 });
 
     const tokenLinks = page.locator("a[aria-label^='token-']");
     const hasTokenLink = (await tokenLinks.count()) > 0;
