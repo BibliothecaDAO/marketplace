@@ -347,6 +347,13 @@ describe("cart sidebar", () => {
     await waitFor(() => {
       expect(mockAccountExecute).not.toHaveBeenCalled();
     });
+    expect(mockListCollectionListings).toHaveBeenCalledWith(
+      expect.objectContaining({
+        collection: "0xabc",
+        tokenId: "1",
+        verifyOwnership: true,
+      }),
+    );
     expect(await screen.findByText(/listing is stale or unavailable/i)).toBeVisible();
     expect(screen.getByRole("button", { name: /remove stale/i })).toBeVisible();
     expect(screen.getByRole("button", { name: /refresh listing/i })).toBeVisible();
@@ -385,6 +392,13 @@ describe("cart sidebar", () => {
     await waitFor(() => {
       expect(screen.queryByRole("button", { name: /refresh listing/i })).toBeNull();
     });
+    expect(mockListCollectionListings).toHaveBeenCalledWith(
+      expect.objectContaining({
+        collection: "0xabc",
+        tokenId: "1",
+        verifyOwnership: true,
+      }),
+    );
   });
 
   it("retry_checkout_succeeds_after_removing_stale_rows", async () => {

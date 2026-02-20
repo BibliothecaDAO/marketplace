@@ -135,7 +135,6 @@ export function TokenDetailView({
   const { client } = useMarketplaceClient();
   const { collections, chainLabel } = getMarketplaceRuntimeConfig();
   const collectionName = collections.find((c) => c.address === address)?.name ?? address;
-  const verifyOwnership = false;
   // Human-readable price in STRK (1 STRK = 1e18 wei)
   const [priceInput, setPriceInput] = useState("1");
   const [quantityInput, setQuantityInput] = useState("1");
@@ -171,11 +170,11 @@ export function TokenDetailView({
     collection: address,
     tokenId: normalizedTokenId,
     projectId,
-    verifyOwnership,
+    verifyOwnership: true,
   });
   const nowEpochSeconds = Math.floor(Date.now() / 1000);
 
-  const { holderAddress, isOwner, effectiveIsOwner, ownershipQuery } = useTokenOwnership({
+  const { holderAddress, effectiveIsOwner, ownershipQuery } = useTokenOwnership({
     collection: address,
     tokenId: normalizedTokenId,
     walletAddress,

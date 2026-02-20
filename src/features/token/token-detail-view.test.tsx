@@ -506,7 +506,7 @@ describe("token detail view", () => {
         collection: "0x123",
         tokenId: "7",
         projectId: "my-project",
-        verifyOwnership: false,
+        verifyOwnership: true,
       }),
     );
   });
@@ -542,7 +542,7 @@ describe("token detail view", () => {
         collection: "0x123",
         tokenId: "1120",
         projectId: "my-project",
-        verifyOwnership: false,
+        verifyOwnership: true,
       }),
     );
   });
@@ -567,7 +567,7 @@ describe("token detail view", () => {
     expect(screen.queryByLabelText(/verify ownership/i)).toBeNull();
   });
 
-  it("listings_query_always_uses_verify_ownership_false", () => {
+  it("listings_query_always_uses_verify_ownership_true", () => {
     mockUseTokenDetailQuery.mockReturnValue(
       successQuery({
         token: { token_id: "7", image: null, metadata: { name: "Token #7" } },
@@ -579,7 +579,7 @@ describe("token detail view", () => {
     render(<TokenDetailView address="0x123" tokenId="7" />);
 
     expect(mockUseCollectionListingsQuery).toHaveBeenCalledWith(
-      expect.objectContaining({ verifyOwnership: false }),
+      expect.objectContaining({ verifyOwnership: true }),
     );
   });
 

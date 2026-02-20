@@ -114,7 +114,7 @@ export function CollectionRouteView({
   const listingQuery = useCollectionListingsQuery({
     collection: address,
     projectId,
-    verifyOwnership: false,
+    verifyOwnership: true,
   });
 
   const cheapestListings = cheapestListingByTokenId(listingQuery.data);

@@ -482,7 +482,7 @@ describe("collection row", () => {
       expect.objectContaining({
         collection: "0x123",
         projectId: "my-project",
-        verifyOwnership: false,
+        verifyOwnership: true,
       }),
     );
   });

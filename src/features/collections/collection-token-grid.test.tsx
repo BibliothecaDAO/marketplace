@@ -385,7 +385,7 @@ describe("collection token grid", () => {
       expect.objectContaining({
         collection: "0xabc",
         projectId: "project-a",
-        verifyOwnership: false,
+        verifyOwnership: true,
       }),
     );
   });

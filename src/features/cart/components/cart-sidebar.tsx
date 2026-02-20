@@ -343,7 +343,7 @@ export function CartSidebar() {
             collection: item.collection,
             tokenId: item.tokenId,
             projectId: item.projectId,
-            verifyOwnership: false,
+            verifyOwnership: true,
           });
           return listings.some((listing) => listingMatchesCartItem(listing, item));
         } catch {
@@ -424,7 +424,7 @@ export function CartSidebar() {
         collection: item.collection,
         tokenId: item.tokenId,
         projectId: item.projectId,
-        verifyOwnership: false,
+        verifyOwnership: true,
       });
       const isValid = listings.some((listing) => listingMatchesCartItem(listing, item));
       if (isValid) {
