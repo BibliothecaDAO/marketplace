@@ -363,6 +363,40 @@ describe("cart sidebar", () => {
     ).toBeVisible();
   });
 
+  it("checkout_blocks_when_listing_status_is_executed", async () => {
+    const user = userEvent.setup();
+    mockUseAccount.mockReturnValue({
+      account: { address: "0xwallet", execute: mockAccountExecute },
+      isConnected: true,
+      status: "connected",
+      address: "0xwallet",
+    });
+    mockListCollectionListings.mockResolvedValue([
+      {
+        id: 7001,
+        tokenId: 1,
+        price: 100,
+        currency: "0xfee",
+        quantity: 1,
+        status: { value: "Executed" },
+      },
+    ]);
+    useCartStore.setState({
+      items: [makeItem("7001", "1", "100")],
+      inlineErrors: {},
+      isOpen: true,
+      lastActionError: null,
+    });
+
+    render(<CartSidebar />);
+    await user.click(screen.getByRole("button", { name: /complete purchase/i }));
+
+    await waitFor(() => {
+      expect(mockArcadeExecute).not.toHaveBeenCalled();
+    });
+    expect(await screen.findByText(/listing is stale or unavailable/i)).toBeVisible();
+  });
+
   it("refresh_listing_clears_inline_error_when_listing_recovers", async () => {
     const user = userEvent.setup();
     mockUseAccount.mockReturnValue({

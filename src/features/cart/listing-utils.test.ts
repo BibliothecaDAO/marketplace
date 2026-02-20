@@ -62,4 +62,35 @@ describe("listing utils", () => {
       quantity: "1",
     });
   });
+
+  it("ignores_non_active_status_listings_when_selecting_cheapest", () => {
+    const listings = [
+      {
+        order_id: "11",
+        token_id: "0x1",
+        price: "80",
+        quantity: "1",
+        currency: "0xfee",
+        status: { value: "Executed" },
+      },
+      {
+        order_id: "12",
+        token_id: "0x1",
+        price: "120",
+        quantity: "1",
+        currency: "0xfee",
+        status: "Placed",
+      },
+    ];
+
+    const result = cheapestListingByTokenId(listings);
+
+    expect(result.get("1")).toMatchObject({
+      orderId: "12",
+      tokenId: "1",
+      price: "120",
+      currency: "0xfee",
+      quantity: "1",
+    });
+  });
 });

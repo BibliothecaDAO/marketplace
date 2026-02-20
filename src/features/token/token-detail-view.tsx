@@ -67,6 +67,12 @@ type ListingRow = {
   currency?: string;
   owner: string;
   expiration?: number | string;
+  status?: unknown;
+  state?: unknown;
+  order?: {
+    status?: unknown;
+    state?: unknown;
+  };
 };
 
 function getTokenName(token: NormalizedToken) {
@@ -104,6 +110,45 @@ function parseExpiration(value: ListingRow["expiration"]) {
   } catch {
     return null;
   }
+}
+
+function normalizeStatus(value: unknown): string | null {
+  if (typeof value === "string" && value.trim().length > 0) {
+    return value.trim().toLowerCase();
+  }
+
+  if (typeof value === "number" && Number.isFinite(value)) {
+    if (value === 1) return "placed";
+    if (value === 2) return "canceled";
+    if (value === 3) return "executed";
+    if (value === 0) return "none";
+    return null;
+  }
+
+  if (typeof value === "bigint") {
+    if (value === BigInt(1)) return "placed";
+    if (value === BigInt(2)) return "canceled";
+    if (value === BigInt(3)) return "executed";
+    if (value === BigInt(0)) return "none";
+    return null;
+  }
+
+  if (value && typeof value === "object") {
+    const record = value as Record<string, unknown>;
+    return normalizeStatus(record.value ?? record.status ?? record.state);
+  }
+
+  return null;
+}
+
+function isInactiveListing(listing: ListingRow) {
+  const status =
+    normalizeStatus(listing.status) ??
+    normalizeStatus(listing.state) ??
+    normalizeStatus(listing.order?.status) ??
+    normalizeStatus(listing.order?.state);
+
+  return Boolean(status && status !== "placed");
 }
 
 function isExpiredListing(listing: ListingRow, nowEpochSeconds: number) {
@@ -197,7 +242,9 @@ export function TokenDetailView({
   const listingRows = useMemo(
     () =>
       (rawListings as ListingRow[]).filter(
-        (listing) => !isExpiredListing(listing, nowEpochSeconds),
+        (listing) =>
+          !isInactiveListing(listing) &&
+          !isExpiredListing(listing, nowEpochSeconds),
       ),
     [nowEpochSeconds, rawListings],
   );

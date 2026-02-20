@@ -106,6 +106,35 @@ function firstString(
   return null;
 }
 
+function normalizeStatus(value: unknown): string | null {
+  if (typeof value === "string" && value.trim().length > 0) {
+    return value.trim().toLowerCase();
+  }
+
+  if (typeof value === "number" && Number.isFinite(value)) {
+    if (value === 1) return "placed";
+    if (value === 2) return "canceled";
+    if (value === 3) return "executed";
+    if (value === 0) return "none";
+    return null;
+  }
+
+  if (typeof value === "bigint") {
+    if (value === BigInt(1)) return "placed";
+    if (value === BigInt(2)) return "canceled";
+    if (value === BigInt(3)) return "executed";
+    if (value === BigInt(0)) return "none";
+    return null;
+  }
+
+  const record = asRecord(value);
+  if (!record) {
+    return null;
+  }
+
+  return normalizeStatus(record.value ?? record.status ?? record.state);
+}
+
 function listingMatchesCartItem(
   listing: unknown,
   item: {
@@ -124,9 +153,32 @@ function listingMatchesCartItem(
   const tokenId = firstNumberish([fields, nestedOrder], ["tokenId", "token_id"]);
   const price = firstNumberish([fields, nestedOrder], ["price", "listingPrice", "listing_price"]);
   const quantity = firstNumberish([fields, nestedOrder], ["quantity", "qty"]) ?? "1";
+  const expiration = firstNumberish([fields, nestedOrder], [
+    "expiration",
+    "expiresAt",
+    "expires_at",
+  ]);
   const currency = firstString([fields, nestedOrder], ["currency"]);
+  const status =
+    normalizeStatus(fields.status) ??
+    normalizeStatus(fields.state) ??
+    normalizeStatus(nestedOrder?.status) ??
+    normalizeStatus(nestedOrder?.state);
   if (!orderId || !tokenId || !price || !currency) {
     return false;
+  }
+  if (status && status !== "placed") {
+    return false;
+  }
+  if (expiration) {
+    try {
+      const expiry = BigInt(expiration);
+      if (expiry > BigInt(0) && expiry <= BigInt(Math.floor(Date.now() / 1000))) {
+        return false;
+      }
+    } catch {
+      // Ignore malformed expiration values.
+    }
   }
 
   return (

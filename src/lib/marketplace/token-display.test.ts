@@ -402,6 +402,16 @@ describe("listingPriceByTokenId", () => {
     const map = listingPriceByTokenId(listings);
     expect(map.get("1")).toBe("120");
   });
+
+  it("ignores_non_active_status_listings", () => {
+    const listings = [
+      { tokenId: "1", price: "80", status: { value: "Executed" } },
+      { tokenId: "1", price: "120", status: "Placed" },
+    ];
+
+    const map = listingPriceByTokenId(listings);
+    expect(map.get("1")).toBe("120");
+  });
 });
 
 // ---------------------------------------------------------------------------

@@ -10,6 +10,35 @@ function asRecord(value: unknown) {
     : null;
 }
 
+function normalizeStatus(value: unknown): string | null {
+  if (typeof value === "string" && value.trim().length > 0) {
+    return value.trim().toLowerCase();
+  }
+
+  if (typeof value === "number" && Number.isFinite(value)) {
+    if (value === 1) return "placed";
+    if (value === 2) return "canceled";
+    if (value === 3) return "executed";
+    if (value === 0) return "none";
+    return null;
+  }
+
+  if (typeof value === "bigint") {
+    if (value === BigInt(1)) return "placed";
+    if (value === BigInt(2)) return "canceled";
+    if (value === BigInt(3)) return "executed";
+    if (value === BigInt(0)) return "none";
+    return null;
+  }
+
+  const record = asRecord(value);
+  if (!record) {
+    return null;
+  }
+
+  return normalizeStatus(record.value ?? record.status ?? record.state);
+}
+
 const WEI_DECIMALS = 18;
 const MIN_AUTO_SCALE_DIGITS = 15;
 
@@ -215,6 +244,11 @@ export function listingPriceByTokenId(listings: unknown[] | undefined) {
     }
 
     const nestedOrder = asRecord(fields.order);
+    const status =
+      normalizeStatus(fields.status) ??
+      normalizeStatus(fields.state) ??
+      normalizeStatus(nestedOrder?.status) ??
+      normalizeStatus(nestedOrder?.state);
     const listingTokenId =
       formatNumberish(fields.tokenId) ??
       formatNumberish(fields.token_id) ??
@@ -235,6 +269,9 @@ export function listingPriceByTokenId(listings: unknown[] | undefined) {
       formatNumberish(nestedOrder?.expires_at) ??
       formatNumberish(nestedOrder?.expiresAt);
     if (!listingTokenId || !listingPrice) {
+      continue;
+    }
+    if (status && status !== "placed") {
       continue;
     }
     if (expiration) {
