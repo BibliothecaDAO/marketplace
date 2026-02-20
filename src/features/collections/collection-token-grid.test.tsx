@@ -472,7 +472,7 @@ describe("collection token grid", () => {
     expect(screen.queryByRole("button", { name: /added/i })).toBeNull();
   });
 
-  it("grid_density_selector_updates_grid_columns", async () => {
+  it("does_not_render_grid_density_buttons", () => {
     mockUseCollectionTokensQuery.mockReturnValue({
       data: {
         page: {
@@ -489,17 +489,11 @@ describe("collection token grid", () => {
       refetch: vi.fn(),
     });
 
-    const user = userEvent.setup();
     render(<CollectionTokenGrid address="0xabc" projectId="project-a" />);
 
-    const grid = screen.getByTestId("collection-token-grid-cards");
-    expect(grid).toHaveClass("lg:grid-cols-3");
-
-    await user.click(screen.getByRole("button", { name: /compact/i }));
-    expect(grid).toHaveClass("lg:grid-cols-5");
-
-    await user.click(screen.getByRole("button", { name: /comfort/i }));
-    expect(grid).toHaveClass("lg:grid-cols-2");
+    expect(screen.queryByRole("button", { name: /compact/i })).toBeNull();
+    expect(screen.queryByRole("button", { name: /standard/i })).toBeNull();
+    expect(screen.queryByRole("button", { name: /comfort/i })).toBeNull();
   });
 
   it("tokens_reset_when_address_prop_changes", async () => {
@@ -572,6 +566,23 @@ describe("collection token grid", () => {
 
     expect(await screen.findByText("Token #20")).toBeVisible();
     expect(screen.queryByText("Token #10")).toBeNull();
+  });
+
+  it("empty_state_shows_friendly_text_not_cli_aesthetic", () => {
+    mockUseCollectionTokensQuery.mockReturnValue({
+      data: { page: { tokens: [], nextCursor: null }, error: null },
+      isLoading: false,
+      isSuccess: true,
+      isError: false,
+      error: null,
+      isFetching: false,
+      refetch: vi.fn(),
+    });
+
+    render(<CollectionTokenGrid address="0xabc" projectId="project-a" />);
+
+    expect(screen.getByText(/no tokens match/i)).toBeVisible();
+    expect(screen.queryByText(/grep/i)).toBeNull();
   });
 
   it("applies_price_ascending_sort_when_requested", async () => {

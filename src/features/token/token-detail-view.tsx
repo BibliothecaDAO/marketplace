@@ -16,7 +16,6 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Switch } from "@/components/ui/switch";
 import {
   Select,
   SelectContent,
@@ -28,6 +27,9 @@ import {
   displayTokenId,
   formatNumberish,
   formatPriceForDisplay,
+  buildExplorerTxUrl,
+  formatRelativeExpiry,
+  getTokenSymbol,
 } from "@/lib/marketplace/token-display";
 import { calculateMarketplaceFee, parseBigInt } from "@/lib/marketplace/fees";
 import type { CheapestListing } from "@/features/cart/listing-utils";
@@ -128,9 +130,9 @@ export function TokenDetailView({
   const { addListingToCart, isRecentlyAdded } = useAddToCartFeedback();
   const { account, address: walletAddress, isConnected } = useAccount();
   const { client } = useMarketplaceClient();
-  const { collections } = getMarketplaceRuntimeConfig();
+  const { collections, chainLabel } = getMarketplaceRuntimeConfig();
   const collectionName = collections.find((c) => c.address === address)?.name ?? address;
-  const [verifyOwnership, setVerifyOwnership] = useState(false);
+  const verifyOwnership = false;
   // Human-readable price in STRK (1 STRK = 1e18 wei)
   const [priceInput, setPriceInput] = useState("1");
   const [quantityInput, setQuantityInput] = useState("1");
@@ -140,6 +142,7 @@ export function TokenDetailView({
   const [txStatus, setTxStatus] = useState<{
     tone: "idle" | "success" | "error";
     message: string;
+    txHash?: string;
   }>({ tone: "idle", message: "" });
   const [pendingAction, setPendingAction] = useState<
     "list" | "offer" | "cancel" | null
@@ -330,7 +333,8 @@ export function TokenDetailView({
       const result = await executor();
       setTxStatus({
         tone: "success",
-        message: `Submitted ${action} transaction: ${result.transaction_hash}`,
+        message: `Transaction submitted`,
+        txHash: result.transaction_hash,
       });
       await Promise.all([listingQuery.refetch(), detailQuery.refetch()]);
     } catch (error) {
@@ -341,6 +345,16 @@ export function TokenDetailView({
       setPendingAction(null);
     }
   }
+
+  // Auto-clear tx status messages after 5 seconds
+  useEffect(() => {
+    if (txStatus.tone === "idle") return;
+    const id = window.setTimeout(
+      () => setTxStatus({ tone: "idle", message: "" }),
+      5000,
+    );
+    return () => window.clearTimeout(id);
+  }, [txStatus.tone, txStatus.message]);
 
   if (detailQuery.isLoading) {
     return (
@@ -525,15 +539,6 @@ export function TokenDetailView({
             >
               {isCheapestAdded ? "Added" : "Add cheapest to cart"}
             </Button>
-            <div className="flex items-center gap-2">
-              <Switch
-                aria-label="Verify ownership"
-                checked={verifyOwnership}
-                id="verify-ownership-detail"
-                onCheckedChange={setVerifyOwnership}
-              />
-              <label htmlFor="verify-ownership-detail">Verify ownership</label>
-            </div>
             <Button
               disabled={listingQuery.isFetching}
               onClick={() => {
@@ -560,10 +565,11 @@ export function TokenDetailView({
         {isConnected && effectiveIsOwner ? (
           <Card className="border-dashed">
             <CardContent className="space-y-3 p-3">
+              <h2 className="text-sm font-medium tracking-widest uppercase text-muted-foreground">List this token</h2>
               <div className="grid gap-2 sm:grid-cols-2">
                 <div className="flex items-center gap-1">
                   <Input
-                    aria-label="Price (STRK)"
+                    aria-label={`Price (${getTokenSymbol(currencyInput)})`}
                     min="0"
                     onChange={(event) => setPriceInput(event.target.value)}
                     placeholder="Price"
@@ -571,7 +577,7 @@ export function TokenDetailView({
                     type="number"
                     value={priceInput}
                   />
-                  <span className="text-sm text-muted-foreground shrink-0">STRK</span>
+                  <span className="text-sm text-muted-foreground shrink-0">{getTokenSymbol(currencyInput)}</span>
                 </div>
                 <Input
                   aria-label="Quantity"
@@ -633,12 +639,25 @@ export function TokenDetailView({
                   type="button"
                   variant="destructive"
                 >
-                  Cancel mine
+                  Cancel my listing
                 </Button>
               </div>
               {txStatus.message ? (
                 <p className={txStatus.tone === "error" ? "text-xs text-destructive" : "text-xs text-primary"}>
                   {txStatus.message}
+                  {txStatus.txHash ? (
+                    <>
+                      {" "}
+                      <a
+                        href={buildExplorerTxUrl(chainLabel, txStatus.txHash)}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="underline"
+                      >
+                        View on Starkscan →
+                      </a>
+                    </>
+                  ) : null}
                 </p>
               ) : null}
             </CardContent>
@@ -649,10 +668,11 @@ export function TokenDetailView({
         {isConnected && !effectiveIsOwner && !(ownershipQuery as { isLoading?: boolean }).isLoading ? (
           <Card className="border-dashed">
             <CardContent className="space-y-3 p-3">
+              <h2 className="text-sm font-medium tracking-widest uppercase text-muted-foreground">Make an offer</h2>
               <div className="grid gap-2 sm:grid-cols-2">
                 <div className="flex items-center gap-1">
                   <Input
-                    aria-label="Price (STRK)"
+                    aria-label={`Price (${getTokenSymbol(currencyInput)})`}
                     min="0"
                     onChange={(event) => setPriceInput(event.target.value)}
                     placeholder="Price"
@@ -660,7 +680,7 @@ export function TokenDetailView({
                     type="number"
                     value={priceInput}
                   />
-                  <span className="text-sm text-muted-foreground shrink-0">STRK</span>
+                  <span className="text-sm text-muted-foreground shrink-0">{getTokenSymbol(currencyInput)}</span>
                 </div>
                 <Input
                   aria-label="Quantity"
@@ -708,6 +728,19 @@ export function TokenDetailView({
               {txStatus.message ? (
                 <p className={txStatus.tone === "error" ? "text-xs text-destructive" : "text-xs text-primary"}>
                   {txStatus.message}
+                  {txStatus.txHash ? (
+                    <>
+                      {" "}
+                      <a
+                        href={buildExplorerTxUrl(chainLabel, txStatus.txHash)}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="underline"
+                      >
+                        View on Starkscan →
+                      </a>
+                    </>
+                  ) : null}
                 </p>
               ) : null}
             </CardContent>
@@ -763,7 +796,7 @@ export function TokenDetailView({
                     <div className="flex items-center gap-2">
                       {expiration ? (
                         <Badge variant="secondary">
-                          {new Date(expiration * 1000).toLocaleDateString()}
+                          {formatRelativeExpiry(expiration)}
                         </Badge>
                       ) : null}
                       <Button

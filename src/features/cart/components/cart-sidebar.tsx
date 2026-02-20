@@ -4,8 +4,14 @@ import { useEffect, useMemo, useState } from "react";
 import { ArcadeProvider, NAMESPACE } from "@cartridge/arcade";
 import { useMarketplaceClient } from "@cartridge/arcade/marketplace/react";
 import { useAccount } from "@starknet-react/core";
+import Link from "next/link";
+import { ShoppingCart } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { formatAddress, formatPriceForDisplay } from "@/lib/marketplace/token-display";
+import {
+  formatPriceForDisplay,
+  buildExplorerTxUrl,
+  getTokenSymbol,
+} from "@/lib/marketplace/token-display";
 import {
   calculateCartSummary,
   parseBigInt,
@@ -157,7 +163,7 @@ export function CartSidebar() {
   const clearInlineErrors = useCartStore((state) => state.clearInlineErrors);
   const { account, isConnected } = useAccount();
   const { client } = useMarketplaceClient();
-  const { sdkConfig } = getMarketplaceRuntimeConfig();
+  const { sdkConfig, chainLabel } = getMarketplaceRuntimeConfig();
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [refreshingRows, setRefreshingRows] = useState<Record<string, boolean>>(
     {},
@@ -169,6 +175,7 @@ export function CartSidebar() {
     kind: "idle" | "stale" | "error" | "success";
     tone: "idle" | "success" | "error";
     message: string;
+    txHash?: string;
   }>({ kind: "idle", tone: "idle", message: "" });
 
   const effectiveFeeConfig = useMemo(
@@ -361,7 +368,8 @@ export function CartSidebar() {
       setCheckoutStatus({
         kind: "success",
         tone: "success",
-        message: `Submitted checkout transaction: ${result.transaction_hash}`,
+        message: "Purchase complete!",
+        txHash: result.transaction_hash,
       });
     } catch (error) {
       const message =
@@ -440,8 +448,14 @@ export function CartSidebar() {
         size="sm"
         type="button"
         variant="outline"
+        className="relative px-2"
       >
-        Cart ({items.length})
+        <ShoppingCart className="h-4 w-4" />
+        {items.length > 0 && (
+          <span className="absolute -right-1 -top-1 flex h-4 w-4 items-center justify-center rounded-full bg-primary text-[10px] font-medium text-primary-foreground">
+            {items.length}
+          </span>
+        )}
       </Button>
 
       <Sheet onOpenChange={setOpen} open={isOpen}>
@@ -467,6 +481,19 @@ export function CartSidebar() {
                   }
                 >
                   {checkoutStatus.message}
+                  {checkoutStatus.txHash ? (
+                    <>
+                      {" "}
+                      <a
+                        href={buildExplorerTxUrl(chainLabel, checkoutStatus.txHash)}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="underline"
+                      >
+                        View transaction →
+                      </a>
+                    </>
+                  ) : null}
                 </p>
                 {checkoutStatus.kind === "stale" ? (
                   <Button
@@ -486,7 +513,15 @@ export function CartSidebar() {
             ) : null}
 
             {items.length === 0 ? (
-              <p className="text-sm text-muted-foreground">Cart is empty.</p>
+              <div className="space-y-2 py-4 text-center">
+                <p className="text-sm text-muted-foreground">Your cart is empty.</p>
+                <Link
+                  href="/collections"
+                  className="text-sm text-primary hover:underline"
+                >
+                  Browse collections →
+                </Link>
+              </div>
             ) : (
               items.map((item) => (
                 <div
@@ -517,7 +552,7 @@ export function CartSidebar() {
                         #{item.tokenId}
                       </p>
                       <p className="text-xs text-primary font-medium">
-                        {formatPriceForDisplay(item.price) ?? item.price} {formatAddress(item.currency)}
+                        {formatPriceForDisplay(item.price) ?? item.price} {getTokenSymbol(item.currency)}
                       </p>
                     </div>
                     <Button

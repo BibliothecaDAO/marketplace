@@ -14,6 +14,12 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import {
   Sheet,
   SheetContent,
   SheetHeader,
@@ -116,34 +122,28 @@ export function Header() {
           </Button>
 
           {isConnected && address ? (
-            <>
-              <Link
-                href={`/profile/${address}`}
-                className="hidden sm:inline"
-              >
-                <span
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <button
                   data-testid="wallet-address"
-                  className="rounded-sm bg-muted/50 px-2 py-0.5 text-xs text-primary font-mono hover:bg-muted transition-colors"
+                  type="button"
+                  className="hidden sm:inline-flex rounded-sm bg-muted/50 px-2 py-0.5 text-xs text-primary font-mono hover:bg-muted transition-colors cursor-pointer"
                 >
                   {formatAddress(address)}
-                </span>
-              </Link>
-              <Button size="sm" variant="outline" asChild>
-                <Link href={`/profile/${address}`}>Profile</Link>
-              </Button>
-            </>
-          ) : null}
-
-          {isConnected ? (
-            <Button
-              type="button"
-              size="sm"
-              variant="secondary"
-              onClick={() => disconnect()}
-              disabled={isBusy}
-            >
-              Disconnect
-            </Button>
+                </button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end">
+                <DropdownMenuItem asChild>
+                  <Link href={`/profile/${address}`}>Profile</Link>
+                </DropdownMenuItem>
+                <DropdownMenuItem
+                  onClick={() => disconnect()}
+                  disabled={isBusy}
+                >
+                  Disconnect
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
           ) : (
             <Button
               type="button"
@@ -151,7 +151,7 @@ export function Header() {
               onClick={() => setWalletModalOpen(true)}
               disabled={connectors.length === 0 || isBusy}
             >
-              Login
+              Connect Wallet
             </Button>
           )}
 
@@ -220,6 +220,24 @@ export function Header() {
                     {label}
                   </a>
                 ))}
+                {isConnected && address ? (
+                  <>
+                    <Link
+                      href={`/profile/${address}`}
+                      onClick={() => setMobileMenuOpen(false)}
+                      className="px-2 py-2.5 text-sm text-muted-foreground hover:text-foreground transition-colors rounded-sm hover:bg-muted"
+                    >
+                      Profile
+                    </Link>
+                    <button
+                      type="button"
+                      onClick={() => { disconnect(); setMobileMenuOpen(false); }}
+                      className="px-2 py-2.5 text-left text-sm text-muted-foreground hover:text-foreground transition-colors rounded-sm hover:bg-muted"
+                    >
+                      Disconnect
+                    </button>
+                  </>
+                ) : null}
               </nav>
               <div className="mt-6 flex items-center gap-2 px-2">
                 {SOCIAL_LINKS.map(({ label, href, Icon }) => (

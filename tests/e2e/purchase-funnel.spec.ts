@@ -14,7 +14,9 @@ test.describe("purchase funnel skeleton", () => {
     await expect(collectionLinks.first()).toBeVisible();
 
     await collectionLinks.first().click();
-    await expect(page).toHaveURL(/\/collections\//);
+    // Use waitForURL with full navigationTimeout – Next.js may need time to compile the
+    // [address] route on first access in CI.
+    await page.waitForURL(/\/collections\//, { timeout: 30_000 });
 
     const addButtons = page
       .getByRole("button", { name: "Add to cart" })
@@ -25,7 +27,7 @@ test.describe("purchase funnel skeleton", () => {
     await addButtons.first().click();
 
     await expect(page.getByRole("heading", { name: "Cart" })).toBeVisible();
-    await expect(page.getByText("Cart is empty.")).toHaveCount(0);
+    await expect(page.getByText("Your cart is empty.")).toHaveCount(0);
   });
 
   test("adds cheapest listing to cart from token detail", async ({ page }) => {
@@ -35,7 +37,7 @@ test.describe("purchase funnel skeleton", () => {
     await expect(collectionLinks.first()).toBeVisible();
 
     await collectionLinks.first().click();
-    await expect(page).toHaveURL(/\/collections\//);
+    await page.waitForURL(/\/collections\//, { timeout: 30_000 });
 
     const tokenLinks = page.locator("a[aria-label^='token-']");
     const hasTokenLink = (await tokenLinks.count()) > 0;
@@ -51,7 +53,7 @@ test.describe("purchase funnel skeleton", () => {
     await addCheapest.click();
 
     await expect(page.getByRole("heading", { name: "Cart" })).toBeVisible();
-    await expect(page.getByText("Cart is empty.")).toHaveCount(0);
+    await expect(page.getByText("Your cart is empty.")).toHaveCount(0);
   });
 
   test("portfolio_lookup_can_open_owned_token_detail", async ({ page }) => {

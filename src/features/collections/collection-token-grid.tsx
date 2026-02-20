@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useReducer, useState } from "react";
+import { useEffect, useMemo, useReducer } from "react";
 import type { NormalizedToken } from "@cartridge/arcade/marketplace";
 import {
   useCollectionListingsQuery,
@@ -35,19 +35,7 @@ type CollectionTokenGridProps = {
   onTokensChange?: (tokens: NormalizedToken[]) => void;
 };
 
-type GridDensity = "compact" | "standard" | "comfort";
-
-const GRID_DENSITY_OPTIONS: Array<{ label: string; value: GridDensity }> = [
-  { label: "Compact", value: "compact" },
-  { label: "Standard", value: "standard" },
-  { label: "Comfort", value: "comfort" },
-];
-
-const GRID_DENSITY_CLASSES: Record<GridDensity, string> = {
-  compact: "grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 xl:grid-cols-6",
-  standard: "grid-cols-1 sm:grid-cols-2 lg:grid-cols-3",
-  comfort: "grid-cols-1 sm:grid-cols-2 lg:grid-cols-2",
-};
+const GRID_CLASSES = "grid-cols-1 sm:grid-cols-2 lg:grid-cols-3";
 
 function dedupeTokens(tokens: NormalizedToken[]) {
   const unique = new Map<string, NormalizedToken>();
@@ -187,7 +175,6 @@ export function CollectionTokenGrid({
     cursor: undefined,
     tokens: [],
   });
-  const [gridDensity, setGridDensity] = useState<GridDensity>("standard");
 
   const tokenQuery = useCollectionTokensQuery({
     address,
@@ -230,27 +217,8 @@ export function CollectionTokenGrid({
 
   return (
     <section className="space-y-4">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <p className="text-xs tracking-wide uppercase text-muted-foreground">
-          Grid density
-        </p>
-        <div aria-label="Grid density" className="flex items-center gap-1">
-          {GRID_DENSITY_OPTIONS.map((option) => (
-            <Button
-              key={option.value}
-              onClick={() => setGridDensity(option.value)}
-              size="sm"
-              type="button"
-              variant={gridDensity === option.value ? "default" : "outline"}
-            >
-              {option.label}
-            </Button>
-          ))}
-        </div>
-      </div>
-
       {tokenQuery.isLoading && pagination.tokens.length === 0 ? (
-        <div className={cn("grid gap-3", GRID_DENSITY_CLASSES[gridDensity])}>
+        <div className={cn("grid gap-3", GRID_CLASSES)}>
           {Array.from({ length: 6 }).map((_, index) => (
             <Card key={index}>
               <CardContent className="space-y-2 p-3">
@@ -272,7 +240,7 @@ export function CollectionTokenGrid({
 
       {!tokenQuery.isLoading ? (
         <div
-          className={cn("grid gap-3", GRID_DENSITY_CLASSES[gridDensity])}
+          className={cn("grid gap-3", GRID_CLASSES)}
           data-testid="collection-token-grid-cards"
         >
           {sortedTokens.map((token) => {
@@ -325,9 +293,8 @@ export function CollectionTokenGrid({
 
       {tokenQuery.isSuccess && visibleTokens.length === 0 ? (
         <Card className="border-dashed">
-          <CardContent className="pt-6 text-sm text-muted-foreground font-mono">
-            <span className="text-primary mr-1">$</span>
-            grep --traits -- 0 results
+          <CardContent className="pt-6 text-sm text-muted-foreground">
+            No tokens match your filters. Try removing some filters.
           </CardContent>
         </Card>
       ) : null}

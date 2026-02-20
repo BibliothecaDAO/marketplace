@@ -1,6 +1,6 @@
 import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { describe, expect, it, vi } from "vitest";
+import { describe, expect, it, vi, beforeEach } from "vitest";
 
 vi.mock("@/features/profile/wallet-profile-view", () => ({
   WalletProfileView: ({ address }: { address: string }) => (
@@ -8,9 +8,21 @@ vi.mock("@/features/profile/wallet-profile-view", () => ({
   ),
 }));
 
+const { mockUseAccount } = vi.hoisted(() => ({
+  mockUseAccount: vi.fn(),
+}));
+
+vi.mock("@starknet-react/core", () => ({
+  useAccount: mockUseAccount,
+}));
+
 import { PortfolioView } from "@/features/portfolio/portfolio-view";
 
 describe("PortfolioView", () => {
+  beforeEach(() => {
+    mockUseAccount.mockReturnValue({ isConnected: false, address: undefined });
+  });
+
   it("renders_address_input_and_submit_action", () => {
     render(<PortfolioView />);
 
@@ -53,6 +65,23 @@ describe("PortfolioView", () => {
 
     expect(screen.getByTestId("wallet-profile-view")).toHaveTextContent(
       "0xabc123",
+    );
+  });
+
+  it("pre_populates_and_auto_fetches_when_wallet_connected", () => {
+    mockUseAccount.mockReturnValue({
+      isConnected: true,
+      address: "0xmywalletaddress",
+    });
+
+    render(<PortfolioView />);
+
+    expect(screen.getByRole("textbox", { name: /wallet address/i })).toHaveValue(
+      "0xmywalletaddress",
+    );
+    // Holdings should be shown without pressing Load holdings
+    expect(screen.getByTestId("wallet-profile-view")).toHaveTextContent(
+      "0xmywalletaddress",
     );
   });
 });

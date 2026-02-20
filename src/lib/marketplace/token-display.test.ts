@@ -9,6 +9,10 @@ import {
   tokenImage,
   tokenName,
   tokenPrice,
+  getTokenSymbol,
+  getTokenIconUrl,
+  buildExplorerTxUrl,
+  formatRelativeExpiry,
 } from "@/lib/marketplace/token-display";
 
 type MockToken = { token_id?: unknown; image?: string | null; metadata?: unknown };
@@ -386,5 +390,127 @@ describe("listingPriceByTokenId", () => {
     ];
     const map = listingPriceByTokenId(listings);
     expect(map.get("1")).toBe("100");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// getTokenSymbol
+// ---------------------------------------------------------------------------
+const STRK_ADDRESS = "0x04718f5a0fc34cc1af16a1cdee98ffb20c31f5cd61d6ab07201858f4287c938d";
+
+describe("getTokenSymbol", () => {
+  it("returns STRK for the known STRK address (lowercase)", () => {
+    expect(getTokenSymbol(STRK_ADDRESS)).toBe("STRK");
+  });
+
+  it("is case-insensitive for the STRK address", () => {
+    expect(getTokenSymbol(STRK_ADDRESS.toUpperCase())).toBe("STRK");
+  });
+
+  it("returns truncated address for unknown token", () => {
+    const result = getTokenSymbol("0xdeadbeef1234567890abcdef");
+    expect(result).toMatch(/^0x.+\.\.\..+$/);
+  });
+
+  it("returns the address as-is for very short unknown addresses", () => {
+    const short = "0xabc";
+    const result = getTokenSymbol(short);
+    expect(result).toBe(short);
+  });
+
+  it("returns SURVIVO for the SURVIVO token address", () => {
+    expect(getTokenSymbol("0x42dd777885ad2c116be96d4d634abc90a26a790ffb5871e037dd5ae7d2ec86b")).toBe("SURVIVO");
+  });
+
+  it("returns LORDS for the Lords token address", () => {
+    expect(getTokenSymbol("0x0124aeb495b947201f5fac96fd1138e326ad86195b98df6dec9009158a533b49")).toBe("LORDS");
+  });
+
+  it("is case-insensitive for SURVIVO address", () => {
+    expect(getTokenSymbol("0x42DD777885AD2C116BE96D4D634ABC90A26A790FFB5871E037DD5AE7D2EC86B")).toBe("SURVIVO");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// getTokenIconUrl
+// ---------------------------------------------------------------------------
+describe("getTokenIconUrl", () => {
+  it("returns null for unknown token", () => {
+    expect(getTokenIconUrl("0xdeadbeef1234567890abcdef")).toBeNull();
+  });
+
+  it("returns null for STRK (no icon registered)", () => {
+    expect(getTokenIconUrl("0x04718f5a0fc34cc1af16a1cdee98ffb20c31f5cd61d6ab07201858f4287c938d")).toBeNull();
+  });
+
+  it("returns local path for SURVIVO", () => {
+    expect(getTokenIconUrl("0x42dd777885ad2c116be96d4d634abc90a26a790ffb5871e037dd5ae7d2ec86b")).toBe("/tokens/survivo.jpg");
+  });
+
+  it("returns CoinGecko URL for LORDS", () => {
+    const url = getTokenIconUrl("0x0124aeb495b947201f5fac96fd1138e326ad86195b98df6dec9009158a533b49");
+    expect(url).toContain("coingecko.com");
+  });
+
+  it("is case-insensitive", () => {
+    expect(getTokenIconUrl("0x42DD777885AD2C116BE96D4D634ABC90A26A790FFB5871E037DD5AE7D2EC86B")).toBe("/tokens/survivo.jpg");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// buildExplorerTxUrl
+// ---------------------------------------------------------------------------
+describe("buildExplorerTxUrl", () => {
+  it("returns mainnet starkscan URL for SN_MAIN", () => {
+    expect(buildExplorerTxUrl("SN_MAIN", "0xabc123")).toBe(
+      "https://starkscan.co/tx/0xabc123",
+    );
+  });
+
+  it("returns sepolia starkscan URL for SN_SEPOLIA", () => {
+    expect(buildExplorerTxUrl("SN_SEPOLIA", "0xabc123")).toBe(
+      "https://sepolia.starkscan.co/tx/0xabc123",
+    );
+  });
+
+  it("falls back to sepolia URL for unknown chain labels", () => {
+    expect(buildExplorerTxUrl("custom", "0xabc123")).toBe(
+      "https://sepolia.starkscan.co/tx/0xabc123",
+    );
+  });
+});
+
+// ---------------------------------------------------------------------------
+// formatRelativeExpiry
+// ---------------------------------------------------------------------------
+describe("formatRelativeExpiry", () => {
+  it("returns 'Expired' for timestamps in the past", () => {
+    const past = Math.floor(Date.now() / 1000) - 100;
+    expect(formatRelativeExpiry(past)).toBe("Expired");
+  });
+
+  it("returns 'Expires in N days' for multi-day future timestamps", () => {
+    const future = Math.floor(Date.now() / 1000) + 3 * 86400 + 60;
+    expect(formatRelativeExpiry(future)).toBe("Expires in 3 days");
+  });
+
+  it("returns 'Expires in 1 day' (singular) for exactly ~1 day", () => {
+    const future = Math.floor(Date.now() / 1000) + 86400 + 60;
+    expect(formatRelativeExpiry(future)).toBe("Expires in 1 day");
+  });
+
+  it("returns 'Expires in N hours' for sub-24h future timestamps", () => {
+    const future = Math.floor(Date.now() / 1000) + 6 * 3600 + 60;
+    expect(formatRelativeExpiry(future)).toBe("Expires in 6 hours");
+  });
+
+  it("returns 'Expires in 1 hour' (singular) for ~1h", () => {
+    const future = Math.floor(Date.now() / 1000) + 3600 + 60;
+    expect(formatRelativeExpiry(future)).toBe("Expires in 1 hour");
+  });
+
+  it("returns 'Expires soon' for < 1 hour future timestamps", () => {
+    const future = Math.floor(Date.now() / 1000) + 300;
+    expect(formatRelativeExpiry(future)).toBe("Expires soon");
   });
 });

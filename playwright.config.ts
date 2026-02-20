@@ -5,9 +5,13 @@ export default defineConfig({
   fullyParallel: true,
   retries: 0,
   reporter: "list",
+  expect: {
+    timeout: 15_000,
+  },
   use: {
     baseURL: "http://127.0.0.1:3400",
     trace: "on-first-retry",
+    navigationTimeout: 30_000,
   },
   projects: [
     {

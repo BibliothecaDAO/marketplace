@@ -179,7 +179,7 @@ describe("collection route view", () => {
     expect(screen.queryByText(/contract type/i)).toBeNull();
   });
 
-  it("sort_controls_update_mode_and_pass_selection_to_token_grid", async () => {
+  it("sort_select_combobox_updates_mode_and_passes_to_grid", async () => {
     mockUseCollectionQuery.mockReturnValue(successQuery(null));
     const onSortModeChange = vi.fn();
     const user = userEvent.setup();
@@ -193,7 +193,12 @@ describe("collection route view", () => {
       />,
     );
 
-    await user.click(screen.getByRole("button", { name: /price low to high/i }));
+    // Sort must be a Select combobox, not individual buttons
+    expect(screen.queryByRole("button", { name: /price low to high/i })).toBeNull();
+    expect(screen.queryByRole("button", { name: /price high to low/i })).toBeNull();
+
+    await user.click(screen.getByRole("combobox", { name: /sort/i }));
+    await user.click(await screen.findByRole("option", { name: /price low to high/i }));
 
     expect(onSortModeChange).toHaveBeenCalledWith("price-asc");
     expect(screen.getByText(/sort: recent/i)).toBeVisible();

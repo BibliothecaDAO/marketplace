@@ -9,7 +9,6 @@ import {
 import {
   formatPriceForDisplay,
 } from "@/lib/marketplace/token-display";
-import { Button } from "@/components/ui/button";
 import {
   Select,
   SelectContent,
@@ -180,19 +179,18 @@ export function CollectionRouteView({
           )}
         </div>
 
-        <div className="flex flex-wrap items-center gap-2" role="group" aria-label="Sort tokens">
-          {SORT_OPTIONS.map((option) => (
-            <Button
-              key={option.value}
-              onClick={() => onSortModeChange?.(option.value)}
-              size="sm"
-              type="button"
-              variant={sortMode === option.value ? "default" : "outline"}
-            >
-              {option.label}
-            </Button>
-          ))}
-        </div>
+        <Select value={sortMode} onValueChange={(value) => onSortModeChange?.(value as CollectionSortMode)}>
+          <SelectTrigger aria-label="Sort tokens" className="w-48">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            {SORT_OPTIONS.map((option) => (
+              <SelectItem key={option.value} value={option.value}>
+                {option.label}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
 
         {collection.isSuccess && !collection.data ? (
           <p className="text-sm text-muted-foreground font-mono">
