@@ -19,7 +19,7 @@
     "ci:feature-routes": "node scripts/ci/feature-screenshot-routes.mjs"
   },
   "dependencies": {
-    "@cartridge/arcade": "^0.3.12",
+    "@cartridge/arcade": "^0.3.13-preview.1",
     "@cartridge/connector": "^0.13.9",
     "@cartridge/controller": "^0.13.9",
     "@effect/platform": ">=0.93.8 <0.94.0-0",

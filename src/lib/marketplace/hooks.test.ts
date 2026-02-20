@@ -41,6 +41,7 @@ describe("marketplace cached hooks", () => {
     mockUseMarketplaceClient.mockReset();
     mockUseMarketplaceTokenBalances.mockReset();
     mockUseMarketplaceTokenBalances.mockReturnValue({ data: [], isLoading: false });
+    vi.unstubAllGlobals();
   });
 
   describe("useCollectionQuery", () => {
@@ -423,7 +424,7 @@ describe("marketplace cached hooks", () => {
         expect.objectContaining({
           tokenIds: expect.arrayContaining(["2648", "0xa58"]),
         }),
-        true,
+        expect.objectContaining({ enabled: true }),
       );
     });
 
@@ -445,7 +446,7 @@ describe("marketplace cached hooks", () => {
         expect.objectContaining({
           tokenIds: expect.arrayContaining(["0xa58", "2648"]),
         }),
-        true,
+        expect.objectContaining({ enabled: true }),
       );
     });
 
@@ -464,7 +465,7 @@ describe("marketplace cached hooks", () => {
 
       expect(mockUseMarketplaceTokenBalances).toHaveBeenCalledWith(
         expect.anything(),
-        false,
+        expect.objectContaining({ enabled: false }),
       );
     });
   });
@@ -487,7 +488,7 @@ describe("marketplace cached hooks", () => {
         expect.objectContaining({
           tokenIds: expect.arrayContaining(["2648", "0xa58"]),
         }),
-        true,
+        expect.objectContaining({ enabled: true }),
       );
     });
 
@@ -508,7 +509,7 @@ describe("marketplace cached hooks", () => {
         expect.objectContaining({
           tokenIds: expect.arrayContaining(["0xa58", "2648"]),
         }),
-        true,
+        expect.objectContaining({ enabled: true }),
       );
     });
 
@@ -527,8 +528,51 @@ describe("marketplace cached hooks", () => {
 
       expect(mockUseMarketplaceTokenBalances).toHaveBeenCalledWith(
         expect.anything(),
-        false,
+        expect.objectContaining({ enabled: false }),
       );
+    });
+  });
+
+  describe("useCollectionTraitMetadataQuery", () => {
+    it("fetches_trait_metadata_via_edge_route", async () => {
+      const traitMetadata = [{ traitName: "Background", traitValue: "Blue", count: 5 }];
+      const fetchMock = vi.fn().mockResolvedValue(
+        new Response(JSON.stringify({ traitMetadata }), {
+          status: 200,
+          headers: { "content-type": "application/json" },
+        }),
+      );
+      vi.stubGlobal("fetch", fetchMock);
+
+      const { useCollectionTraitMetadataQuery } = await import("@/lib/marketplace/hooks");
+      const { result } = renderHook(
+        () => useCollectionTraitMetadataQuery({ address: "0xabc", projectId: "project-a" }),
+        { wrapper: makeWrapper() },
+      );
+
+      await waitFor(() => expect(result.current.isSuccess).toBe(true));
+      expect(fetchMock).toHaveBeenCalledWith(
+        "/api/collections/0xabc/trait-metadata?projectId=project-a",
+        expect.objectContaining({ method: "GET" }),
+      );
+      expect(result.current.data).toEqual(traitMetadata);
+    });
+
+    it("returns_error_when_trait_metadata_route_fails", async () => {
+      const fetchMock = vi.fn().mockResolvedValue(
+        new Response("upstream failed", { status: 500 }),
+      );
+      vi.stubGlobal("fetch", fetchMock);
+
+      const { useCollectionTraitMetadataQuery } = await import("@/lib/marketplace/hooks");
+      const { result } = renderHook(
+        () => useCollectionTraitMetadataQuery({ address: "0xabc", projectId: "project-a" }),
+        { wrapper: makeWrapper() },
+      );
+
+      await waitFor(() => expect(result.current.isError).toBe(true));
+      expect(fetchMock).toHaveBeenCalledTimes(1);
+      expect((result.current.error as Error).message).toContain("failed to load trait metadata");
     });
   });
 });

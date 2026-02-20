@@ -10,6 +10,7 @@ import type {
   TokenDetailsOptions,
 } from "@cartridge/arcade/marketplace";
 import { useMarketplaceClient, useMarketplaceTokenBalances } from "@cartridge/arcade/marketplace/react";
+import type { TraitMetadataRow } from "@/lib/marketplace/traits";
 
 function logSdkPayload(label: string, options: object, payload: unknown) {
   if (process.env.NODE_ENV !== "development") {
@@ -105,6 +106,49 @@ function alternateTokenId(rawTokenId: string) {
   }
 
   return null;
+}
+
+type TraitMetadataApiPayload = {
+  traitMetadata?: TraitMetadataRow[];
+};
+
+function traitMetadataRoutePath(options: { address: string; projectId?: string }) {
+  const params = new URLSearchParams();
+  if (options.projectId) {
+    params.set("projectId", options.projectId);
+  }
+
+  const query = params.toString();
+  const encodedAddress = encodeURIComponent(options.address);
+  return query
+    ? `/api/collections/${encodedAddress}/trait-metadata?${query}`
+    : `/api/collections/${encodedAddress}/trait-metadata`;
+}
+
+async function fetchTraitMetadataFromRoute(options: {
+  address: string;
+  projectId?: string;
+}): Promise<TraitMetadataRow[]> {
+  const response = await fetch(traitMetadataRoutePath(options), {
+    method: "GET",
+    headers: { accept: "application/json" },
+  });
+
+  if (!response.ok) {
+    let detail = "";
+    try {
+      detail = (await response.text()).trim();
+    } catch {
+      // no-op: keep fallback message below
+    }
+
+    throw new Error(
+      `failed to load trait metadata${detail ? `: ${detail}` : ""}`,
+    );
+  }
+
+  const payload = (await response.json()) as TraitMetadataApiPayload;
+  return Array.isArray(payload.traitMetadata) ? payload.traitMetadata : [];
 }
 
 export function useCollectionQuery(options: CollectionSummaryOptions) {
@@ -269,7 +313,9 @@ export function useTokenOwnershipQuery(options: {
       tokenIds,
       limit: 1,
     },
-    !!options.accountAddress && !!options.collection && !!options.tokenId,
+    {
+      enabled: !!options.accountAddress && !!options.collection && !!options.tokenId,
+    },
   );
 }
 
@@ -279,16 +325,7 @@ export function useCollectionTraitMetadataQuery(options: {
 }) {
   return useQuery({
     queryKey: ["collection-trait-metadata", options.address, options.projectId] as const,
-    queryFn: async () => {
-      const { fetchCollectionTraitMetadata, aggregateTraitMetadata } =
-        await import("@cartridge/arcade/marketplace");
-      const result = await fetchCollectionTraitMetadata({
-        address: options.address,
-        projects: options.projectId ? [options.projectId] : undefined,
-        defaultProjectId: options.projectId,
-      });
-      return aggregateTraitMetadata(result.pages);
-    },
+    queryFn: async () => fetchTraitMetadataFromRoute(options),
     enabled: !!options.address,
   });
 }
@@ -305,7 +342,9 @@ export function useTokenHolderQuery(options: {
       tokenIds,
       limit: 1,
     },
-    !!options.collection && !!options.tokenId,
+    {
+      enabled: !!options.collection && !!options.tokenId,
+    },
   );
 }
 
@@ -315,6 +354,8 @@ export function useWalletPortfolioQuery(walletAddress: string | undefined) {
       accountAddresses: walletAddress ? [walletAddress] : [],
       limit: 200,
     },
-    !!walletAddress,
+    {
+      enabled: !!walletAddress,
+    },
   );
 }
