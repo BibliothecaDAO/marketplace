@@ -9,9 +9,9 @@ describe("collection trait metadata api route", () => {
     const fetchMock = vi.fn().mockResolvedValue(
       new Response(
         JSON.stringify([
-          { trait_name: "Background", trait_value: "Blue", count: 3 },
-          { trait_name: "Background", trait_value: "Blue", count: 2 },
-          { trait_name: "Body", trait_value: "Human", count: 4 },
+          { trait_name: "Background", trait_value: "Blue" },
+          { trait_name: "Background", trait_value: "Blue" },
+          { trait_name: "Body", trait_value: "Human" },
         ]),
         {
           status: 200,
@@ -35,6 +35,7 @@ describe("collection trait metadata api route", () => {
       "https://api.cartridge.gg/x/project-a/torii/sql",
       expect.objectContaining({
         method: "POST",
+        body: expect.stringContaining("LIMIT"),
       }),
     );
     expect(response.status).toBe(200);
@@ -43,8 +44,8 @@ describe("collection trait metadata api route", () => {
     );
     expect(await response.json()).toEqual({
       traitMetadata: [
-        { traitName: "Background", traitValue: "Blue", count: 5 },
-        { traitName: "Body", traitValue: "Human", count: 4 },
+        { traitName: "Background", traitValue: "Blue", count: 2 },
+        { traitName: "Body", traitValue: "Human", count: 1 },
       ],
     });
   });

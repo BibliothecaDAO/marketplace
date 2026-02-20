@@ -6,6 +6,7 @@ import type { TraitMetadataRow } from "@/lib/marketplace/traits";
 const EDGE_CACHE_CONTROL = "public, s-maxage=300, stale-while-revalidate=900";
 const DEFAULT_PROJECT_ID = "arcade-main";
 const TORII_SQL_TIMEOUT_MS = 4_000;
+const TRAIT_SAMPLE_ROW_LIMIT = 10_000;
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -51,17 +52,12 @@ function resolveProjectId(address: string, requestedProjectId: string | undefine
 
 function buildTraitMetadataQuery(address: string) {
   const paddedAddress = addAddressPadding(address);
-  return `SELECT trait_name, trait_value, COUNT(*) AS count
+  // Aggregating over the full dataset frequently times out on larger collections.
+  // Pull a bounded sample of raw rows, then aggregate in-process for predictable latency.
+  return `SELECT trait_name, trait_value
 FROM token_attributes
-WHERE token_id IN (
-    SELECT token_id
-    FROM token_attributes
-    WHERE 1 = 1
-      AND token_id LIKE '${paddedAddress}:%'
-    GROUP BY token_id
-)
-GROUP BY trait_name, trait_value
-ORDER BY trait_name, count DESC`;
+WHERE token_id LIKE '${paddedAddress}:%'
+LIMIT ${TRAIT_SAMPLE_ROW_LIMIT}`;
 }
 
 function extractRows(payload: unknown): TraitMetadataSqlRow[] {
@@ -107,7 +103,7 @@ function normalizeRow(row: TraitMetadataSqlRow): TraitMetadataRow | null {
       ? row.count
       : typeof row.count === "string"
         ? Number.parseInt(row.count, 10)
-        : Number(row.count ?? 0);
+        : Number(row.count ?? 1);
   const count = Number.isFinite(countRaw) ? Number(countRaw) : 0;
   return { traitName, traitValue, count };
 }
