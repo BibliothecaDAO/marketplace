@@ -120,6 +120,38 @@ describe("cart sidebar", () => {
     expect(screen.getByRole("button", { name: /cart \(1\)/i })).toBeVisible();
   });
 
+  it("cart_trigger_button_shows_icon_not_text", () => {
+    useCartStore.setState({
+      items: [makeItem("7001", "1", "100")],
+      inlineErrors: {},
+      isOpen: false,
+      lastActionError: null,
+    });
+
+    render(<CartSidebar />);
+
+    const trigger = screen.getByRole("button", { name: /cart \(1\)/i });
+    // Icon button: should not display "Cart" as visible text
+    expect(trigger.textContent).not.toContain("Cart");
+  });
+
+  it("empty_cart_shows_browse_collections_link", async () => {
+    useCartStore.setState({
+      items: [],
+      inlineErrors: {},
+      isOpen: false,
+      lastActionError: null,
+    });
+    const user = userEvent.setup();
+
+    render(<CartSidebar />);
+    await user.click(screen.getByRole("button", { name: /cart \(0\)/i }));
+
+    const browseLink = await screen.findByRole("link", { name: /browse collections/i });
+    expect(browseLink).toBeVisible();
+    expect(browseLink).toHaveAttribute("href", "/collections");
+  });
+
   it("header_cart_trigger_opens_top_right_sidebar", async () => {
     useCartStore.setState({
       items: [makeItem("7001", "1", "100")],
@@ -384,6 +416,6 @@ describe("cart sidebar", () => {
     await waitFor(() => {
       expect(mockArcadeExecute).toHaveBeenCalledTimes(1);
     });
-    expect(await screen.findByText(/submitted checkout transaction/i)).toBeVisible();
+    expect(await screen.findByText(/purchase complete/i)).toBeVisible();
   });
 });

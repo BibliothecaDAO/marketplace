@@ -33,6 +33,17 @@ describe("cart store", () => {
     expect(store.getState().items[0]?.tokenId).toBe("1");
   });
 
+  it("cart_store_reports_already_in_cart_for_duplicate", () => {
+    const store = createCartStore();
+
+    store.getState().addItem(makeItem({ orderId: "101" }));
+    const result = store.getState().addItem(makeItem({ orderId: "101", tokenId: "2" }));
+
+    expect(result.ok).toBe(false);
+    expect(result.error).toMatch(/already in cart/i);
+    expect(store.getState().lastActionError).toMatch(/already in cart/i);
+  });
+
   it("cart_store_rejects_mixed_currency", () => {
     const store = createCartStore();
 

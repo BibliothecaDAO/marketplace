@@ -108,7 +108,7 @@ describe("Header", () => {
   it("shows_login_button_when_disconnected", () => {
     render(<Header />);
 
-    expect(screen.getByRole("button", { name: /login/i })).toBeVisible();
+    expect(screen.getByRole("button", { name: /connect wallet/i })).toBeVisible();
   });
 
   it("shows_cart_trigger_button", () => {
@@ -138,7 +138,7 @@ describe("Header", () => {
     const user = userEvent.setup();
 
     render(<Header />);
-    await user.click(screen.getByRole("button", { name: /login/i }));
+    await user.click(screen.getByRole("button", { name: /connect wallet/i }));
 
     expect(screen.getByRole("heading", { name: /select wallet/i })).toBeVisible();
     expect(screen.getByRole("button", { name: /braavos/i })).toBeVisible();
@@ -158,13 +158,40 @@ describe("Header", () => {
     const user = userEvent.setup();
 
     render(<Header />);
-    await user.click(screen.getByRole("button", { name: /login/i }));
+    await user.click(screen.getByRole("button", { name: /connect wallet/i }));
     await user.click(screen.getByRole("button", { name: /braavos/i }));
 
     expect(mockConnect).toHaveBeenCalledWith({ connector: braavosConnector });
   });
 
-  it("shows_disconnect_button_for_connected_wallet", async () => {
+  it("shows_wallet_address_badge_when_connected", () => {
+    mockUseAccount.mockReturnValue({
+      status: "connected",
+      isConnected: true,
+      isDisconnected: false,
+      address: "0x1234567890abcdef",
+    });
+
+    render(<Header />);
+
+    expect(screen.getByTestId("wallet-address")).toHaveTextContent("0x1234...cdef");
+  });
+
+  it("no_top_level_disconnect_button_when_connected", () => {
+    mockUseAccount.mockReturnValue({
+      status: "connected",
+      isConnected: true,
+      isDisconnected: false,
+      address: "0x1234567890abcdef",
+    });
+
+    render(<Header />);
+
+    // Disconnect must NOT be a top-level visible button; it lives inside the dropdown
+    expect(screen.queryByRole("button", { name: /^disconnect$/i })).toBeNull();
+  });
+
+  it("wallet_dropdown_contains_profile_and_disconnect", async () => {
     mockUseAccount.mockReturnValue({
       status: "connected",
       isConnected: true,
@@ -174,48 +201,51 @@ describe("Header", () => {
     const user = userEvent.setup();
 
     render(<Header />);
-    await user.click(screen.getByRole("button", { name: /disconnect/i }));
+    await user.click(screen.getByTestId("wallet-address"));
 
-    expect(screen.getByTestId("wallet-address")).toHaveTextContent("0x1234...cdef");
+    expect(screen.getByRole("menuitem", { name: /profile/i })).toBeVisible();
+    expect(screen.getByRole("menuitem", { name: /disconnect/i })).toBeVisible();
+  });
+
+  it("disconnect_from_dropdown_calls_disconnect", async () => {
+    mockUseAccount.mockReturnValue({
+      status: "connected",
+      isConnected: true,
+      isDisconnected: false,
+      address: "0x1234567890abcdef",
+    });
+    const user = userEvent.setup();
+
+    render(<Header />);
+    await user.click(screen.getByTestId("wallet-address"));
+    await user.click(screen.getByRole("menuitem", { name: /disconnect/i }));
+
     expect(mockDisconnect).toHaveBeenCalledTimes(1);
   });
 
-  it("profile_button_links_to_wallet_profile_page", () => {
+  it("profile_menuitem_links_to_wallet_profile_page", async () => {
     mockUseAccount.mockReturnValue({
       status: "connected",
       isConnected: true,
       isDisconnected: false,
       address: "0x1234567890abcdef",
     });
+    const user = userEvent.setup();
 
     render(<Header />);
+    await user.click(screen.getByTestId("wallet-address"));
 
-    const profileLink = screen.getByRole("link", { name: /profile/i });
-    expect(profileLink).toBeVisible();
-    expect(profileLink).toHaveAttribute("href", "/profile/0x1234567890abcdef");
+    const profileItem = screen.getByRole("menuitem", { name: /profile/i });
+    expect(profileItem.closest("a")).toHaveAttribute(
+      "href",
+      "/profile/0x1234567890abcdef",
+    );
   });
 
-  it("wallet_address_links_to_profile_page", () => {
-    mockUseAccount.mockReturnValue({
-      status: "connected",
-      isConnected: true,
-      isDisconnected: false,
-      address: "0x1234567890abcdef",
-    });
-
+  it("wallet_dropdown_not_shown_when_disconnected", () => {
     render(<Header />);
 
-    const addressEl = screen.getByTestId("wallet-address");
-    // The address element should be inside a link to the profile page
-    const link = addressEl.closest("a");
-    expect(link).not.toBeNull();
-    expect(link).toHaveAttribute("href", "/profile/0x1234567890abcdef");
-  });
-
-  it("profile_button_not_shown_when_disconnected", () => {
-    render(<Header />);
-
-    expect(screen.queryByRole("link", { name: /profile/i })).toBeNull();
+    expect(screen.queryByTestId("wallet-address")).toBeNull();
   });
 
   it("handles_connect_errors_without_throwing", async () => {
@@ -226,7 +256,7 @@ describe("Header", () => {
     mockConnect.mockRejectedValueOnce(new Error("connect failed"));
 
     render(<Header />);
-    await user.click(screen.getByRole("button", { name: /login/i }));
+    await user.click(screen.getByRole("button", { name: /connect wallet/i }));
     await user.click(screen.getByRole("button", { name: /controller/i }));
 
     expect(mockConsoleError).toHaveBeenCalledWith(

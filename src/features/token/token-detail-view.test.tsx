@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from "@testing-library/react";
+import { act, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi, beforeEach } from "vitest";
 import { TokenDetailView } from "@/features/token/token-detail-view";
@@ -547,7 +547,7 @@ describe("token detail view", () => {
     );
   });
 
-  it("listing_verify_toggle_updates_query_option", async () => {
+  it("verify_ownership_toggle_not_visible", () => {
     mockUseTokenDetailQuery.mockReturnValue(
       successQuery({
         token: {
@@ -560,18 +560,27 @@ describe("token detail view", () => {
       }),
     );
 
-    const user = userEvent.setup();
     render(<TokenDetailView address="0x123" tokenId="7" />);
 
-    // Changed from button to switch
-    await user.click(screen.getByRole("switch", { name: /verify ownership/i }));
+    // The verify ownership toggle was a debug feature — it must not be visible to users
+    expect(screen.queryByRole("switch", { name: /verify ownership/i })).toBeNull();
+    expect(screen.queryByLabelText(/verify ownership/i)).toBeNull();
+  });
 
-    const latestArgs = mockUseCollectionListingsQuery.mock.calls.at(-1)?.[0];
-    expect(latestArgs).toMatchObject({
-      collection: "0x123",
-      tokenId: "7",
-      verifyOwnership: true,
-    });
+  it("listings_query_always_uses_verify_ownership_false", () => {
+    mockUseTokenDetailQuery.mockReturnValue(
+      successQuery({
+        token: { token_id: "7", image: null, metadata: { name: "Token #7" } },
+        orders: [],
+        listings: [],
+      }),
+    );
+
+    render(<TokenDetailView address="0x123" tokenId="7" />);
+
+    expect(mockUseCollectionListingsQuery).toHaveBeenCalledWith(
+      expect.objectContaining({ verifyOwnership: false }),
+    );
   });
 
   // UPDATED: was shows_listing_transaction_actions — now tests NOT-connected state
@@ -1149,6 +1158,99 @@ describe("token detail view", () => {
 
     expect(screen.queryByRole("link", { name: /owner/i })).toBeNull();
   });
+
+  // M3: Cancel button label
+  it("cancel_listing_button_labeled_cancel_my_listing", () => {
+    const mockAccountExecute = vi.fn().mockResolvedValue({ transaction_hash: "0xhash" });
+    mockUseAccount.mockReturnValue({
+      account: { execute: mockAccountExecute },
+      address: "0xabc",
+      isConnected: true,
+      status: "connected",
+    });
+    mockUseTokenOwnershipQuery.mockReturnValue(ownershipQuery(true));
+    mockUseCollectionListingsQuery.mockReturnValue(
+      successListingsQuery([
+        { id: 77, tokenId: "7", price: "100", currency: "0xstrk", quantity: "1", owner: "0xabc", expiration: FAR_FUTURE_EXPIRATION },
+      ]),
+    );
+    mockUseTokenDetailQuery.mockReturnValue(
+      successQuery({ token: { token_id: "7", image: null, metadata: { name: "Token #7" } }, orders: [], listings: [] }),
+    );
+
+    render(<TokenDetailView address="0x123" tokenId="7" />);
+
+    expect(screen.getByRole("button", { name: /cancel my listing/i })).toBeVisible();
+    expect(screen.queryByRole("button", { name: /^cancel mine$/i })).toBeNull();
+  });
+
+  // M3: Sell form has distinct heading
+  it("sell_form_has_list_this_token_heading", () => {
+    mockUseAccount.mockReturnValue({
+      account: { execute: vi.fn() },
+      address: "0xabc",
+      isConnected: true,
+      status: "connected",
+    });
+    mockUseTokenOwnershipQuery.mockReturnValue(ownershipQuery(true));
+    mockUseTokenDetailQuery.mockReturnValue(
+      successQuery({ token: { token_id: "7", image: null, metadata: { name: "Token #7" } }, orders: [], listings: [] }),
+    );
+
+    render(<TokenDetailView address="0x123" tokenId="7" />);
+
+    expect(screen.getByText(/list this token/i)).toBeVisible();
+  });
+
+  // M3: Offer form has distinct heading
+  it("offer_form_has_make_an_offer_heading", () => {
+    mockUseAccount.mockReturnValue({
+      account: { execute: vi.fn() },
+      address: "0xabc",
+      isConnected: true,
+      status: "connected",
+    });
+    mockUseTokenOwnershipQuery.mockReturnValue(ownershipQuery(false));
+    mockUseTokenDetailQuery.mockReturnValue(
+      successQuery({ token: { token_id: "7", image: null, metadata: { name: "Token #7" } }, orders: [], listings: [] }),
+    );
+
+    render(<TokenDetailView address="0x123" tokenId="7" />);
+
+    expect(screen.getByText(/make an offer/i)).toBeVisible();
+  });
+
+  // M3: tx status auto-clears — verify setTimeout is registered with 5000ms
+  it("tx_status_registers_5s_auto_clear_timer_on_success", async () => {
+    const mockAccountExecute = vi.fn().mockResolvedValue({ transaction_hash: "0xtxhash" });
+    mockUseAccount.mockReturnValue({
+      account: { execute: mockAccountExecute },
+      address: "0xabc",
+      isConnected: true,
+      status: "connected",
+    });
+    mockUseTokenOwnershipQuery.mockReturnValue(ownershipQuery(true));
+    mockUseTokenDetailQuery.mockReturnValue(
+      successQuery({ token: { token_id: "7", image: null, metadata: { name: "Token #7" } }, orders: [], listings: [] }),
+    );
+
+    const setTimeoutSpy = vi.spyOn(window, "setTimeout");
+
+    const user = userEvent.setup();
+    render(<TokenDetailView address="0x123" tokenId="7" />);
+
+    await user.click(screen.getByRole("button", { name: /list token/i }));
+
+    await waitFor(() => {
+      expect(screen.getByText(/transaction submitted/i)).toBeVisible();
+    });
+
+    // The auto-clear useEffect should have scheduled a 5000ms timer
+    expect(setTimeoutSpy).toHaveBeenCalledWith(expect.any(Function), 5000);
+
+    setTimeoutSpy.mockRestore();
+  });
+
 
   it("breadcrumb_shows_home_link", () => {
     mockUseTokenDetailQuery.mockReturnValue(

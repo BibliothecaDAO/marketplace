@@ -131,6 +131,52 @@ export function tokenPrice(token: NormalizedToken) {
   return null;
 }
 
+// ---------------------------------------------------------------------------
+// M1: Token symbol, explorer URL, relative expiry
+// ---------------------------------------------------------------------------
+
+const KNOWN_TOKEN_SYMBOLS: Record<string, string> = {
+  "0x04718f5a0fc34cc1af16a1cdee98ffb20c31f5cd61d6ab07201858f4287c938d": "STRK",
+};
+
+export function getTokenSymbol(address: string): string {
+  const normalized = address.toLowerCase();
+  if (normalized in KNOWN_TOKEN_SYMBOLS) {
+    return KNOWN_TOKEN_SYMBOLS[normalized];
+  }
+  return formatAddress(address);
+}
+
+export function buildExplorerTxUrl(
+  chainLabel: string,
+  txHash: string,
+): string {
+  const base =
+    chainLabel === "SN_MAIN"
+      ? "https://starkscan.co"
+      : "https://sepolia.starkscan.co";
+  return `${base}/tx/${txHash}`;
+}
+
+export function formatRelativeExpiry(epochSeconds: number): string {
+  const nowSeconds = Math.floor(Date.now() / 1000);
+  const diffSeconds = epochSeconds - nowSeconds;
+
+  if (diffSeconds <= 0) return "Expired";
+
+  const diffDays = Math.floor(diffSeconds / 86400);
+  if (diffDays >= 1) {
+    return diffDays === 1 ? "Expires in 1 day" : `Expires in ${diffDays} days`;
+  }
+
+  const diffHours = Math.floor(diffSeconds / 3600);
+  if (diffHours >= 1) {
+    return diffHours === 1 ? "Expires in 1 hour" : `Expires in ${diffHours} hours`;
+  }
+
+  return "Expires soon";
+}
+
 export function listingPriceByTokenId(listings: unknown[] | undefined) {
   const prices = new Map<string, string>();
 

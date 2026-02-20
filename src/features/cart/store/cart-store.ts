@@ -61,7 +61,7 @@ function applyAddItem(
   item: CartItem,
 ): CartActionResult {
   if (state.items.some((entry) => entry.orderId === item.orderId)) {
-    return { ok: true };
+    return { ok: false, error: "Already in cart." };
   }
 
   if (state.items.length >= CART_MAX_ITEMS) {

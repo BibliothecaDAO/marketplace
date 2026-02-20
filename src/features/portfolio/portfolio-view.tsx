@@ -1,6 +1,7 @@
 "use client";
 
 import { FormEvent, useState } from "react";
+import { useAccount } from "@starknet-react/core";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { WalletProfileView } from "@/features/profile/wallet-profile-view";
@@ -14,8 +15,11 @@ function isValidAddress(value: string) {
 }
 
 export function PortfolioView({ initialAddress = "" }: PortfolioViewProps) {
-  const [addressInput, setAddressInput] = useState(initialAddress);
-  const [activeAddress, setActiveAddress] = useState(initialAddress);
+  const { isConnected, address: connectedAddress } = useAccount();
+  const defaultAddress =
+    initialAddress || (isConnected && connectedAddress ? connectedAddress : "");
+  const [addressInput, setAddressInput] = useState(defaultAddress);
+  const [activeAddress, setActiveAddress] = useState(defaultAddress);
   const [errorMessage, setErrorMessage] = useState("");
 
   function handleSubmit(event: FormEvent<HTMLFormElement>) {
