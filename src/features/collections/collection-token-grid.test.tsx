@@ -472,7 +472,7 @@ describe("collection token grid", () => {
     expect(screen.queryByRole("button", { name: /added/i })).toBeNull();
   });
 
-  it("does_not_render_grid_density_buttons", () => {
+  it("renders_grid_density_buttons_with_standard_default", () => {
     mockUseCollectionTokensQuery.mockReturnValue({
       data: {
         page: {
@@ -491,9 +491,42 @@ describe("collection token grid", () => {
 
     render(<CollectionTokenGrid address="0xabc" projectId="project-a" />);
 
-    expect(screen.queryByRole("button", { name: /compact/i })).toBeNull();
-    expect(screen.queryByRole("button", { name: /standard/i })).toBeNull();
-    expect(screen.queryByRole("button", { name: /comfort/i })).toBeNull();
+    expect(screen.getByRole("button", { name: /compact/i })).toBeVisible();
+    expect(screen.getByRole("button", { name: /standard/i })).toBeVisible();
+    expect(screen.getByRole("button", { name: /comfort/i })).toBeVisible();
+    expect(screen.getByTestId("collection-token-grid-cards")).toHaveClass(
+      "grid-cols-1",
+      "sm:grid-cols-2",
+      "lg:grid-cols-3",
+    );
+  });
+
+  it("density_buttons_update_grid_layout_classes", async () => {
+    mockUseCollectionTokensQuery.mockReturnValue({
+      data: {
+        page: {
+          tokens: [token("1")],
+          nextCursor: null,
+        },
+        error: null,
+      },
+      isLoading: false,
+      isSuccess: true,
+      isError: false,
+      error: null,
+      isFetching: false,
+      refetch: vi.fn(),
+    });
+
+    const user = userEvent.setup();
+    render(<CollectionTokenGrid address="0xabc" projectId="project-a" />);
+
+    const grid = screen.getByTestId("collection-token-grid-cards");
+    await user.click(screen.getByRole("button", { name: /compact/i }));
+    expect(grid).toHaveClass("grid-cols-2", "sm:grid-cols-3", "lg:grid-cols-4");
+
+    await user.click(screen.getByRole("button", { name: /comfort/i }));
+    expect(grid).toHaveClass("grid-cols-1", "sm:grid-cols-1", "lg:grid-cols-2");
   });
 
   it("tokens_reset_when_address_prop_changes", async () => {

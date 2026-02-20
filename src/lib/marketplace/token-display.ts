@@ -142,21 +142,36 @@ const KNOWN_TOKEN_SYMBOLS: Record<string, string> = {
 };
 
 const KNOWN_TOKEN_ICONS: Record<string, string> = {
+  "0x04718f5a0fc34cc1af16a1cdee98ffb20c31f5cd61d6ab07201858f4287c938d": "/tokens/strk.svg",
   "0x42dd777885ad2c116be96d4d634abc90a26a790ffb5871e037dd5ae7d2ec86b": "/tokens/survivo.jpg",
   "0x0124aeb495b947201f5fac96fd1138e326ad86195b98df6dec9009158a533b49": "https://coin-images.coingecko.com/coins/images/22171/small/Frame_1.png?1696521515",
 };
 
-export function getTokenSymbol(address: string): string {
-  const normalized = address.toLowerCase();
-  if (normalized in KNOWN_TOKEN_SYMBOLS) {
-    return KNOWN_TOKEN_SYMBOLS[normalized];
+function normalizeTokenAddress(address: string): string {
+  try {
+    return `0x${BigInt(address.toLowerCase()).toString(16)}`;
+  } catch {
+    return address.toLowerCase();
   }
-  return formatAddress(address);
+}
+
+// Build lookup maps with normalized keys so leading-zero variants all resolve correctly.
+const TOKEN_SYMBOLS_NORMALIZED: Record<string, string> = Object.fromEntries(
+  Object.entries(KNOWN_TOKEN_SYMBOLS).map(([addr, sym]) => [normalizeTokenAddress(addr), sym]),
+);
+
+const TOKEN_ICONS_NORMALIZED: Record<string, string> = Object.fromEntries(
+  Object.entries(KNOWN_TOKEN_ICONS).map(([addr, icon]) => [normalizeTokenAddress(addr), icon]),
+);
+
+export function getTokenSymbol(address: string): string {
+  const normalized = normalizeTokenAddress(address);
+  return TOKEN_SYMBOLS_NORMALIZED[normalized] ?? formatAddress(address);
 }
 
 export function getTokenIconUrl(address: string): string | null {
-  const normalized = address.toLowerCase();
-  return KNOWN_TOKEN_ICONS[normalized] ?? null;
+  const normalized = normalizeTokenAddress(address);
+  return TOKEN_ICONS_NORMALIZED[normalized] ?? null;
 }
 
 export function buildExplorerTxUrl(

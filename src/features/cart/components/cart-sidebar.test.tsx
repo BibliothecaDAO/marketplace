@@ -6,6 +6,7 @@ import { useCartStore } from "@/features/cart/store/cart-store";
 
 const {
   mockUseAccount,
+  mockUseBalance,
   mockUseMarketplaceClient,
   mockAccountExecute,
   mockArcadeExecute,
@@ -15,6 +16,7 @@ const {
   mockGetRoyaltyFee,
 } = vi.hoisted(() => ({
   mockUseAccount: vi.fn(),
+  mockUseBalance: vi.fn(),
   mockUseMarketplaceClient: vi.fn(),
   mockAccountExecute: vi.fn(),
   mockArcadeExecute: vi.fn(),
@@ -26,6 +28,7 @@ const {
 
 vi.mock("@starknet-react/core", () => ({
   useAccount: mockUseAccount,
+  useBalance: mockUseBalance,
 }));
 
 vi.mock("@cartridge/arcade/marketplace/react", () => ({
@@ -79,7 +82,11 @@ describe("cart sidebar", () => {
     mockGetFees.mockReset();
     mockGetRoyaltyFee.mockReset();
     mockUseAccount.mockReset();
+    mockUseBalance.mockReset();
     mockUseMarketplaceClient.mockReset();
+
+    // Default: ample balance so balance check doesn't interfere with unrelated tests
+    mockUseBalance.mockReturnValue({ data: { value: BigInt("999999999999999999999") }, isLoading: false });
 
     mockUseAccount.mockReturnValue({
       account: undefined,
@@ -149,7 +156,7 @@ describe("cart sidebar", () => {
 
     const browseLink = await screen.findByRole("link", { name: /browse collections/i });
     expect(browseLink).toBeVisible();
-    expect(browseLink).toHaveAttribute("href", "/collections");
+    expect(browseLink).toHaveAttribute("href", "/");
   });
 
   it("header_cart_trigger_opens_top_right_sidebar", async () => {
@@ -199,18 +206,22 @@ describe("cart sidebar", () => {
     render(<CartSidebar />);
     await user.click(screen.getByRole("button", { name: /cart \(2\)/i }));
 
-    const summary = screen.getByTestId("cart-summary");
-    expect(await screen.findByText("1 0xfee")).toBeVisible();
-    expect(screen.getByText("0.5 0xfee")).toBeVisible();
+    const item1 = await screen.findByTestId("cart-item-9001");
+    const item2 = screen.getByTestId("cart-item-9002");
+    expect(within(item1).getByText("1")).toBeVisible();
+    expect(within(item1).getByText("0xfee")).toBeVisible();
+    expect(within(item2).getByText("0.5")).toBeVisible();
+    expect(within(item2).getByText("0xfee")).toBeVisible();
     expect(
       within(screen.getByTestId("cart-summary-marketplace-fee")).getByText("0.075"),
     ).toBeVisible();
-    expect(within(summary).getByText("1.575")).toBeVisible();
+    expect(within(screen.getByTestId("cart-summary-total")).getByText("1.5")).toBeVisible();
     expect(screen.queryByText("1000000000000000000 0xfee")).toBeNull();
   });
 
   it("summary_uses_sdk_fee_and_royalty_estimates_and_updates_on_remove", async () => {
     const user = userEvent.setup();
+    // fee receiver comes from on-chain; fee rate is always pinned to CLIENT_FEE_BPS (500)
     mockGetFees.mockResolvedValue({
       feeNum: 250,
       feeDenominator: 10_000,
@@ -235,27 +246,29 @@ describe("cart sidebar", () => {
 
     render(<CartSidebar />);
 
+    // Subtotal=150, fee=7 (display only), royalty=8, total=150+8=158 (fee not added on top)
     await waitFor(() => {
       expect(
-        within(screen.getByTestId("cart-summary-marketplace-fee")).getByText("3"),
+        within(screen.getByTestId("cart-summary-marketplace-fee")).getByText("7"),
       ).toBeVisible();
       expect(
         within(screen.getByTestId("cart-summary-royalty")).getByText("8"),
       ).toBeVisible();
-      expect(within(screen.getByTestId("cart-summary-total")).getByText("161")).toBeVisible();
+      expect(within(screen.getByTestId("cart-summary-total")).getByText("158")).toBeVisible();
     });
 
     const removeButtons = screen.getAllByRole("button", { name: /remove/i });
     await user.click(removeButtons[1]);
 
+    // After removing item 2 (price=50): subtotal=100, fee=5 (display only), royalty=5, total=100+5=105
     await waitFor(() => {
       expect(
-        within(screen.getByTestId("cart-summary-marketplace-fee")).getByText("2"),
+        within(screen.getByTestId("cart-summary-marketplace-fee")).getByText("5"),
       ).toBeVisible();
       expect(
         within(screen.getByTestId("cart-summary-royalty")).getByText("5"),
       ).toBeVisible();
-      expect(within(screen.getByTestId("cart-summary-total")).getByText("107")).toBeVisible();
+      expect(within(screen.getByTestId("cart-summary-total")).getByText("105")).toBeVisible();
     });
   });
 
@@ -307,7 +320,7 @@ describe("cart sidebar", () => {
       "1",
       true,
       500,
-      "0x045c587318c9ebcf2fbe21febf288ee2e3597a21cd48676005a5770a50d433c5",
+      "0x049fb4281d13e1f5f488540cd051e1507149e99cc2e22635101041ec5e4e4557",
     );
     expect(await screen.findByText(/cart is empty/i)).toBeVisible();
   });

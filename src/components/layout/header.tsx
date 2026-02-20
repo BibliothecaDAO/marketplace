@@ -17,8 +17,10 @@ import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
+  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { WalletBalances } from "@/components/layout/wallet-balances";
 import {
   Sheet,
   SheetContent,
@@ -132,7 +134,9 @@ export function Header() {
                   {formatAddress(address)}
                 </button>
               </DropdownMenuTrigger>
-              <DropdownMenuContent align="end">
+              <DropdownMenuContent align="end" className="w-52">
+                <WalletBalances walletAddress={address} />
+                <DropdownMenuSeparator />
                 <DropdownMenuItem asChild>
                   <Link href={`/profile/${address}`}>Profile</Link>
                 </DropdownMenuItem>

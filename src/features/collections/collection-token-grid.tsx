@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useReducer } from "react";
+import { useEffect, useMemo, useReducer, useState } from "react";
 import type { NormalizedToken } from "@cartridge/arcade/marketplace";
 import {
   useCollectionListingsQuery,
@@ -12,6 +12,24 @@ import {
   tokenId,
   tokenPrice,
 } from "@/lib/marketplace/token-display";
+
+// Expand token IDs from a listing price map to include both decimal and hex forms,
+// which the SDK may need to resolve either variant.
+function expandedListingTokenIds(priceMap: Map<string, unknown>): string[] {
+  const expanded = new Set<string>();
+  for (const id of priceMap.keys()) {
+    if (!id) continue;
+    expanded.add(id);
+    if (/^\d+$/.test(id)) {
+      try {
+        expanded.add(`0x${BigInt(id).toString(16)}`);
+      } catch {
+        // skip malformed ids
+      }
+    }
+  }
+  return Array.from(expanded);
+}
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { MarketplaceTokenCard } from "@/components/marketplace/token-card";
@@ -35,7 +53,13 @@ type CollectionTokenGridProps = {
   onTokensChange?: (tokens: NormalizedToken[]) => void;
 };
 
-const GRID_CLASSES = "grid-cols-1 sm:grid-cols-2 lg:grid-cols-3";
+type GridDensityMode = "compact" | "standard" | "comfort";
+
+const GRID_CLASSES_BY_DENSITY: Record<GridDensityMode, string> = {
+  compact: "grid-cols-2 sm:grid-cols-3 lg:grid-cols-4",
+  standard: "grid-cols-1 sm:grid-cols-2 lg:grid-cols-3",
+  comfort: "grid-cols-1 sm:grid-cols-1 lg:grid-cols-2",
+};
 
 function dedupeTokens(tokens: NormalizedToken[]) {
   const unique = new Map<string, NormalizedToken>();
@@ -153,6 +177,7 @@ export function CollectionTokenGrid({
   onTokensChange,
 }: CollectionTokenGridProps) {
   const { addListingToCart, isRecentlyAdded } = useAddToCartFeedback();
+  const [gridDensity, setGridDensity] = useState<GridDensityMode>("standard");
   const tokenIdsKey = useMemo(() => tokenIds?.join(",") ?? "", [tokenIds]);
   const activeFiltersKey = useMemo(
     () =>
@@ -205,20 +230,81 @@ export function CollectionTokenGrid({
     onTokensChange?.(pagination.tokens);
   }, [pagination.tokens, onTokensChange]);
 
-  const nextCursor = tokenQuery.data?.page?.nextCursor ?? null;
-  const canLoadMore = Boolean(nextCursor);
-  const visibleTokens = pagination.tokens;
   const listingPrices = cheapestListingByTokenId(listingQuery.data);
   const listingPriceMap = listingPriceByTokenId(listingQuery.data);
+
+  // When sorting by price, explicitly fetch the listed token IDs so they are
+  // present in the grid regardless of which page of the general query they fall on.
+  const listedQueryTokenIds = useMemo(
+    () => (sortMode !== "recent" ? expandedListingTokenIds(listingPriceMap) : []),
+    [listingPriceMap, sortMode],
+  );
+  const listedTokensQuery = useCollectionTokensQuery(
+    {
+      address,
+      project: projectId,
+      tokenIds: listedQueryTokenIds.length > 0 ? listedQueryTokenIds : undefined,
+      limit: Math.max(listedQueryTokenIds.length, 1),
+      fetchImages: true,
+      attributeFilters,
+    },
+    { enabled: sortMode !== "recent" && listedQueryTokenIds.length > 0 },
+  );
+
+  const nextCursor = tokenQuery.data?.page?.nextCursor ?? null;
+  const canLoadMore = Boolean(nextCursor);
+
+  // Merge explicitly-fetched listed tokens with the paginated set so that
+  // price sorting always has them available even if they are not on page 1.
+  const visibleTokens = useMemo(() => {
+    const listedTokens = listedTokensQuery.data?.page?.tokens;
+    if (!listedTokens?.length) return pagination.tokens;
+    return dedupeTokens([...listedTokens, ...pagination.tokens]);
+  }, [pagination.tokens, listedTokensQuery.data?.page?.tokens]);
+
   const sortedTokens = useMemo(
     () => sortTokens(visibleTokens, sortMode, listingPrices, listingPriceMap),
     [listingPriceMap, listingPrices, sortMode, visibleTokens],
   );
+  const gridClasses = GRID_CLASSES_BY_DENSITY[gridDensity];
 
   return (
     <section className="space-y-4">
+      <div className="flex items-center justify-end gap-1">
+        <Button
+          aria-pressed={gridDensity === "compact"}
+          onClick={() => setGridDensity("compact")}
+          size="sm"
+          type="button"
+          variant={gridDensity === "compact" ? "default" : "outline"}
+          className="h-7 px-2 text-xs"
+        >
+          Compact
+        </Button>
+        <Button
+          aria-pressed={gridDensity === "standard"}
+          onClick={() => setGridDensity("standard")}
+          size="sm"
+          type="button"
+          variant={gridDensity === "standard" ? "default" : "outline"}
+          className="h-7 px-2 text-xs"
+        >
+          Standard
+        </Button>
+        <Button
+          aria-pressed={gridDensity === "comfort"}
+          onClick={() => setGridDensity("comfort")}
+          size="sm"
+          type="button"
+          variant={gridDensity === "comfort" ? "default" : "outline"}
+          className="h-7 px-2 text-xs"
+        >
+          Comfort
+        </Button>
+      </div>
+
       {tokenQuery.isLoading && pagination.tokens.length === 0 ? (
-        <div className={cn("grid gap-3", GRID_CLASSES)}>
+        <div className={cn("grid gap-3", gridClasses)}>
           {Array.from({ length: 6 }).map((_, index) => (
             <Card key={index}>
               <CardContent className="space-y-2 p-3">
@@ -240,7 +326,7 @@ export function CollectionTokenGrid({
 
       {!tokenQuery.isLoading ? (
         <div
-          className={cn("grid gap-3", GRID_CLASSES)}
+          className={cn("grid gap-3", gridClasses)}
           data-testid="collection-token-grid-cards"
         >
           {sortedTokens.map((token) => {
@@ -257,6 +343,7 @@ export function CollectionTokenGrid({
                 <MarketplaceTokenCard
                   cardContentAriaLabel={`token-${tokenKey}`}
                   cardContentRole="article"
+                  currency={cheapestListing?.currency ?? null}
                   href={`/collections/${address}/${tokenId(token)}`}
                   linkAriaLabel={`token-${tokenKey}`}
                   price={price}

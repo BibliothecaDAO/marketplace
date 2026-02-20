@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { ArcadeProvider, NAMESPACE } from "@cartridge/arcade";
 import { useMarketplaceClient } from "@cartridge/arcade/marketplace/react";
-import { useAccount } from "@starknet-react/core";
+import { useAccount, useBalance } from "@starknet-react/core";
 import Link from "next/link";
 import { ShoppingCart } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -12,6 +12,7 @@ import {
   buildExplorerTxUrl,
   getTokenSymbol,
 } from "@/lib/marketplace/token-display";
+import { TokenSymbol } from "@/components/ui/token-symbol";
 import {
   calculateCartSummary,
   parseBigInt,
@@ -30,7 +31,18 @@ import { useCartStore } from "@/features/cart/store/cart-store";
 
 const CLIENT_FEE_BPS = 500;
 const CLIENT_FEE_DENOMINATOR = 10_000;
-const CLIENT_FEE_RECEIVER = "0x045c587318c9ebcf2fbe21febf288ee2e3597a21cd48676005a5770a50d433c5";
+
+// Fee receiver addresses split by currency
+const CLIENT_FEE_RECEIVER_LORDS = "0x045c587318c9ebcf2fbe21febf288ee2e3597a21cd48676005a5770a50d433c5";
+const CLIENT_FEE_RECEIVER_DEFAULT = "0x049fb4281d13e1f5f488540cd051e1507149e99cc2e22635101041ec5e4e4557";
+const LORDS_TOKEN_ADDRESS = "0x0124aeb495b947201f5fac96fd1138e326ad86195b98df6dec9009158a533b49";
+
+function clientFeeReceiverForCurrency(currency: string): string {
+  return currency.toLowerCase() === LORDS_TOKEN_ADDRESS
+    ? CLIENT_FEE_RECEIVER_LORDS
+    : CLIENT_FEE_RECEIVER_DEFAULT;
+}
+
 const STALE_LISTING_ERROR = "Listing is stale or unavailable.";
 
 function asRecord(value: unknown) {
@@ -162,6 +174,12 @@ export function CartSidebar() {
   const clearItemError = useCartStore((state) => state.clearItemError);
   const clearInlineErrors = useCartStore((state) => state.clearInlineErrors);
   const { account, isConnected } = useAccount();
+  const cartCurrency = items[0]?.currency;
+  const { data: walletBalanceData, isLoading: isBalanceLoading } = useBalance({
+    address: account?.address as `0x${string}` | undefined,
+    token: cartCurrency as `0x${string}` | undefined,
+    enabled: !!account?.address && !!cartCurrency && isConnected,
+  });
   const { client } = useMarketplaceClient();
   const { sdkConfig, chainLabel } = getMarketplaceRuntimeConfig();
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -179,12 +197,11 @@ export function CartSidebar() {
   }>({ kind: "idle", tone: "idle", message: "" });
 
   const effectiveFeeConfig = useMemo(
-    () =>
-      marketplaceFeeConfig ?? {
-        feeNum: CLIENT_FEE_BPS,
-        feeDenominator: CLIENT_FEE_DENOMINATOR,
-        feeReceiver: CLIENT_FEE_RECEIVER,
-      },
+    () => ({
+      feeNum: CLIENT_FEE_BPS,
+      feeDenominator: CLIENT_FEE_DENOMINATOR,
+      feeReceiver: marketplaceFeeConfig?.feeReceiver,
+    }),
     [marketplaceFeeConfig],
   );
   const { subtotal, marketplaceFee, total } = useMemo(
@@ -196,6 +213,13 @@ export function CartSidebar() {
       }),
     [effectiveFeeConfig, items, royaltyEstimate],
   );
+  const walletBalance = walletBalanceData?.value ?? BigInt(0);
+  const hasInsufficientBalance =
+    items.length > 0 &&
+    isConnected &&
+    !isBalanceLoading &&
+    walletBalance < total;
+
   const arcadeProvider = useMemo(
     () => new ArcadeProvider(sdkConfig.chainId),
     [sdkConfig.chainId],
@@ -354,7 +378,7 @@ export function CartSidebar() {
           item.quantity,
           true,
           effectiveFeeConfig.feeNum,
-          effectiveFeeConfig.feeReceiver ?? CLIENT_FEE_RECEIVER,
+          effectiveFeeConfig.feeReceiver ?? clientFeeReceiverForCurrency(item.currency),
         ),
       );
 
@@ -516,7 +540,7 @@ export function CartSidebar() {
               <div className="space-y-2 py-4 text-center">
                 <p className="text-sm text-muted-foreground">Your cart is empty.</p>
                 <Link
-                  href="/collections"
+                  href="/"
                   className="text-sm text-primary hover:underline"
                 >
                   Browse collections →
@@ -551,8 +575,9 @@ export function CartSidebar() {
                       <p className="text-xs text-muted-foreground">
                         #{item.tokenId}
                       </p>
-                      <p className="text-xs text-primary font-medium">
-                        {formatPriceForDisplay(item.price) ?? item.price} {getTokenSymbol(item.currency)}
+                      <p className="text-xs text-primary font-medium flex items-center gap-1">
+                        {formatPriceForDisplay(item.price) ?? item.price}
+                        <TokenSymbol address={item.currency} className="text-muted-foreground" />
                       </p>
                     </div>
                     <Button
@@ -597,23 +622,49 @@ export function CartSidebar() {
               className="w-full space-y-1 rounded-sm border border-border/70 p-3 text-xs"
               data-testid="cart-summary"
             >
-              <div className="flex items-center justify-between" data-testid="cart-summary-subtotal">
-                <span className="text-muted-foreground">Subtotal</span>
-                <span>{formatPriceForDisplay(subtotal.toString()) ?? subtotal.toString()}</span>
-              </div>
-              <div className="flex items-center justify-between" data-testid="cart-summary-marketplace-fee">
-                <span className="text-muted-foreground">Marketplace Fee</span>
-                <span>{formatPriceForDisplay(marketplaceFee.toString()) ?? marketplaceFee.toString()}</span>
-              </div>
-              <div className="flex items-center justify-between" data-testid="cart-summary-royalty">
-                <span className="text-muted-foreground">Royalty Estimate</span>
-                <span>{formatPriceForDisplay(royaltyEstimate.toString()) ?? royaltyEstimate.toString()}</span>
-              </div>
-              <div className="flex items-center justify-between font-medium" data-testid="cart-summary-total">
-                <span>Total</span>
-                <span>{formatPriceForDisplay(total.toString()) ?? total.toString()}</span>
-              </div>
+              {(() => {
+                const CurrencyBadge = cartCurrency
+                  ? () => <TokenSymbol address={cartCurrency} className="text-muted-foreground" />
+                  : null;
+                return (
+                  <>
+                    <div className="flex items-center justify-between" data-testid="cart-summary-subtotal">
+                      <span className="text-muted-foreground">Subtotal</span>
+                      <span className="flex items-center gap-1">
+                        {formatPriceForDisplay(subtotal.toString()) ?? subtotal.toString()}
+                        {CurrencyBadge ? <CurrencyBadge /> : null}
+                      </span>
+                    </div>
+                    <div className="flex items-center justify-between" data-testid="cart-summary-marketplace-fee">
+                      <span className="text-muted-foreground">Marketplace Fee</span>
+                      <span className="flex items-center gap-1">
+                        {formatPriceForDisplay(marketplaceFee.toString()) ?? marketplaceFee.toString()}
+                        {CurrencyBadge ? <CurrencyBadge /> : null}
+                      </span>
+                    </div>
+                    <div className="flex items-center justify-between" data-testid="cart-summary-royalty">
+                      <span className="text-muted-foreground">Royalty Estimate</span>
+                      <span className="flex items-center gap-1">
+                        {formatPriceForDisplay(royaltyEstimate.toString()) ?? royaltyEstimate.toString()}
+                        {CurrencyBadge ? <CurrencyBadge /> : null}
+                      </span>
+                    </div>
+                    <div className="flex items-center justify-between font-medium" data-testid="cart-summary-total">
+                      <span>Total</span>
+                      <span className="flex items-center gap-1">
+                        {formatPriceForDisplay(total.toString()) ?? total.toString()}
+                        {CurrencyBadge ? <CurrencyBadge /> : null}
+                      </span>
+                    </div>
+                  </>
+                );
+              })()}
             </div>
+            {hasInsufficientBalance ? (
+              <p className="text-xs text-destructive text-center" data-testid="cart-insufficient-balance">
+                Insufficient {cartCurrency ? getTokenSymbol(cartCurrency) : ""} balance
+              </p>
+            ) : null}
             <div className="flex w-full gap-2">
               <Button
                 disabled={items.length === 0}
@@ -624,7 +675,7 @@ export function CartSidebar() {
                   Clear
                 </Button>
               <Button
-                disabled={items.length === 0 || isSubmitting}
+                disabled={items.length === 0 || isSubmitting || hasInsufficientBalance}
                 onClick={() => {
                   void handleCheckout();
                 }}

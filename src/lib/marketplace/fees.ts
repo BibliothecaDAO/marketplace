@@ -71,7 +71,8 @@ export function calculateCartSummary(options: {
     options.marketplaceFeeConfig,
   );
   const royaltyEstimate = options.royaltyEstimate ?? BigInt(0);
-  const total = subtotal + marketplaceFee + royaltyEstimate;
+  // The marketplace fee is taken from the seller's proceeds, not added on top.
+  const total = subtotal + royaltyEstimate;
 
   return {
     subtotal,

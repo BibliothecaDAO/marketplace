@@ -1,7 +1,8 @@
 "use client";
 
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
 import {
   type ActiveFilters,
@@ -30,6 +31,8 @@ export function TraitFilterSidebar({
   onActiveFiltersChange,
   isLoading,
 }: TraitFilterSidebarProps) {
+  const [openTraitName, setOpenTraitName] = useState<string | null>(null);
+  const [searchByTraitName, setSearchByTraitName] = useState<Record<string, string>>({});
   const availableFilters = useMemo(
     () => computeAvailableFilters(traitMetadata, activeFilters),
     [traitMetadata, activeFilters],
@@ -56,6 +59,10 @@ export function TraitFilterSidebar({
     }
 
     onActiveFiltersChange?.(next);
+  }
+
+  function toggleTraitGroup(traitName: string) {
+    setOpenTraitName((current) => (current === traitName ? null : traitName));
   }
 
   return (
@@ -92,13 +99,31 @@ export function TraitFilterSidebar({
         <p className="text-xs text-muted-foreground">No trait data available.</p>
       ) : null}
 
-      {/* Trait groups — collapsible via native details */}
+      {/* Trait groups — single-open accordion with per-group search */}
       <div className="space-y-1">
-        {precomputed.attributes.map((traitName) => {
+        {precomputed.attributes.map((traitName, index) => {
+          const traitPanelId = `trait-panel-${index}`;
+          const traitButtonId = `trait-toggle-${index}`;
+          const isOpen = openTraitName === traitName;
           const activeInGroup = activeFilters[traitName]?.size ?? 0;
+          const searchTerm = searchByTraitName[traitName] ?? "";
+          const normalizedSearchTerm = searchTerm.trim().toLocaleLowerCase();
+          const traitValues = (precomputed.properties[traitName] ?? []).filter((item) =>
+            normalizedSearchTerm.length === 0
+              ? true
+              : item.property.toLocaleLowerCase().includes(normalizedSearchTerm),
+          );
+
           return (
-            <details key={traitName} open className="group">
-              <summary className="flex cursor-pointer select-none list-none items-center justify-between rounded-sm px-2 py-1.5 text-xs font-medium uppercase tracking-wide text-muted-foreground hover:bg-muted/50 hover:text-foreground transition-colors">
+            <div key={traitName} className="space-y-1">
+              <button
+                id={traitButtonId}
+                type="button"
+                aria-controls={traitPanelId}
+                aria-expanded={isOpen}
+                onClick={() => toggleTraitGroup(traitName)}
+                className="flex w-full items-center justify-between rounded-sm px-2 py-1.5 text-left text-xs font-medium uppercase tracking-wide text-muted-foreground transition-colors hover:bg-muted/50 hover:text-foreground"
+              >
                 <span className="flex items-center gap-1.5">
                   {traitName}
                   {activeInGroup > 0 && (
@@ -107,31 +132,62 @@ export function TraitFilterSidebar({
                     </span>
                   )}
                 </span>
-                <span className="text-muted-foreground/50 group-open:rotate-90 transition-transform duration-150">
+                <span
+                  className={cn(
+                    "text-muted-foreground/50 transition-transform duration-150",
+                    isOpen ? "rotate-90" : "",
+                  )}
+                >
                   ›
                 </span>
-              </summary>
-              <div className="flex flex-wrap gap-1.5 px-2 pb-2 pt-1.5">
-                {(precomputed.properties[traitName] ?? []).map((item) => {
-                  const isActive = activeFilters[traitName]?.has(item.property) ?? false;
-                  return (
-                    <button
-                      key={`${traitName}-${item.property}`}
-                      onClick={() => toggleFilter(traitName, item.property)}
-                      type="button"
-                      className={cn(
-                        "inline-flex items-center rounded-full border px-2 py-0.5 text-xs transition-colors",
-                        isActive
-                          ? "border-primary bg-primary/10 text-primary"
-                          : "border-border text-muted-foreground hover:border-primary/50 hover:text-foreground",
-                      )}
-                    >
-                      {item.property} ({item.count})
-                    </button>
-                  );
-                })}
-              </div>
-            </details>
+              </button>
+              {isOpen ? (
+                <div
+                  id={traitPanelId}
+                  role="region"
+                  aria-labelledby={traitButtonId}
+                  className="space-y-2 px-2 pb-2"
+                >
+                  <Input
+                    type="search"
+                    value={searchTerm}
+                    onChange={(event) => {
+                      setSearchByTraitName((current) => ({
+                        ...current,
+                        [traitName]: event.target.value,
+                      }));
+                    }}
+                    aria-label={`Search ${traitName}`}
+                    placeholder={`Search ${traitName}`}
+                    className="h-7 text-xs"
+                  />
+                  <div className="flex flex-wrap gap-1.5">
+                    {traitValues.length === 0 ? (
+                      <p className="text-xs text-muted-foreground">No matches.</p>
+                    ) : (
+                      traitValues.map((item) => {
+                        const isActive = activeFilters[traitName]?.has(item.property) ?? false;
+                        return (
+                          <button
+                            key={`${traitName}-${item.property}`}
+                            onClick={() => toggleFilter(traitName, item.property)}
+                            type="button"
+                            className={cn(
+                              "inline-flex items-center rounded-full border px-2 py-0.5 text-xs transition-colors",
+                              isActive
+                                ? "border-primary bg-primary/10 text-primary"
+                                : "border-border text-muted-foreground hover:border-primary/50 hover:text-foreground",
+                            )}
+                          >
+                            {item.property} ({item.count})
+                          </button>
+                        );
+                      })
+                    )}
+                  </div>
+                </div>
+              ) : null}
+            </div>
           );
         })}
       </div>

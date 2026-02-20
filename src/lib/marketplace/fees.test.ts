@@ -32,6 +32,6 @@ describe("marketplace fees", () => {
     expect(summary.subtotal).toBe(BigInt(150));
     expect(summary.marketplaceFee).toBe(BigInt(3));
     expect(summary.royaltyEstimate).toBe(BigInt(8));
-    expect(summary.total).toBe(BigInt(161));
+    expect(summary.total).toBe(BigInt(158));
   });
 });

@@ -12,6 +12,7 @@ import {
   displayTokenId,
   formatNumberish,
   formatPriceForDisplay,
+  getTokenSymbol,
   listingPriceByTokenId,
   tokenId,
   tokenName,
@@ -107,15 +108,17 @@ function listingTokenIds(listings: unknown[] | undefined, limit: number) {
 }
 
 function floorPriceFromListings(
-  cheapestListings: Map<string, { price: string }>,
-): string | null {
+  cheapestListings: Map<string, { price: string; currency?: string }>,
+): { price: string; currency: string | null } | null {
   let min: bigint | null = null;
+  let minCurrency: string | null = null;
 
-  for (const { price } of cheapestListings.values()) {
+  for (const { price, currency } of cheapestListings.values()) {
     try {
       const val = BigInt(price);
       if (min === null || val < min) {
         min = val;
+        minCurrency = currency ?? null;
       }
     } catch {
       // skip unparseable prices
@@ -126,7 +129,8 @@ function floorPriceFromListings(
     return null;
   }
 
-  return formatPriceForDisplay(min.toString());
+  const formatted = formatPriceForDisplay(min.toString());
+  return formatted ? { price: formatted, currency: minCurrency } : null;
 }
 
 export function CollectionRow({
@@ -188,15 +192,20 @@ export function CollectionRow({
       return tokens;
     }
 
+    // fallbackTokens are fetched specifically for listed token IDs — prefer them
+    // so we show all listed tokens, not just the subset that landed on page 1.
+    if (fallbackTokens.length > 0) {
+      return fallbackTokens;
+    }
+
+    // While the specific query is still loading, show any listed tokens from
+    // the regular query as a temporary placeholder.
     const pricedTokens = tokens.filter((token) => {
       const key = displayTokenId(token);
       return cheapestListings.has(key) || listingPrices.has(key);
     });
-    if (pricedTokens.length > 0) {
-      return pricedTokens;
-    }
 
-    return fallbackTokens.length > 0 ? fallbackTokens : tokens;
+    return pricedTokens.length > 0 ? pricedTokens : tokens;
   }, [cheapestListings, fallbackTokens, listingPrices, tokens]);
   const normalizedSearch = normalizeHomeSearchQuery(searchQuery);
   const collectionMatchesSearch = matchesHomeSearch(normalizedSearch, [name]);
@@ -231,7 +240,7 @@ export function CollectionRow({
 
   const totalSupply = collectionQuery.data?.totalSupply;
   const listingCount = Array.isArray(listingQuery.data) ? listingQuery.data.length : 0;
-  const floorPrice = floorPriceFromListings(cheapestListings);
+  const floor = floorPriceFromListings(cheapestListings);
 
   return (
     <section className="space-y-3">
@@ -249,8 +258,13 @@ export function CollectionRow({
           {listingCount > 0 && (
             <span>{listingCount} listed</span>
           )}
-          {floorPrice && (
-            <span className="text-foreground font-medium">Floor: {floorPrice}</span>
+          {floor && (
+            <span className="text-foreground font-medium flex items-center gap-1">
+              Floor: {floor.price}
+              {floor.currency ? (
+                <span className="text-muted-foreground font-normal">{getTokenSymbol(floor.currency)}</span>
+              ) : null}
+            </span>
           )}
         </div>
       </div>
@@ -297,6 +311,7 @@ export function CollectionRow({
                 <MarketplaceTokenCard
                   href={`/collections/${address}/${tokenId(token)}`}
                   price={price}
+                  currency={cheapestListing?.currency}
                   token={token}
                 />
                 <Button

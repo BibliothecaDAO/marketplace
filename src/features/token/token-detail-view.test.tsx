@@ -453,7 +453,7 @@ describe("token detail view", () => {
     await waitFor(() => {
       expect(screen.getByTestId("token-fee-marketplace")).toHaveTextContent("2");
       expect(screen.getByTestId("token-fee-royalty")).toHaveTextContent("7");
-      expect(screen.getByTestId("token-fee-total")).toHaveTextContent("109");
+      expect(screen.getByTestId("token-fee-total")).toHaveTextContent("107");
     });
   });
 
@@ -601,7 +601,7 @@ describe("token detail view", () => {
 
     expect(screen.getByRole("button", { name: /add cheapest to cart/i })).toBeVisible();
     expect(screen.getByText(/connect wallet to transact/i)).toBeVisible();
-    expect(screen.queryByRole("button", { name: /list token/i })).toBeNull();
+    expect(screen.queryByRole("button", { name: /list for sale/i })).toBeNull();
     expect(screen.queryByRole("button", { name: /make offer/i })).toBeNull();
   });
 
@@ -668,12 +668,16 @@ describe("token detail view", () => {
     const user = userEvent.setup();
     render(<TokenDetailView address="0x123" tokenId="7" />);
 
-    await user.click(screen.getByRole("button", { name: /list token/i }));
+    await user.click(screen.getByRole("button", { name: /list for sale/i }));
 
     expect(mockAccountExecute).toHaveBeenCalled();
-    const [calls] = mockAccountExecute.mock.calls[0] as [[{ contractAddress: string; entrypoint: string; calldata: string[] }]];
-    expect(calls[0].entrypoint).toBe("list");
-    expect(calls[0].calldata[0]).toBe("0x123"); // collection address
+    const [calls] = mockAccountExecute.mock.calls[0] as [Array<{ contractAddress: string; entrypoint: string; calldata: string[] }>];
+    // calls[0] = set_approval_for_all (approve marketplace for all tokens in collection)
+    expect(calls[0].entrypoint).toBe("set_approval_for_all");
+    expect(calls[0].contractAddress).toBe("0x123"); // collection address
+    // calls[1] = list
+    expect(calls[1].entrypoint).toBe("list");
+    expect(calls[1].calldata[0]).toBe("0x123"); // collection address
   });
 
   // --- New tests ---
@@ -741,7 +745,7 @@ describe("token detail view", () => {
     await user.click(screen.getByRole("button", { name: /make offer/i }));
 
     expect(mockAccountExecute).toHaveBeenCalled();
-    const [calls] = mockAccountExecute.mock.calls[0] as [[{ contractAddress: string; entrypoint: string; calldata: string[] }]];
+    const [calls] = mockAccountExecute.mock.calls[0] as [Array<{ contractAddress: string; entrypoint: string; calldata: string[] }>];
     expect(calls[0].entrypoint).toBe("offer");
     expect(calls[0].calldata[0]).toBe("0x123"); // collection address
   });
@@ -772,7 +776,7 @@ describe("token detail view", () => {
     const user = userEvent.setup();
     render(<TokenDetailView address="0x123" tokenId="7" />);
 
-    await user.click(screen.getByRole("button", { name: /list token/i }));
+    await user.click(screen.getByRole("button", { name: /list for sale/i }));
 
     await waitFor(() => {
       expect(screen.getByText("Transaction reverted")).toBeVisible();
@@ -1027,7 +1031,7 @@ describe("token detail view", () => {
     mockUseTokenOwnershipQuery.mockReturnValue(ownershipQuery(true));
     mockUseTokenDetailQuery.mockReturnValue(successQuery({ token: { token_id: "7", image: null, metadata: { name: "Token #7" } }, orders: [], listings: [] }));
     render(<TokenDetailView address="0x123" tokenId="7" />);
-    expect(screen.getByRole("button", { name: /list token/i })).toBeVisible();
+    expect(screen.getByRole("button", { name: /list for sale/i })).toBeVisible();
     expect(screen.queryByRole("button", { name: /make offer/i })).toBeNull();
   });
 
@@ -1038,7 +1042,7 @@ describe("token detail view", () => {
     render(<TokenDetailView address="0x123" tokenId="7" />);
     expect(screen.getByRole("button", { name: /make offer/i })).toBeVisible();
     // Non-owner should NOT see the list form
-    expect(screen.queryByRole("button", { name: /list token/i })).toBeNull();
+    expect(screen.queryByRole("button", { name: /list for sale/i })).toBeNull();
   });
 
   it("you_own_this_badge_shown_when_owner", () => {
@@ -1061,7 +1065,7 @@ describe("token detail view", () => {
     // isConnected: false (default in beforeEach)
     mockUseTokenDetailQuery.mockReturnValue(successQuery({ token: { token_id: "7", image: null, metadata: { name: "Token #7" } }, orders: [], listings: [] }));
     render(<TokenDetailView address="0x123" tokenId="7" />);
-    expect(screen.queryByRole("button", { name: /list token/i })).toBeNull();
+    expect(screen.queryByRole("button", { name: /list for sale/i })).toBeNull();
     expect(screen.queryByRole("button", { name: /make offer/i })).toBeNull();
     expect(screen.getByText(/connect wallet to transact/i)).toBeVisible();
   });
@@ -1180,8 +1184,7 @@ describe("token detail view", () => {
 
     render(<TokenDetailView address="0x123" tokenId="7" />);
 
-    expect(screen.getByRole("button", { name: /cancel my listing/i })).toBeVisible();
-    expect(screen.queryByRole("button", { name: /^cancel mine$/i })).toBeNull();
+    expect(screen.getByRole("button", { name: /^cancel$/i })).toBeVisible();
   });
 
   // M3: Sell form has distinct heading
@@ -1199,7 +1202,7 @@ describe("token detail view", () => {
 
     render(<TokenDetailView address="0x123" tokenId="7" />);
 
-    expect(screen.getByText(/list this token/i)).toBeVisible();
+    expect(screen.getAllByText(/list for sale/i)[0]).toBeVisible();
   });
 
   // M3: Offer form has distinct heading
@@ -1239,7 +1242,7 @@ describe("token detail view", () => {
     const user = userEvent.setup();
     render(<TokenDetailView address="0x123" tokenId="7" />);
 
-    await user.click(screen.getByRole("button", { name: /list token/i }));
+    await user.click(screen.getByRole("button", { name: /list for sale/i }));
 
     await waitFor(() => {
       expect(screen.getByText(/transaction submitted/i)).toBeVisible();
