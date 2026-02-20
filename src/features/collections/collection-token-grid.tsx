@@ -213,7 +213,7 @@ export function CollectionTokenGrid({
   const listingQuery = useCollectionListingsQuery({
     collection: address,
     projectId,
-    verifyOwnership: false,
+    verifyOwnership: true,
   });
 
   useEffect(() => {

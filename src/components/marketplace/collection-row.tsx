@@ -151,7 +151,7 @@ export function CollectionRow({
   const listingQuery = useCollectionListingsQuery({
     collection: address,
     projectId,
-    verifyOwnership: false,
+    verifyOwnership: true,
   });
   const listedTokenIds = useMemo(
     () => listingTokenIds(listingQuery.data, 12),

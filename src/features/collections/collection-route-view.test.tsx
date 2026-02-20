@@ -171,6 +171,20 @@ describe("collection route view", () => {
     );
   });
 
+  it("collection_route_uses_verified_listings_query", () => {
+    mockUseCollectionQuery.mockReturnValue(successQuery(null));
+
+    render(<CollectionRouteView address="0xabc" collections={collections} />);
+
+    expect(mockUseCollectionListingsQuery).toHaveBeenCalledWith(
+      expect.objectContaining({
+        collection: "0xabc",
+        projectId: "project-a",
+        verifyOwnership: true,
+      }),
+    );
+  });
+
   it("contract_type_not_shown_to_users", () => {
     mockUseCollectionQuery.mockReturnValue(
       successQuery({ metadata: { name: "Genesis" }, contractType: "erc721", address: "0xabc" })

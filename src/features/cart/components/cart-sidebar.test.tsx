@@ -12,6 +12,7 @@ const {
   mockArcadeExecute,
   mockListCollectionListings,
   mockBuildExecuteCalldata,
+  mockGetValidity,
   mockGetFees,
   mockGetRoyaltyFee,
 } = vi.hoisted(() => ({
@@ -22,6 +23,7 @@ const {
   mockArcadeExecute: vi.fn(),
   mockListCollectionListings: vi.fn(),
   mockBuildExecuteCalldata: vi.fn(),
+  mockGetValidity: vi.fn(),
   mockGetFees: vi.fn(),
   mockGetRoyaltyFee: vi.fn(),
 }));
@@ -44,6 +46,7 @@ vi.mock("@cartridge/arcade", () => ({
     execute: mockArcadeExecute,
     marketplace: {
       buildExecuteCalldata: mockBuildExecuteCalldata,
+      getValidity: mockGetValidity,
     },
   })),
   NAMESPACE: "ARCADE",
@@ -79,6 +82,7 @@ describe("cart sidebar", () => {
     mockArcadeExecute.mockReset();
     mockListCollectionListings.mockReset();
     mockBuildExecuteCalldata.mockReset();
+    mockGetValidity.mockReset();
     mockGetFees.mockReset();
     mockGetRoyaltyFee.mockReset();
     mockUseAccount.mockReset();
@@ -111,6 +115,7 @@ describe("cart sidebar", () => {
       entrypoint: "execute",
       calldata: [orderId],
     }));
+    mockGetValidity.mockResolvedValue(["0x1", "0x0"]);
     mockArcadeExecute.mockResolvedValue({ transaction_hash: "0xcheckout" });
   });
 
@@ -347,6 +352,13 @@ describe("cart sidebar", () => {
     await waitFor(() => {
       expect(mockAccountExecute).not.toHaveBeenCalled();
     });
+    expect(mockListCollectionListings).toHaveBeenCalledWith(
+      expect.objectContaining({
+        collection: "0xabc",
+        tokenId: "1",
+        verifyOwnership: true,
+      }),
+    );
     expect(await screen.findByText(/listing is stale or unavailable/i)).toBeVisible();
     expect(screen.getByRole("button", { name: /remove stale/i })).toBeVisible();
     expect(screen.getByRole("button", { name: /refresh listing/i })).toBeVisible();
@@ -354,6 +366,76 @@ describe("cart sidebar", () => {
     expect(
       screen.getByText(/remove stale rows or refresh them, then retry checkout/i),
     ).toBeVisible();
+  });
+
+  it("checkout_blocks_when_listing_status_is_executed", async () => {
+    const user = userEvent.setup();
+    mockUseAccount.mockReturnValue({
+      account: { address: "0xwallet", execute: mockAccountExecute },
+      isConnected: true,
+      status: "connected",
+      address: "0xwallet",
+    });
+    mockListCollectionListings.mockResolvedValue([
+      {
+        id: 7001,
+        tokenId: 1,
+        price: 100,
+        currency: "0xfee",
+        quantity: 1,
+        status: { value: "Executed" },
+      },
+    ]);
+    useCartStore.setState({
+      items: [makeItem("7001", "1", "100")],
+      inlineErrors: {},
+      isOpen: true,
+      lastActionError: null,
+    });
+
+    render(<CartSidebar />);
+    await user.click(screen.getByRole("button", { name: /complete purchase/i }));
+
+    await waitFor(() => {
+      expect(mockArcadeExecute).not.toHaveBeenCalled();
+    });
+    expect(await screen.findByText(/listing is stale or unavailable/i)).toBeVisible();
+  });
+
+  it("checkout_blocks_when_on_chain_validity_is_false", async () => {
+    const user = userEvent.setup();
+    mockUseAccount.mockReturnValue({
+      account: { address: "0xwallet", execute: mockAccountExecute },
+      isConnected: true,
+      status: "connected",
+      address: "0xwallet",
+    });
+    mockListCollectionListings.mockResolvedValue([
+      {
+        id: 7001,
+        tokenId: 1,
+        price: 100,
+        currency: "0xfee",
+        quantity: 1,
+        status: { value: "Placed" },
+      },
+    ]);
+    mockGetValidity.mockResolvedValue(["0x0", "0x53616c653a206e6f7420616c6c6f776564"]);
+    useCartStore.setState({
+      items: [makeItem("7001", "1", "100")],
+      inlineErrors: {},
+      isOpen: true,
+      lastActionError: null,
+    });
+
+    render(<CartSidebar />);
+    await user.click(screen.getByRole("button", { name: /complete purchase/i }));
+
+    await waitFor(() => {
+      expect(mockArcadeExecute).not.toHaveBeenCalled();
+    });
+    expect(mockGetValidity).toHaveBeenCalledWith("7001", "0xabc", "1");
+    expect(await screen.findByText(/listing is stale or unavailable/i)).toBeVisible();
   });
 
   it("refresh_listing_clears_inline_error_when_listing_recovers", async () => {
@@ -385,6 +467,13 @@ describe("cart sidebar", () => {
     await waitFor(() => {
       expect(screen.queryByRole("button", { name: /refresh listing/i })).toBeNull();
     });
+    expect(mockListCollectionListings).toHaveBeenCalledWith(
+      expect.objectContaining({
+        collection: "0xabc",
+        tokenId: "1",
+        verifyOwnership: true,
+      }),
+    );
   });
 
   it("retry_checkout_succeeds_after_removing_stale_rows", async () => {

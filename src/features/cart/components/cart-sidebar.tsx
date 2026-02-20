@@ -106,6 +106,105 @@ function firstString(
   return null;
 }
 
+function normalizeStatus(value: unknown): string | null {
+  if (typeof value === "string" && value.trim().length > 0) {
+    return value.trim().toLowerCase();
+  }
+
+  if (typeof value === "number" && Number.isFinite(value)) {
+    if (value === 1) return "placed";
+    if (value === 2) return "canceled";
+    if (value === 3) return "executed";
+    if (value === 0) return "none";
+    return null;
+  }
+
+  if (typeof value === "bigint") {
+    if (value === BigInt(1)) return "placed";
+    if (value === BigInt(2)) return "canceled";
+    if (value === BigInt(3)) return "executed";
+    if (value === BigInt(0)) return "none";
+    return null;
+  }
+
+  const record = asRecord(value);
+  if (!record) {
+    return null;
+  }
+
+  return normalizeStatus(record.value ?? record.status ?? record.state);
+}
+
+function parseBoolLike(value: unknown): boolean | null {
+  if (typeof value === "boolean") {
+    return value;
+  }
+
+  if (typeof value === "number" && Number.isFinite(value)) {
+    if (value === 0) return false;
+    if (value === 1) return true;
+  }
+
+  if (typeof value === "bigint") {
+    if (value === BigInt(0)) return false;
+    if (value === BigInt(1)) return true;
+  }
+
+  if (typeof value === "string") {
+    const normalized = value.trim().toLowerCase();
+    if (normalized === "0" || normalized === "0x0" || normalized === "false") {
+      return false;
+    }
+    if (normalized === "1" || normalized === "0x1" || normalized === "true") {
+      return true;
+    }
+  }
+
+  return null;
+}
+
+function extractValidityFlag(value: unknown): boolean | null {
+  const direct = parseBoolLike(value);
+  if (direct !== null) {
+    return direct;
+  }
+
+  if (Array.isArray(value) && value.length > 0) {
+    return parseBoolLike(value[0]);
+  }
+
+  const record = asRecord(value);
+  if (!record) {
+    return null;
+  }
+
+  const keyed =
+    parseBoolLike(record.valid) ??
+    parseBoolLike(record.isValid) ??
+    parseBoolLike(record.is_valid) ??
+    parseBoolLike(record.value) ??
+    parseBoolLike(record.result) ??
+    parseBoolLike(record["0"]);
+  if (keyed !== null) {
+    return keyed;
+  }
+
+  for (const candidate of Object.values(record)) {
+    const parsed = parseBoolLike(candidate);
+    if (parsed !== null) {
+      return parsed;
+    }
+    if (Array.isArray(candidate) && candidate.length > 0) {
+      const nested = parseBoolLike(candidate[0]);
+      if (nested !== null) {
+        return nested;
+      }
+    }
+  }
+
+  return null;
+}
+
 function listingMatchesCartItem(
   listing: unknown,
   item: {
@@ -124,9 +223,32 @@ function listingMatchesCartItem(
   const tokenId = firstNumberish([fields, nestedOrder], ["tokenId", "token_id"]);
   const price = firstNumberish([fields, nestedOrder], ["price", "listingPrice", "listing_price"]);
   const quantity = firstNumberish([fields, nestedOrder], ["quantity", "qty"]) ?? "1";
+  const expiration = firstNumberish([fields, nestedOrder], [
+    "expiration",
+    "expiresAt",
+    "expires_at",
+  ]);
   const currency = firstString([fields, nestedOrder], ["currency"]);
+  const status =
+    normalizeStatus(fields.status) ??
+    normalizeStatus(fields.state) ??
+    normalizeStatus(nestedOrder?.status) ??
+    normalizeStatus(nestedOrder?.state);
   if (!orderId || !tokenId || !price || !currency) {
     return false;
+  }
+  if (status && status !== "placed") {
+    return false;
+  }
+  if (expiration) {
+    try {
+      const expiry = BigInt(expiration);
+      if (expiry > BigInt(0) && expiry <= BigInt(Math.floor(Date.now() / 1000))) {
+        return false;
+      }
+    } catch {
+      // Ignore malformed expiration values.
+    }
   }
 
   return (
@@ -337,15 +459,33 @@ export function CartSidebar() {
     setCheckoutStatus({ kind: "idle", tone: "idle", message: "" });
 
     try {
+      const validateOnChainValidity = async (item: (typeof items)[number]) => {
+        try {
+          const validityResult = await arcadeProvider.marketplace.getValidity(
+            item.orderId,
+            item.collection,
+            item.tokenId,
+          );
+          return extractValidityFlag(validityResult) === true;
+        } catch {
+          return false;
+        }
+      };
+
       const validateItem = async (item: (typeof items)[number]) => {
         try {
           const listings = await client.listCollectionListings({
             collection: item.collection,
             tokenId: item.tokenId,
             projectId: item.projectId,
-            verifyOwnership: false,
+            verifyOwnership: true,
           });
-          return listings.some((listing) => listingMatchesCartItem(listing, item));
+          const hasMatchingListing = listings.some((listing) => listingMatchesCartItem(listing, item));
+          if (!hasMatchingListing) {
+            return false;
+          }
+
+          return await validateOnChainValidity(item);
         } catch {
           return false;
         }
@@ -424,9 +564,23 @@ export function CartSidebar() {
         collection: item.collection,
         tokenId: item.tokenId,
         projectId: item.projectId,
-        verifyOwnership: false,
+        verifyOwnership: true,
       });
-      const isValid = listings.some((listing) => listingMatchesCartItem(listing, item));
+      const hasMatchingListing = listings.some((listing) => listingMatchesCartItem(listing, item));
+      let isOnChainValid = false;
+      if (hasMatchingListing) {
+        try {
+          const validityResult = await arcadeProvider.marketplace.getValidity(
+            item.orderId,
+            item.collection,
+            item.tokenId,
+          );
+          isOnChainValid = extractValidityFlag(validityResult) === true;
+        } catch {
+          isOnChainValid = false;
+        }
+      }
+      const isValid = hasMatchingListing && isOnChainValid;
       if (isValid) {
         clearItemError(item.orderId);
         setCheckoutStatus({

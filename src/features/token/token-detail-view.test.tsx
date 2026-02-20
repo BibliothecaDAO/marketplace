@@ -329,6 +329,59 @@ describe("token detail view", () => {
     );
   });
 
+  it("hides_non_active_listings_and_excludes_them_from_cheapest_add", async () => {
+    mockUseCollectionListingsQuery.mockReturnValue(
+      successListingsQuery([
+        {
+          id: 1,
+          tokenId: "1",
+          price: "100000000000000000",
+          currency: "0xstrk",
+          quantity: "1",
+          owner: "0xexecuted",
+          status: { value: "Executed" },
+          expiration: FAR_FUTURE_EXPIRATION,
+        },
+        {
+          id: 2,
+          tokenId: "1",
+          price: "200000000000000000",
+          currency: "0xstrk",
+          quantity: "1",
+          owner: "0xactive",
+          status: "Placed",
+          expiration: FAR_FUTURE_EXPIRATION,
+        },
+      ]),
+    );
+
+    mockUseTokenDetailQuery.mockReturnValue(
+      successQuery({
+        token: {
+          token_id: "1",
+          image: "https://cdn.example/1.png",
+          metadata: { name: "Token #1" },
+        },
+        orders: [],
+        listings: [],
+      }),
+    );
+
+    const user = userEvent.setup();
+    render(<TokenDetailView address="0xabc" tokenId="1" />);
+
+    expect(screen.queryByText("0xexecuted")).toBeNull();
+    expect(screen.getByText("0xactive")).toBeVisible();
+
+    await user.click(screen.getByRole("button", { name: /add cheapest to cart/i }));
+
+    expect(mockCartAddItem).toHaveBeenCalledWith(
+      expect.objectContaining({
+        orderId: "2",
+      }),
+    );
+  });
+
   it("shows_empty_listings_message", () => {
     mockUseTokenDetailQuery.mockReturnValue(
       successQuery({
@@ -506,7 +559,7 @@ describe("token detail view", () => {
         collection: "0x123",
         tokenId: "7",
         projectId: "my-project",
-        verifyOwnership: false,
+        verifyOwnership: true,
       }),
     );
   });
@@ -542,7 +595,7 @@ describe("token detail view", () => {
         collection: "0x123",
         tokenId: "1120",
         projectId: "my-project",
-        verifyOwnership: false,
+        verifyOwnership: true,
       }),
     );
   });
@@ -567,7 +620,7 @@ describe("token detail view", () => {
     expect(screen.queryByLabelText(/verify ownership/i)).toBeNull();
   });
 
-  it("listings_query_always_uses_verify_ownership_false", () => {
+  it("listings_query_always_uses_verify_ownership_true", () => {
     mockUseTokenDetailQuery.mockReturnValue(
       successQuery({
         token: { token_id: "7", image: null, metadata: { name: "Token #7" } },
@@ -579,7 +632,7 @@ describe("token detail view", () => {
     render(<TokenDetailView address="0x123" tokenId="7" />);
 
     expect(mockUseCollectionListingsQuery).toHaveBeenCalledWith(
-      expect.objectContaining({ verifyOwnership: false }),
+      expect.objectContaining({ verifyOwnership: true }),
     );
   });
 

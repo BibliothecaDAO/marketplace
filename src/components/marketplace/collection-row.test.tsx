@@ -482,7 +482,7 @@ describe("collection row", () => {
       expect.objectContaining({
         collection: "0x123",
         projectId: "my-project",
-        verifyOwnership: false,
+        verifyOwnership: true,
       }),
     );
   });
@@ -519,6 +519,53 @@ describe("collection row", () => {
     );
     expect(mockCartSetOpen).toHaveBeenCalledWith(true);
     expect(screen.getByRole("button", { name: /added/i })).toBeVisible();
+  });
+
+  it("collection_and_home_add_to_cart_ignores_expired_listings", async () => {
+    const now = Math.floor(Date.now() / 1000);
+    const user = userEvent.setup();
+    mockUseCollectionListingsQuery.mockReturnValue(
+      successListingsResult([
+        {
+          id: 10,
+          tokenId: 1,
+          price: 90,
+          currency: "0xfee",
+          quantity: 1,
+          expiration: now - 60,
+        },
+        {
+          id: 11,
+          tokenId: 1,
+          price: 120,
+          currency: "0xfee",
+          quantity: 1,
+          expiration: now + 3600,
+        },
+      ]),
+    );
+    mockUseCollectionTokensQuery.mockReturnValue(
+      successResult([
+        token("1", {
+          image: "https://cdn.example/1.png",
+          metadata: { name: "Alpha" },
+        }),
+      ]),
+    );
+
+    render(<CollectionRow address="0xabc" name="Addable Collection" />);
+
+    await user.click(screen.getByRole("button", { name: /add to cart/i }));
+
+    expect(mockCartAddItem).toHaveBeenCalledWith(
+      expect.objectContaining({
+        orderId: "11",
+        collection: "0xabc",
+        tokenId: "1",
+        price: "120",
+        currency: "0xfee",
+      }),
+    );
   });
 
   it("makes_token_image_flush_to_card_edges", () => {
