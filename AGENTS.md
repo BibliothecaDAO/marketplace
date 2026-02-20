@@ -1,212 +1,238 @@
 # AGENTS.md
 
-This file is the contributor and coding-agent playbook for the `biblio/marketplace` repo.
+```text
+    _    ____ _____ _   _ _____ ____
+   / \  / ___| ____| \ | |_   _/ ___|
+  / _ \| |  _|  _| |  \| | | | \___ \\
+ / ___ \ |_| | |___| |\  | | |  ___) |
+/_/   \_\____|_____|_| \_| |_| |____/
+```
 
-## 1) Repository Overview
+Contributor and coding-agent playbook for `biblio/marketplace`.
 
-`biblio/marketplace` is a Next.js App Router marketplace scaffold built around the Arcade Marketplace SDK.
+## 1) Mission and Constraints
 
-Core goals:
-- Multi-collection marketplace UX
-- Minimal, clean UI using only `shadcn/ui` + Tailwind tokens
-- TDD-first implementation and reliable CI
+This repo is a production-oriented marketplace frontend for Starknet collections.
 
-Primary docs:
-- Scope: `docs/SCOPE.md`
-- TDD PRD: `docs/TDD-PRD.md`
+Non-negotiable constraints:
 
-## 2) Tech Stack
+- Use only `shadcn/ui` primitives + Tailwind tokens for UI.
+- Keep business logic in `src/lib` or `src/features`, not route files.
+- Preserve strict typing; avoid `any` unless unavoidable.
+- Implement behavior changes with tests first (RED -> GREEN -> REFACTOR).
+- Keep changes focused; avoid broad refactors unless requested.
+
+## 2) Read Order (Required)
+
+Before changing code:
+
+1. `AGENTS.md` (this file)
+2. `README.md`
+3. `docs/SCOPE.md`
+4. `docs/TDD-PRD.md`
+
+## 3) Current Stack and Tooling
 
 - Next.js `16.1.6` + React `19`
 - TypeScript
 - Tailwind CSS v4
-- `shadcn/ui` components only
-- `@cartridge/arcade` marketplace SDK
+- `@cartridge/arcade` SDK + `@starknet-react/*`
+- Zustand for persisted cart state
 - Vitest + React Testing Library + MSW
-- Playwright for e2e and visual snapshots in CI
+- Playwright for e2e and feature screenshots
 
-## 3) Repository Structure
+Package manager notes:
 
-- `src/app/*` App Router routes
-- `src/features/*` feature modules (`collections`, `ops`)
-- `src/components/ui/*` shadcn primitives
-- `src/components/marketplace/*` marketplace shells/presentation
-- `src/components/providers/*` provider wiring
-- `src/lib/marketplace/*` config and marketplace utilities
-- `src/test/*` test setup + MSW handlers
-- `tests/e2e/*` Playwright tests
-- `scripts/ci/*` CI helper scripts
-- `.github/workflows/ci.yml` CI pipeline
+- CI uses `pnpm` (`pnpm-lock.yaml` is canonical).
+- Local `npm` scripts also work, but `pnpm` is preferred for parity.
 
-## 4) Local Setup
+## 4) Repository Map
 
-Prerequisites:
-- Node.js `20.x`
-- npm `>=10`
+- `src/app/*`: App Router pages, metadata, API routes
+- `src/features/collections/*`: collection UX (grid, filters, market activity)
+- `src/features/token/*`: token detail and listing actions
+- `src/features/cart/*`: cart store/sidebar/checkout flow
+- `src/features/portfolio/*`: wallet lookup flow
+- `src/features/profile/*`: wallet profile holdings view
+- `src/features/ops/*`: client diagnostics
+- `src/components/ui/*`: shadcn primitives only
+- `src/components/providers/*`: Starknet/query/marketplace provider setup
+- `src/lib/marketplace/*`: config parsing, hooks, fee logic, token display
+- `src/test/*`: unit/integration test setup + MSW
+- `tests/e2e/*`: Playwright tests
+- `scripts/ci/*`: screenshot route detection and CI helper scripts
+- `.github/workflows/ci.yml`: CI pipeline
 
-Install and run:
+## 5) Product and Domain Invariants (Do Not Break)
 
-```bash
-npm install
-cp .env.example .env.local
-npm run dev
-```
+### Multi-collection
 
-Default dev URL:
-- `http://localhost:3000`
-- If occupied, Next.js will pick another port (for example `3001`).
+- Collections come from `NEXT_PUBLIC_MARKETPLACE_COLLECTIONS` in `address|name|projectId` format.
+- Route and query logic must handle collection switching without stale state leakage.
 
-## 5) Environment Variables
+### Multi-currency marketplace behavior
 
-Configure in `.env.local`:
+- Listings/offers are multi-currency (`STRK`, `LORDS`, `SURVIVO`).
+- Currency display is address-based via token symbol/icon resolvers.
+- Wallet dropdown displays balances across those currencies.
+- Cart checkout calldata uses each listing's currency.
+- Cart intentionally enforces one-currency-per-checkout (mixed currency is rejected).
+
+### Checkout and cart safety
+
+- Cart row identity is `orderId`.
+- Cart maximum is 25 items.
+- Checkout must pre-validate listing freshness and block if any row is stale.
+- Checkout executes as one transaction; no partial fallback path.
+- Validation failures must remain visible inline per row.
+
+## 6) Environment Contract
+
+Use `.env.local`:
 
 - `NEXT_PUBLIC_MARKETPLACE_CHAIN_ID`
 - `NEXT_PUBLIC_MARKETPLACE_DEFAULT_PROJECT`
 - `NEXT_PUBLIC_MARKETPLACE_COLLECTIONS`
+- `NEXT_PUBLIC_SITE_URL` (recommended for canonical/OG metadata)
 
-Collection format:
+Collections format:
 
 ```env
 NEXT_PUBLIC_MARKETPLACE_COLLECTIONS=address|name|projectId,address|name|projectId
 ```
 
-Example:
+After env edits, restart dev server.
 
-```env
-NEXT_PUBLIC_MARKETPLACE_CHAIN_ID=SN_SEPOLIA
-NEXT_PUBLIC_MARKETPLACE_DEFAULT_PROJECT=
-NEXT_PUBLIC_MARKETPLACE_COLLECTIONS=0x123...|Genesis|project-a,0x456...|Artifacts|project-b
-```
+## 7) Development Workflow (Required)
 
-How to add collections:
-- Update `NEXT_PUBLIC_MARKETPLACE_COLLECTIONS` in `.env.local`.
-- Use comma-separated entries in this format:
-  - `address|name|projectId`
-- `address` and `name` are required.
-- `projectId` is optional.
-- Restart the dev server after changes.
+1. Sync branch with latest `main`.
+2. Create a focused branch for one change-set.
+3. Write/adjust failing tests first.
+4. Implement minimal code to pass tests.
+5. Refactor while preserving green tests.
+6. Run quality gates before commit.
 
-Example single collection:
+## 8) Git Workflow (Required)
 
-```env
-NEXT_PUBLIC_MARKETPLACE_COLLECTIONS=0xabc123...|Genesis|project-a
-```
-
-## 6) Daily Development Workflow
-
-1. Create a branch from latest main.
-2. Implement with TDD: write failing test first, then minimal code, then refactor.
-3. Keep UI within shadcn + Tailwind token system.
-4. Run local quality gates before committing.
-5. Commit in small, reviewable chunks.
-
-Useful commands:
+Branching:
 
 ```bash
-npm run lint
-npm run typecheck
-npm test
-npm run build
-npm run test:e2e
+git fetch origin
+git checkout main
+git pull --ff-only origin main
+git checkout -b feat/short-topic
 ```
 
-## 7) Testing and CI
-
-CI workflow: `.github/workflows/ci.yml`
-
-CI stages:
-1. `npm ci`
-2. `npm run lint`
-3. `npm run typecheck`
-4. `npm test`
-5. `npm run build`
-6. `npm run test:e2e`
-7. Conditional feature screenshot capture
-
-Feature screenshot behavior:
-- Route detection script: `scripts/ci/feature-screenshot-routes.mjs`
-- Screenshot spec: `tests/e2e/feature-screenshots.spec.ts`
-- Artifacts uploaded as:
-  - `feature-screenshots-*`
-  - `playwright-artifacts-*`
-
-## 8) Commit Standards
-
-Before commit, run:
+During work:
 
 ```bash
-npm run lint && npm run typecheck && npm test && npm run build
+git status
+git diff
 ```
 
-Commit message format:
+Commit format:
 
 ```text
 type(scope): concise summary
 ```
 
+Allowed types: `feat`, `fix`, `refactor`, `test`, `docs`, `chore`, `ci`.
+
 Examples:
-- `feat(collections): add trait sidebar URL sync`
-- `fix(ci): skip screenshot suite when no routes`
-- `test(traits): cover filter flattening edge cases`
 
-Recommended types:
-- `feat`, `fix`, `refactor`, `test`, `docs`, `chore`, `ci`
+- `feat(collections): sync trait filters with url`
+- `fix(cart): block stale rows before checkout`
+- `test(token): cover expired listing filtering`
 
-Commit flow:
+Commit/push:
 
 ```bash
-git checkout -b feat/short-name
-git status
 git add <paths>
-git commit -m \"feat(scope): message\"
-git push -u origin feat/short-name
+git commit -m "type(scope): summary"
+git push -u origin <branch>
 ```
 
-## 9) Pull Request Best Practices
+Git safety rules:
 
-Include in PR description:
+- Never commit `.next`, Playwright artifacts, temp files, or secrets.
+- Never force-push shared branches.
+- Never revert unrelated changes you did not author.
+- Keep PRs small and single-purpose.
+
+## 9) Test Expectations by Change Type
+
+For logic changes:
+
+```bash
+pnpm test
+pnpm typecheck
+pnpm lint
+```
+
+For UI/route changes:
+
+```bash
+pnpm test
+pnpm test:e2e
+pnpm build
+```
+
+For CI-parity preflight:
+
+```bash
+pnpm lint && pnpm typecheck && pnpm test:coverage && pnpm build && pnpm test:e2e
+```
+
+For docs-only changes, tests may be skipped, but state that explicitly in PR notes.
+
+## 10) UI and Accessibility Standards
+
+- Maintain minimal, readable hierarchy.
+- Use semantic theme tokens (`primary`, `secondary`, `muted`, `destructive`, `chart-*`).
+- Preserve keyboard navigation and visible focus states.
+- Ensure responsive behavior on mobile and desktop.
+
+## 11) API/Data Rules
+
+- Keep query boundaries explicit: loading, empty, error, success.
+- Prefer deterministic parsing/normalization for SDK payload variance.
+- Do not hardcode fee results when SDK methods are available.
+- Preserve URL-canonical state for filters/sort/cursor where implemented.
+
+## 12) PR Requirements
+
+Each PR should include:
+
 - What changed
 - Why it changed
 - Risk/impact areas
-- Test evidence (commands + result)
+- Test evidence (exact commands + result)
 - Screenshots for UI changes
 
-PR checklist:
-- [ ] Tests added/updated for behavior changes
-- [ ] Lint/typecheck/build pass locally
-- [ ] No unrelated file changes
-- [ ] Updated docs when behavior/contracts changed
+Checklist:
 
-## 10) Code Quality Guidelines
+- [ ] Behavior change has tests
+- [ ] Lint/typecheck/build pass
+- [ ] No unrelated files modified
+- [ ] Docs updated if contracts/behavior changed
 
-- Favor small composable functions over large components.
-- Keep business logic in `src/lib` or feature modules, not in route files.
-- Preserve strict typing; avoid `any` unless unavoidable.
-- Handle all async states: loading, success, empty, error.
-- Keep URL state canonical for filters/search/cursor where applicable.
-- Avoid introducing UI libraries beyond shadcn primitives.
+## 13) Quick Commands
 
-## 11) Frontend UX Guidelines
+```bash
+pnpm dev
+pnpm dev:https
+pnpm lint
+pnpm typecheck
+pnpm test
+pnpm test:coverage
+pnpm test:e2e
+pnpm test:e2e:screenshots
+pnpm ci:feature-routes
+pnpm build
+```
 
-- Minimal, readable layouts with strong information hierarchy.
-- Use theme tokens (`primary`, `secondary`, `accent`, `muted`, `destructive`, `chart-*`).
-- Maintain keyboard accessibility and visible focus states.
-- Ensure responsive behavior for mobile and desktop.
+## 14) Conductor Workspace Notes
 
-## 12) Agent-Specific Guidelines
-
-If you are an automated coding agent working in this repo:
-- Read this file first, then `README.md`, `docs/SCOPE.md`, and `docs/TDD-PRD.md`.
-- Do not skip tests-first workflow for feature or bugfix work.
-- Do not commit generated output (`.next`, temporary artifacts, local env files).
-- Prefer focused patches and avoid broad refactors unless requested.
-- When making UI changes, provide route screenshots and test proof.
-
-## 13) Quick Reference
-
-- Start dev server: `npm run dev`
-- Start HTTPS dev server for wallet testing: `npm run dev:https`
-- Unit/integration tests: `npm test`
-- E2E tests: `npm run test:e2e`
-- Feature screenshots e2e: `npm run test:e2e:screenshots`
-- CI route detection helper: `npm run ci:feature-routes`
+- Work inside the assigned workspace path only.
+- Use `.context/` for scratch notes shared across agents.
+- Target branch is `main` unless explicitly told otherwise.
