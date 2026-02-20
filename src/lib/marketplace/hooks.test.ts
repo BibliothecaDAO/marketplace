@@ -128,11 +128,50 @@ describe("marketplace hooks", () => {
       () => useTokenDetailQuery({ collection: "0xabc", tokenId: "42", fetchImages: true }),
     );
 
-    expect(mockUseMarketplaceToken).toHaveBeenCalledWith(
+    expect(mockUseMarketplaceToken).toHaveBeenNthCalledWith(
+      1,
       { collection: "0xabc", tokenId: "42", fetchImages: true },
       { enabled: true },
     );
+    expect(mockUseMarketplaceToken).toHaveBeenNthCalledWith(
+      2,
+      { collection: "0xabc", tokenId: "0x2a", fetchImages: true },
+      { enabled: false },
+    );
     expect(result.current).toBe(expected);
+  });
+
+  it("useTokenDetailQuery_uses_alternate_token_id_when_primary_has_no_token", async () => {
+    const fallbackResult = {
+      status: "success",
+      data: { token: { token_id: "0x935", metadata: { name: "Loot Chest #2357" } } },
+    };
+    mockUseMarketplaceToken.mockImplementation((options: { tokenId: string }) => {
+      if (options.tokenId === "2357") {
+        return { status: "success", data: null };
+      }
+      if (options.tokenId === "0x935") {
+        return fallbackResult;
+      }
+      return { status: "pending", data: null };
+    });
+
+    const { useTokenDetailQuery } = await import("@/lib/marketplace/hooks");
+    const { result } = renderHook(
+      () => useTokenDetailQuery({ collection: "0xloot", tokenId: "2357", fetchImages: true }),
+    );
+
+    expect(mockUseMarketplaceToken).toHaveBeenNthCalledWith(
+      1,
+      { collection: "0xloot", tokenId: "2357", fetchImages: true },
+      { enabled: true },
+    );
+    expect(mockUseMarketplaceToken).toHaveBeenNthCalledWith(
+      2,
+      { collection: "0xloot", tokenId: "0x935", fetchImages: true },
+      { enabled: true },
+    );
+    expect(result.current).toBe(fallbackResult);
   });
 
   it("useTokenOwnershipQuery_passes_alt_token_ids", async () => {

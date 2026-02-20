@@ -6,6 +6,7 @@ import type {
   CollectionOrdersOptions,
   CollectionSummaryOptions,
   FetchCollectionTokensOptions,
+  TokenDetails,
   TokenDetailsOptions,
 } from "@cartridge/arcade/marketplace";
 import {
@@ -41,6 +42,10 @@ function alternateTokenId(rawTokenId: string) {
   }
 
   return null;
+}
+
+function hasUsableToken(data: TokenDetails | null | undefined): data is TokenDetails {
+  return data !== null && data !== undefined && data.token !== null && data.token !== undefined;
 }
 
 type TraitMetadataApiPayload = {
@@ -111,9 +116,40 @@ export function useCollectionListingsQuery(options: CollectionListingsOptions) {
 }
 
 export function useTokenDetailQuery(options: TokenDetailsOptions) {
-  return useMarketplaceToken(options, {
-    enabled: !!options.collection && !!options.tokenId,
+  const tokenId = String(options.tokenId);
+  const enabled = !!options.collection && !!tokenId;
+  const altTokenId = alternateTokenId(tokenId);
+  const hasAlternateTokenId = !!altTokenId && altTokenId !== tokenId;
+
+  const primaryQuery = useMarketplaceToken(options, {
+    enabled,
   });
+
+  const shouldEnableAlternateQuery =
+    enabled
+    && hasAlternateTokenId
+    && primaryQuery.status !== "pending"
+    && (primaryQuery.status === "error" || !hasUsableToken(primaryQuery.data));
+
+  const alternateQuery = useMarketplaceToken(
+    {
+      ...options,
+      tokenId: hasAlternateTokenId ? altTokenId : tokenId,
+    },
+    {
+      enabled: shouldEnableAlternateQuery,
+    },
+  );
+
+  if (hasUsableToken(primaryQuery.data)) {
+    return primaryQuery;
+  }
+
+  if (shouldEnableAlternateQuery) {
+    return alternateQuery;
+  }
+
+  return primaryQuery;
 }
 
 export function useTokenOwnershipQuery(options: {
