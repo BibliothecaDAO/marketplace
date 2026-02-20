@@ -69,7 +69,7 @@ export function WalletProfileView({
   const portfolioQuery = useWalletPortfolioQuery(address);
   const [filterInput, setFilterInput] = useState("");
   const isLoading =
-    portfolioQuery.status === "loading" || portfolioQuery.isFetching;
+    portfolioQuery.status === "pending" || portfolioQuery.isFetching;
   const isError = portfolioQuery.status === "error" || !!portfolioQuery.error;
   const items = useMemo(
     () => parsePortfolioItems(portfolioQuery.data),

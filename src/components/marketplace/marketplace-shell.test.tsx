@@ -50,7 +50,7 @@ function makeRuntimeConfig(overrides: Record<string, unknown> = {}) {
 function makeQueryResult(overrides: Record<string, unknown> = {}) {
   return {
     data: undefined,
-    status: "loading",
+    status: "pending",
     ...overrides,
   };
 }
@@ -155,7 +155,7 @@ describe("MarketplaceShell", () => {
 
   it("shows_skeleton_when_loading", async () => {
     mockUseMarketplaceCollectionTokens.mockReturnValue(
-      makeQueryResult({ status: "loading" }),
+      makeQueryResult({ status: "pending" }),
     );
 
     const { MarketplaceShell } = await import(

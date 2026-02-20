@@ -91,7 +91,7 @@ export function MarketplaceShell() {
       fetchImages: true,
       projectId,
     },
-    isCollectionSelected,
+    { enabled: isCollectionSelected },
   );
   const tokens = useMarketplaceCollectionTokens(
     {
@@ -100,7 +100,7 @@ export function MarketplaceShell() {
       limit: 24,
       project: projectId,
     },
-    isCollectionSelected,
+    { enabled: isCollectionSelected },
   );
   const listings = useMarketplaceCollectionListings(
     {
@@ -108,7 +108,7 @@ export function MarketplaceShell() {
       limit: 24,
       projectId,
     },
-    isCollectionSelected,
+    { enabled: isCollectionSelected },
   );
 
   const tokenRows = tokens.data?.page?.tokens ?? [];
@@ -244,7 +244,7 @@ export function MarketplaceShell() {
               <Separator />
             </CardHeader>
             <CardContent>
-              {tokens.status === "loading" && (
+              {tokens.status === "pending" && (
                 <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
                   {Array.from({ length: 6 }).map((_, index) => (
                     <Card key={index} className="overflow-hidden">
@@ -258,7 +258,7 @@ export function MarketplaceShell() {
                 </div>
               )}
 
-              {tokens.status !== "loading" && (
+              {tokens.status !== "pending" && (
                 <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
                   {filteredTokens.map((token) => {
                     const image = tokenImage(token);
