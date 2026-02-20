@@ -74,13 +74,32 @@ function comparePrice(left: string, right: string) {
   }
 }
 
-function normalizeListing(listing: unknown): CheapestListing | null {
+function normalizeListing(
+  listing: unknown,
+  nowEpochSeconds: bigint,
+): CheapestListing | null {
   const fields = asRecord(listing);
   if (!fields) {
     return null;
   }
 
   const nestedOrder = asRecord(fields.order);
+  const expiration = firstNumberish([fields, nestedOrder], [
+    "expiration",
+    "expiresAt",
+    "expires_at",
+  ]);
+  if (expiration) {
+    try {
+      const expiry = BigInt(expiration);
+      if (expiry > BigInt(0) && expiry <= nowEpochSeconds) {
+        return null;
+      }
+    } catch {
+      // Ignore malformed expiration values.
+    }
+  }
+
   const orderId = firstNumberish([fields, nestedOrder], [
     "id",
     "orderId",
@@ -111,9 +130,10 @@ function normalizeListing(listing: unknown): CheapestListing | null {
 
 export function cheapestListingByTokenId(listings: unknown[] | undefined) {
   const entries = new Map<string, CheapestListing>();
+  const nowEpochSeconds = BigInt(Math.floor(Date.now() / 1000));
 
   for (const listing of listings ?? []) {
-    const normalized = normalizeListing(listing);
+    const normalized = normalizeListing(listing, nowEpochSeconds);
     if (!normalized) {
       continue;
     }

@@ -206,6 +206,7 @@ export function formatRelativeExpiry(epochSeconds: number): string {
 
 export function listingPriceByTokenId(listings: unknown[] | undefined) {
   const prices = new Map<string, string>();
+  const nowEpochSeconds = BigInt(Math.floor(Date.now() / 1000));
 
   for (const listing of listings ?? []) {
     const fields = asRecord(listing);
@@ -226,8 +227,25 @@ export function listingPriceByTokenId(listings: unknown[] | undefined) {
       formatNumberish(nestedOrder?.price) ??
       formatNumberish(nestedOrder?.listing_price) ??
       formatNumberish(nestedOrder?.listingPrice);
+    const expiration =
+      formatNumberish(fields.expiration) ??
+      formatNumberish(fields.expires_at) ??
+      formatNumberish(fields.expiresAt) ??
+      formatNumberish(nestedOrder?.expiration) ??
+      formatNumberish(nestedOrder?.expires_at) ??
+      formatNumberish(nestedOrder?.expiresAt);
     if (!listingTokenId || !listingPrice) {
       continue;
+    }
+    if (expiration) {
+      try {
+        const expiry = BigInt(expiration);
+        if (expiry > BigInt(0) && expiry <= nowEpochSeconds) {
+          continue;
+        }
+      } catch {
+        // Ignore malformed expiration values.
+      }
     }
 
     const currentPrice = prices.get(listingTokenId);
