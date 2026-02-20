@@ -29,6 +29,7 @@ import {
   formatPriceForDisplay,
   buildExplorerTxUrl,
   formatRelativeExpiry,
+  getTokenSymbol,
 } from "@/lib/marketplace/token-display";
 import { calculateMarketplaceFee, parseBigInt } from "@/lib/marketplace/fees";
 import type { CheapestListing } from "@/features/cart/listing-utils";
@@ -568,7 +569,7 @@ export function TokenDetailView({
               <div className="grid gap-2 sm:grid-cols-2">
                 <div className="flex items-center gap-1">
                   <Input
-                    aria-label="Price (STRK)"
+                    aria-label={`Price (${getTokenSymbol(currencyInput)})`}
                     min="0"
                     onChange={(event) => setPriceInput(event.target.value)}
                     placeholder="Price"
@@ -576,7 +577,7 @@ export function TokenDetailView({
                     type="number"
                     value={priceInput}
                   />
-                  <span className="text-sm text-muted-foreground shrink-0">STRK</span>
+                  <span className="text-sm text-muted-foreground shrink-0">{getTokenSymbol(currencyInput)}</span>
                 </div>
                 <Input
                   aria-label="Quantity"
@@ -671,7 +672,7 @@ export function TokenDetailView({
               <div className="grid gap-2 sm:grid-cols-2">
                 <div className="flex items-center gap-1">
                   <Input
-                    aria-label="Price (STRK)"
+                    aria-label={`Price (${getTokenSymbol(currencyInput)})`}
                     min="0"
                     onChange={(event) => setPriceInput(event.target.value)}
                     placeholder="Price"
@@ -679,7 +680,7 @@ export function TokenDetailView({
                     type="number"
                     value={priceInput}
                   />
-                  <span className="text-sm text-muted-foreground shrink-0">STRK</span>
+                  <span className="text-sm text-muted-foreground shrink-0">{getTokenSymbol(currencyInput)}</span>
                 </div>
                 <Input
                   aria-label="Quantity"

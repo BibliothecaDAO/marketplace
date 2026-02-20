@@ -137,6 +137,13 @@ export function tokenPrice(token: NormalizedToken) {
 
 const KNOWN_TOKEN_SYMBOLS: Record<string, string> = {
   "0x04718f5a0fc34cc1af16a1cdee98ffb20c31f5cd61d6ab07201858f4287c938d": "STRK",
+  "0x42dd777885ad2c116be96d4d634abc90a26a790ffb5871e037dd5ae7d2ec86b": "SURVIVO",
+  "0x0124aeb495b947201f5fac96fd1138e326ad86195b98df6dec9009158a533b49": "LORDS",
+};
+
+const KNOWN_TOKEN_ICONS: Record<string, string> = {
+  "0x42dd777885ad2c116be96d4d634abc90a26a790ffb5871e037dd5ae7d2ec86b": "/tokens/survivo.jpg",
+  "0x0124aeb495b947201f5fac96fd1138e326ad86195b98df6dec9009158a533b49": "https://coin-images.coingecko.com/coins/images/22171/small/Frame_1.png?1696521515",
 };
 
 export function getTokenSymbol(address: string): string {
@@ -145,6 +152,11 @@ export function getTokenSymbol(address: string): string {
     return KNOWN_TOKEN_SYMBOLS[normalized];
   }
   return formatAddress(address);
+}
+
+export function getTokenIconUrl(address: string): string | null {
+  const normalized = address.toLowerCase();
+  return KNOWN_TOKEN_ICONS[normalized] ?? null;
 }
 
 export function buildExplorerTxUrl(
