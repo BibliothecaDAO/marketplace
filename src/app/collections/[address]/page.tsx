@@ -1,3 +1,4 @@
+import { Suspense } from "react";
 import type { Metadata } from "next";
 import { CollectionRouteContainer } from "@/features/collections/collection-route-container";
 import { buildMarketplacePageMetadata } from "@/lib/seo/metadata";
@@ -16,7 +17,9 @@ export default async function CollectionPage({
 
   return (
     <main className="flex min-h-screen w-full items-start px-4 py-6 sm:px-6 lg:px-8">
-      <CollectionRouteContainer address={address} cursor={cursor ?? null} />
+      <Suspense>
+        <CollectionRouteContainer address={address} cursor={cursor ?? null} />
+      </Suspense>
     </main>
   );
 }
