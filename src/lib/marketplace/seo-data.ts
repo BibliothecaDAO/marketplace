@@ -1,6 +1,10 @@
 import { cache } from "react";
+import { unstable_cache } from "next/cache";
 import { getMarketplaceRuntimeConfig } from "@/lib/marketplace/config";
 import { tokenImage, tokenName } from "@/lib/marketplace/token-display";
+
+const COLLECTION_CACHE_REVALIDATE_SECONDS = 300;
+const TOKEN_CACHE_REVALIDATE_SECONDS = 60;
 
 type TokenLike = {
   token_id?: unknown;
@@ -161,7 +165,7 @@ const getMarketplaceClient = cache(async (): Promise<MarketplaceClientLike | nul
   }
 });
 
-async function fetchCollection(address: string) {
+async function _fetchCollectionUncached(address: string) {
   const context = resolveCollectionContext(address);
   const client = await getMarketplaceClient();
 
@@ -191,7 +195,16 @@ async function fetchCollection(address: string) {
   }
 }
 
-async function fetchTokenWithFallback(options: {
+const fetchCollectionCached = unstable_cache(
+  _fetchCollectionUncached,
+  ["seo-collection"],
+  { revalidate: COLLECTION_CACHE_REVALIDATE_SECONDS },
+);
+
+// Per-request dedup on top of the cross-request edge cache.
+const fetchCollection = cache((address: string) => fetchCollectionCached(address));
+
+async function _fetchTokenWithFallbackUncached(options: {
   collection: string;
   tokenId: string;
   projectId?: string;
@@ -236,6 +249,19 @@ async function fetchTokenWithFallback(options: {
     return null;
   }
 }
+
+const fetchTokenWithFallbackCached = unstable_cache(
+  (collection: string, tokenId: string, projectId?: string) =>
+    _fetchTokenWithFallbackUncached({ collection, tokenId, projectId }),
+  ["seo-token"],
+  { revalidate: TOKEN_CACHE_REVALIDATE_SECONDS },
+);
+
+// Per-request dedup on top of the cross-request edge cache.
+const fetchTokenWithFallback = cache(
+  (options: { collection: string; tokenId: string; projectId?: string }) =>
+    fetchTokenWithFallbackCached(options.collection, options.tokenId, options.projectId),
+);
 
 function normalizedTokenImage(token: TokenLike) {
   return normalizeImageUrl(tokenImage(token as never));

@@ -1,7 +1,18 @@
 import "@testing-library/jest-dom/vitest";
 import { cleanup } from "@testing-library/react";
-import { afterAll, afterEach, beforeAll } from "vitest";
+import { afterAll, afterEach, beforeAll, vi } from "vitest";
 import { server } from "@/test/msw/server";
+
+// next/cache is not available outside the Next.js runtime (e.g. Vitest / jsdom).
+// Replace unstable_cache with a pass-through so tests exercise the underlying
+// fetch logic without requiring the incremental cache context.
+vi.mock("next/cache", () => ({
+  unstable_cache: <T extends (...args: unknown[]) => Promise<unknown>>(
+    fn: T,
+  ) => fn,
+  revalidateTag: vi.fn(),
+  revalidatePath: vi.fn(),
+}));
 
 beforeAll(() => {
   if (!HTMLElement.prototype.hasPointerCapture) {
