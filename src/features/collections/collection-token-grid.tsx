@@ -51,6 +51,7 @@ type CollectionTokenGridProps = {
   activeFilters?: ActiveFilters;
   sortMode?: CollectionSortMode;
   onTokensChange?: (tokens: NormalizedToken[]) => void;
+  sweepPreviewTokenIds?: Set<string>;
 };
 
 type GridDensityMode = "compact" | "standard" | "comfort";
@@ -175,6 +176,7 @@ export function CollectionTokenGrid({
   activeFilters,
   sortMode = "recent",
   onTokensChange,
+  sweepPreviewTokenIds,
 }: CollectionTokenGridProps) {
   const { addListingToCart, isRecentlyAdded } = useAddToCartFeedback();
   const [gridDensity, setGridDensity] = useState<GridDensityMode>("standard");
@@ -333,6 +335,7 @@ export function CollectionTokenGrid({
             const tokenKey = displayTokenId(token);
             const cheapestListing = listingPrices.get(tokenKey);
             const isAdded = isRecentlyAdded(cheapestListing?.orderId);
+            const isSweepPreview = sweepPreviewTokenIds?.has(tokenKey) ?? false;
             const price =
               cheapestListing?.price ??
               listingPriceMap.get(tokenKey) ??
@@ -340,18 +343,25 @@ export function CollectionTokenGrid({
 
             return (
               <div key={tokenId(token)} className="space-y-2">
-                <MarketplaceTokenCard
-                  cardContentAriaLabel={`token-${tokenKey}`}
-                  cardContentRole="article"
-                  currency={cheapestListing?.currency ?? null}
-                  href={`/collections/${address}/${tokenId(token)}`}
-                  linkAriaLabel={`token-${tokenKey}`}
-                  price={price}
-                  token={token}
-                />
+                <div
+                  className={cn(
+                    "rounded-lg transition-all duration-150",
+                    isSweepPreview && "relative z-10 ring-2 ring-primary ring-offset-2 ring-offset-background",
+                  )}
+                >
+                  <MarketplaceTokenCard
+                    cardContentAriaLabel={`token-${tokenKey}`}
+                    cardContentRole="article"
+                    currency={cheapestListing?.currency ?? null}
+                    href={`/collections/${address}/${tokenId(token)}`}
+                    linkAriaLabel={`token-${tokenKey}`}
+                    price={price}
+                    token={token}
+                  />
+                </div>
                 <Button
                   className="w-full"
-                  disabled={!cheapestListing}
+                  disabled={!cheapestListing || isSweepPreview}
                   onClick={() => {
                     if (!cheapestListing) {
                       return;
@@ -368,9 +378,9 @@ export function CollectionTokenGrid({
                   }}
                   size="sm"
                   type="button"
-                  variant={isAdded ? "default" : "outline"}
+                  variant={isAdded ? "default" : isSweepPreview ? "secondary" : "outline"}
                 >
-                  {isAdded ? "Added" : "Add to cart"}
+                  {isAdded ? "Added" : isSweepPreview ? "Pending sweep" : "Add to cart"}
                 </Button>
               </div>
             );

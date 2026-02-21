@@ -13,6 +13,7 @@ vi.mock("@/lib/marketplace/hooks", () => ({
   useCollectionQuery: mockUseCollectionQuery,
   useCollectionTraitMetadataQuery: () => ({ data: [], isLoading: false }),
   useCollectionListingsQuery: () => ({ data: [], isLoading: false, isSuccess: true }),
+  useCollectionTokensQuery: () => ({ data: null, isLoading: false, isSuccess: false }),
 }));
 
 vi.mock("@/features/collections/collection-token-grid", () => ({
@@ -31,6 +32,16 @@ vi.mock("@/features/collections/trait-filter-sidebar", () => ({
   TraitFilterSidebar: () => (
     <div data-testid="trait-filter-sidebar">Trait Sidebar</div>
   ),
+}));
+
+vi.mock("@/features/cart/store/cart-store", () => ({
+  CART_MAX_ITEMS: 25,
+  useCartStore: (selector: (state: Record<string, unknown>) => unknown) =>
+    selector({ items: [], addCandidates: vi.fn(), setOpen: vi.fn() }),
+}));
+
+vi.mock("@/features/collections/sweep-bar", () => ({
+  SweepBar: () => <div data-testid="sweep-bar" />,
 }));
 
 vi.mock("next/navigation", () => ({

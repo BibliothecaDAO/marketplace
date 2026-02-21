@@ -5,7 +5,7 @@ import { ArcadeProvider, NAMESPACE } from "@cartridge/arcade";
 import { useMarketplaceClient } from "@cartridge/arcade/marketplace/react";
 import { useAccount, useBalance } from "@starknet-react/core";
 import Link from "next/link";
-import { ShoppingCart } from "lucide-react";
+import { ShoppingCart, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   formatPriceForDisplay,
@@ -1116,73 +1116,92 @@ export function CartSidebar() {
                 </Link>
               </div>
             ) : (
-              items.map((item) => (
-                <div
-                  key={item.orderId}
-                  className="rounded-sm border border-border/70 p-3"
-                  data-testid={`cart-item-${item.orderId}`}
-                >
-                  <div className="flex items-start gap-3">
-                    <div className="h-14 w-14 shrink-0 overflow-hidden rounded-sm bg-muted">
-                      {item.tokenImage ? (
-                        // eslint-disable-next-line @next/next/no-img-element
-                        <img
-                          alt={item.tokenName ?? `Token #${item.tokenId}`}
-                          className="h-full w-full object-cover"
-                          src={item.tokenImage}
-                        />
-                      ) : (
-                        <span className="flex h-full w-full items-center justify-center text-[10px] text-muted-foreground">
-                          No img
-                        </span>
-                      )}
-                    </div>
-                    <div className="min-w-0 flex-1">
-                      <p className="truncate text-sm font-medium">
-                        {item.tokenName ?? `Token #${item.tokenId}`}
-                      </p>
-                      <p className="text-xs text-muted-foreground">
-                        #{item.tokenId}
-                      </p>
-                      <p className="text-xs text-primary font-medium flex items-center gap-1">
-                        {formatPriceForDisplay(item.price) ?? item.price}
-                        <TokenSymbol address={item.currency} className="text-muted-foreground" />
-                      </p>
-                    </div>
-                    <Button
-                      onClick={() => removeItem(item.orderId)}
-                      size="sm"
-                      type="button"
-                      variant="ghost"
-                      className="shrink-0"
-                    >
-                      {inlineErrors[item.orderId] ? "Remove stale" : "Remove"}
-                    </Button>
-                  </div>
-
-                  {inlineErrors[item.orderId] ? (
-                    <div className="mt-2 flex flex-wrap items-center gap-2">
-                      <p className="text-xs text-destructive">
-                        {inlineErrors[item.orderId]}
-                      </p>
-                      <Button
-                        className="h-7 px-2 text-xs"
-                        disabled={
-                          isSubmitting || refreshingRows[item.orderId] === true
-                        }
-                        onClick={() => {
-                          void handleRefreshListing(item);
-                        }}
-                        size="sm"
-                        type="button"
-                        variant="outline"
+              items.map((item) => {
+                const hasError = !!inlineErrors[item.orderId];
+                const detailHref = `/collections/${item.collection}/${item.tokenId}`;
+                return (
+                  <div
+                    key={item.orderId}
+                    className="group/item rounded-lg border border-border/50 p-2"
+                    data-testid={`cart-item-${item.orderId}`}
+                  >
+                    <div className="flex gap-2.5">
+                      <Link
+                        className="shrink-0"
+                        href={detailHref}
+                        onClick={() => setOpen(false)}
                       >
-                        {refreshingRows[item.orderId] ? "Refreshing..." : "Refresh listing"}
+                        <div className="h-14 w-14 overflow-hidden rounded-md bg-muted transition-opacity hover:opacity-80">
+                          {item.tokenImage ? (
+                            // eslint-disable-next-line @next/next/no-img-element
+                            <img
+                              alt={item.tokenName ?? `Token #${item.tokenId}`}
+                              className="h-full w-full object-cover"
+                              src={item.tokenImage}
+                            />
+                          ) : (
+                            <span className="flex h-full w-full items-center justify-center text-[10px] text-muted-foreground">
+                              NFT
+                            </span>
+                          )}
+                        </div>
+                      </Link>
+                      <div className="min-w-0 flex-1 py-0.5">
+                        <Link
+                          className="group/link"
+                          href={detailHref}
+                          onClick={() => setOpen(false)}
+                        >
+                          <p className="truncate text-sm font-medium group-hover/link:underline">
+                            {item.tokenName ?? `Token #${item.tokenId}`}
+                          </p>
+                        </Link>
+                        <p className="text-xs text-muted-foreground">
+                          #{item.tokenId}
+                        </p>
+                        <p className="mt-0.5 flex items-center gap-1 text-xs font-medium text-primary">
+                          {formatPriceForDisplay(item.price) ?? item.price}
+                          <TokenSymbol address={item.currency} className="text-muted-foreground" />
+                        </p>
+                      </div>
+                      <Button
+                        aria-label="Remove item"
+                        className={hasError
+                          ? "shrink-0 text-destructive hover:text-destructive"
+                          : "shrink-0 opacity-0 transition-opacity group-hover/item:opacity-100"}
+                        onClick={() => removeItem(item.orderId)}
+                        size="icon-xs"
+                        type="button"
+                        variant="ghost"
+                      >
+                        <X className="h-3.5 w-3.5" />
                       </Button>
                     </div>
-                  ) : null}
-                </div>
-              ))
+
+                    {hasError ? (
+                      <div className="mt-1.5 flex items-center gap-2 rounded-md bg-destructive/10 px-2 py-1.5">
+                        <p className="flex-1 text-xs text-destructive">
+                          {inlineErrors[item.orderId]}
+                        </p>
+                        <Button
+                          className="h-6 px-2 text-[11px]"
+                          disabled={
+                            isSubmitting || refreshingRows[item.orderId] === true
+                          }
+                          onClick={() => {
+                            void handleRefreshListing(item);
+                          }}
+                          size="sm"
+                          type="button"
+                          variant="outline"
+                        >
+                          {refreshingRows[item.orderId] ? "Refreshing..." : "Refresh"}
+                        </Button>
+                      </div>
+                    ) : null}
+                  </div>
+                );
+              })
             )}
           </div>
 

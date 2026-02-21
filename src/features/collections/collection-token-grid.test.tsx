@@ -749,4 +749,45 @@ describe("collection token grid", () => {
       screen.getAllByRole("article").map((card) => card.getAttribute("aria-label")),
     ).toEqual(["token-1", "token-2", "token-3"]);
   });
+
+  it("highlights_sweep_preview_tokens_by_order_id", async () => {
+    mockUseCollectionTokensQuery.mockReturnValue({
+      data: {
+        page: {
+          tokens: [token("1"), token("2")],
+          nextCursor: null,
+        },
+        error: null,
+      },
+      isLoading: false,
+      isSuccess: true,
+      isError: false,
+      error: null,
+      isFetching: false,
+      refetch: vi.fn(),
+    });
+    mockUseCollectionListingsQuery.mockReturnValue(
+      successListingsResult([
+        { id: 21, tokenId: 1, price: 100, currency: "0xfee", quantity: 1 },
+        { id: 22, tokenId: 2, price: 200, currency: "0xfee", quantity: 1 },
+      ]),
+    );
+
+    render(
+      <CollectionTokenGrid
+        address="0xabc"
+        projectId="project-a"
+        sweepPreviewTokenIds={new Set(["1"])}
+      />,
+    );
+
+    const previewArticle = await screen.findByRole("article", { name: "token-1" });
+    const nonPreviewArticle = screen.getByRole("article", { name: "token-2" });
+    // The ring is on the inner wrapper div (parent of the Link/Card), not the outer .space-y-2
+    const previewRingWrapper = previewArticle.closest("a")!.parentElement!;
+    const nonPreviewRingWrapper = nonPreviewArticle.closest("a")!.parentElement!;
+
+    expect(previewRingWrapper).toHaveClass("ring-2", "ring-primary", "ring-offset-2", "ring-offset-background");
+    expect(nonPreviewRingWrapper).not.toHaveClass("ring-2");
+  });
 });
