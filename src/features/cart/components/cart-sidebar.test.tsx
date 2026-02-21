@@ -1,6 +1,6 @@
 import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { CartSidebar } from "@/features/cart/components/cart-sidebar";
 import { useCartStore } from "@/features/cart/store/cart-store";
 
@@ -9,23 +9,23 @@ const {
   mockUseBalance,
   mockUseMarketplaceClient,
   mockAccountExecute,
-  mockArcadeExecute,
   mockListCollectionListings,
   mockBuildExecuteCalldata,
   mockGetValidity,
   mockGetFees,
   mockGetRoyaltyFee,
+  mockManifestWorldAddress,
 } = vi.hoisted(() => ({
   mockUseAccount: vi.fn(),
   mockUseBalance: vi.fn(),
   mockUseMarketplaceClient: vi.fn(),
   mockAccountExecute: vi.fn(),
-  mockArcadeExecute: vi.fn(),
   mockListCollectionListings: vi.fn(),
   mockBuildExecuteCalldata: vi.fn(),
   mockGetValidity: vi.fn(),
   mockGetFees: vi.fn(),
   mockGetRoyaltyFee: vi.fn(),
+  mockManifestWorldAddress: { current: null as string | null },
 }));
 
 vi.mock("@starknet-react/core", () => ({
@@ -38,17 +38,20 @@ vi.mock("@cartridge/arcade/marketplace/react", () => ({
 }));
 
 vi.mock("@cartridge/arcade", () => ({
-  ArcadeProvider: vi.fn().mockImplementation(() => ({
-    manifest: {
-      abis: [{ type: "interface", name: "ARCADE::Marketplace", items: [] }],
-      contracts: [{ tag: "ARCADE-Marketplace", address: "0xmarket" }],
-    },
-    execute: mockArcadeExecute,
-    marketplace: {
-      buildExecuteCalldata: mockBuildExecuteCalldata,
-      getValidity: mockGetValidity,
-    },
-  })),
+  ArcadeProvider: vi.fn().mockImplementation(() => {
+    const worldAddress = mockManifestWorldAddress.current;
+    return {
+      manifest: {
+        abis: [{ type: "interface", name: "ARCADE::Marketplace", items: [] }],
+        contracts: [{ tag: "ARCADE-Marketplace", address: "0xmarket" }],
+        ...(worldAddress ? { world: { address: worldAddress } } : {}),
+      },
+      marketplace: {
+        buildExecuteCalldata: mockBuildExecuteCalldata,
+        getValidity: mockGetValidity,
+      },
+    };
+  }),
   NAMESPACE: "ARCADE",
 }));
 
@@ -74,12 +77,13 @@ function makeItem(orderId: string, tokenId: string, price: string) {
 }
 
 describe("cart sidebar", () => {
+  let consoleInfoSpy: ReturnType<typeof vi.spyOn>;
+
   beforeEach(() => {
     localStorage.clear();
     useCartStore.setState({ items: [], inlineErrors: {}, isOpen: false, lastActionError: null });
 
     mockAccountExecute.mockReset();
-    mockArcadeExecute.mockReset();
     mockListCollectionListings.mockReset();
     mockBuildExecuteCalldata.mockReset();
     mockGetValidity.mockReset();
@@ -110,13 +114,20 @@ describe("cart sidebar", () => {
     });
     mockGetFees.mockResolvedValue(null);
     mockGetRoyaltyFee.mockResolvedValue(null);
+    mockManifestWorldAddress.current = null;
     mockBuildExecuteCalldata.mockImplementation((orderId: string) => ({
       contractName: "Marketplace",
       entrypoint: "execute",
       calldata: [orderId],
     }));
     mockGetValidity.mockResolvedValue(["0x1", "0x0"]);
-    mockArcadeExecute.mockResolvedValue({ transaction_hash: "0xcheckout" });
+    mockAccountExecute.mockResolvedValue({ transaction_hash: "0xcheckout" });
+    vi.unstubAllEnvs();
+    consoleInfoSpy = vi.spyOn(console, "info").mockImplementation(() => {});
+  });
+
+  afterEach(() => {
+    consoleInfoSpy.mockRestore();
   });
 
   it("shows_trigger_count_in_header", () => {
@@ -220,7 +231,7 @@ describe("cart sidebar", () => {
     expect(
       within(screen.getByTestId("cart-summary-marketplace-fee")).getByText("0.075"),
     ).toBeVisible();
-    expect(within(screen.getByTestId("cart-summary-total")).getByText("1.5")).toBeVisible();
+    expect(within(screen.getByTestId("cart-summary-total")).getByText("1.575")).toBeVisible();
     expect(screen.queryByText("1000000000000000000 0xfee")).toBeNull();
   });
 
@@ -251,7 +262,7 @@ describe("cart sidebar", () => {
 
     render(<CartSidebar />);
 
-    // Subtotal=150, fee=7 (display only), royalty=8, total=150+8=158 (fee not added on top)
+    // Subtotal=150, fee=7, royalty=8, total=150+7+8=165 (fee added on top for buyer)
     await waitFor(() => {
       expect(
         within(screen.getByTestId("cart-summary-marketplace-fee")).getByText("7"),
@@ -259,13 +270,13 @@ describe("cart sidebar", () => {
       expect(
         within(screen.getByTestId("cart-summary-royalty")).getByText("8"),
       ).toBeVisible();
-      expect(within(screen.getByTestId("cart-summary-total")).getByText("158")).toBeVisible();
+      expect(within(screen.getByTestId("cart-summary-total")).getByText("165")).toBeVisible();
     });
 
     const removeButtons = screen.getAllByRole("button", { name: /remove/i });
     await user.click(removeButtons[1]);
 
-    // After removing item 2 (price=50): subtotal=100, fee=5 (display only), royalty=5, total=100+5=105
+    // After removing item 2 (price=50): subtotal=100, fee=5, royalty=5, total=100+5+5=110
     await waitFor(() => {
       expect(
         within(screen.getByTestId("cart-summary-marketplace-fee")).getByText("5"),
@@ -273,7 +284,7 @@ describe("cart sidebar", () => {
       expect(
         within(screen.getByTestId("cart-summary-royalty")).getByText("5"),
       ).toBeVisible();
-      expect(within(screen.getByTestId("cart-summary-total")).getByText("105")).toBeVisible();
+      expect(within(screen.getByTestId("cart-summary-total")).getByText("110")).toBeVisible();
     });
   });
 
@@ -307,27 +318,70 @@ describe("cart sidebar", () => {
     await user.click(screen.getByRole("button", { name: /complete purchase/i }));
 
     await waitFor(() => {
-      expect(mockArcadeExecute).toHaveBeenCalledTimes(1);
+      expect(mockAccountExecute).toHaveBeenCalledTimes(1);
     });
-    expect(mockAccountExecute).not.toHaveBeenCalled();
-    const executeCalls = mockArcadeExecute.mock.calls[0]?.[1];
+    const executeCalls = mockAccountExecute.mock.calls[0]?.[0];
     expect(Array.isArray(executeCalls)).toBe(true);
-    expect(executeCalls).toHaveLength(2);
+    expect(executeCalls).toHaveLength(3);
     expect(executeCalls?.[0]).toMatchObject({
-      contractName: "Marketplace",
+      contractAddress: "0xfee",
+      entrypoint: "approve",
+      calldata: ["0xmarket", "157", "0"],
+    });
+    expect(executeCalls?.[1]).toMatchObject({
+      contractAddress: "0xmarket",
+      entrypoint: "execute",
+      calldata: ["7001", "0xabc", "1", "0", "1", "0", "1", "1", "500", "0x049fb4281d13e1f5f488540cd051e1507149e99cc2e22635101041ec5e4e4557"],
+    });
+    expect(await screen.findByText(/cart is empty/i)).toBeVisible();
+  });
+
+  it("checkout_approves_total_wallet_outflow_including_royalty_estimate", async () => {
+    const user = userEvent.setup();
+    mockUseAccount.mockReturnValue({
+      account: { address: "0xwallet", execute: mockAccountExecute },
+      isConnected: true,
+      status: "connected",
+      address: "0xwallet",
+    });
+    mockGetRoyaltyFee.mockResolvedValue({
+      receiver: "0xroyalty",
+      amount: BigInt(5),
+    });
+    mockListCollectionListings.mockResolvedValue([
+      {
+        id: 7001,
+        tokenId: 1,
+        price: 100,
+        currency: "0xfee",
+        quantity: 1,
+      },
+    ]);
+    useCartStore.setState({
+      items: [makeItem("7001", "1", "100")],
+      inlineErrors: {},
+      isOpen: true,
+      lastActionError: null,
+    });
+
+    render(<CartSidebar />);
+    await user.click(screen.getByRole("button", { name: /complete purchase/i }));
+
+    await waitFor(() => {
+      expect(mockAccountExecute).toHaveBeenCalledTimes(1);
+    });
+    const txCalls = mockAccountExecute.mock.calls[0]?.[0];
+    expect(txCalls).toHaveLength(2);
+    expect(txCalls?.[0]).toMatchObject({
+      contractAddress: "0xfee",
+      entrypoint: "approve",
+      // price=100 + fee=5 + royalty=5 => approve 110
+      calldata: ["0xmarket", "110", "0"],
+    });
+    expect(txCalls?.[1]).toMatchObject({
+      contractAddress: "0xmarket",
       entrypoint: "execute",
     });
-    expect(mockBuildExecuteCalldata).toHaveBeenCalledWith(
-      "7001",
-      "0xabc",
-      "1",
-      "0xfee",
-      "1",
-      true,
-      500,
-      "0x049fb4281d13e1f5f488540cd051e1507149e99cc2e22635101041ec5e4e4557",
-    );
-    expect(await screen.findByText(/cart is empty/i)).toBeVisible();
   });
 
   it("checkout_blocks_when_any_listing_is_stale_and_sets_inline_errors", async () => {
@@ -397,9 +451,45 @@ describe("cart sidebar", () => {
     await user.click(screen.getByRole("button", { name: /complete purchase/i }));
 
     await waitFor(() => {
-      expect(mockArcadeExecute).not.toHaveBeenCalled();
+      expect(mockAccountExecute).not.toHaveBeenCalled();
     });
     expect(await screen.findByText(/listing is stale or unavailable/i)).toBeVisible();
+  });
+
+  it("checkout_blocks_when_listing_owner_matches_connected_wallet", async () => {
+    const user = userEvent.setup();
+    mockUseAccount.mockReturnValue({
+      account: { address: "0xwallet", execute: mockAccountExecute },
+      isConnected: true,
+      status: "connected",
+      address: "0xwallet",
+    });
+    mockListCollectionListings.mockResolvedValue([
+      {
+        id: 7001,
+        tokenId: 1,
+        price: 100,
+        currency: "0xfee",
+        quantity: 1,
+        status: { value: "Placed" },
+        owner: "0xwallet",
+      },
+    ]);
+    useCartStore.setState({
+      items: [makeItem("7001", "1", "100")],
+      inlineErrors: {},
+      isOpen: true,
+      lastActionError: null,
+    });
+
+    render(<CartSidebar />);
+    await user.click(screen.getByRole("button", { name: /complete purchase/i }));
+
+    await waitFor(() => {
+      expect(mockAccountExecute).not.toHaveBeenCalled();
+    });
+    expect(mockGetValidity).not.toHaveBeenCalled();
+    expect(await screen.findByText(/cannot buy your own listing/i)).toBeVisible();
   });
 
   it("checkout_blocks_when_on_chain_validity_is_false", async () => {
@@ -432,10 +522,294 @@ describe("cart sidebar", () => {
     await user.click(screen.getByRole("button", { name: /complete purchase/i }));
 
     await waitFor(() => {
-      expect(mockArcadeExecute).not.toHaveBeenCalled();
+      expect(mockAccountExecute).not.toHaveBeenCalled();
     });
     expect(mockGetValidity).toHaveBeenCalledWith("7001", "0xabc", "1");
     expect(await screen.findByText(/listing is stale or unavailable/i)).toBeVisible();
+  });
+
+  it("checkout_can_skip_on_chain_validity_when_strict_precheck_is_disabled", async () => {
+    const user = userEvent.setup();
+    vi.stubEnv("NEXT_PUBLIC_MARKETPLACE_STRICT_ONCHAIN_VALIDATION", "false");
+    mockUseAccount.mockReturnValue({
+      account: { address: "0xwallet", execute: mockAccountExecute },
+      isConnected: true,
+      status: "connected",
+      address: "0xwallet",
+    });
+    mockListCollectionListings.mockResolvedValue([
+      {
+        id: 7001,
+        tokenId: 1,
+        price: 100,
+        currency: "0xfee",
+        quantity: 1,
+        status: { value: "Placed" },
+      },
+    ]);
+    mockGetValidity.mockResolvedValue(["0x0", "0x53616c653a206e6f7420616c6c6f776564"]);
+    useCartStore.setState({
+      items: [makeItem("7001", "1", "100")],
+      inlineErrors: {},
+      isOpen: true,
+      lastActionError: null,
+    });
+
+    render(<CartSidebar />);
+    await user.click(screen.getByRole("button", { name: /complete purchase/i }));
+
+    await waitFor(() => {
+      expect(mockAccountExecute).toHaveBeenCalledTimes(1);
+    });
+    expect(mockGetValidity).not.toHaveBeenCalled();
+    expect(await screen.findByText(/purchase complete/i)).toBeVisible();
+  });
+
+  it("checkout_logs_validation_diagnostics_when_debug_flag_is_enabled", async () => {
+    const user = userEvent.setup();
+    vi.stubEnv("NEXT_PUBLIC_MARKETPLACE_CHECKOUT_DEBUG", "true");
+    vi.stubEnv("NEXT_PUBLIC_MARKETPLACE_STRICT_ONCHAIN_VALIDATION", "false");
+    mockUseAccount.mockReturnValue({
+      account: { address: "0xwallet", execute: mockAccountExecute },
+      isConnected: true,
+      status: "connected",
+      address: "0xwallet",
+    });
+    mockListCollectionListings.mockResolvedValue([
+      {
+        id: 7001,
+        tokenId: 1,
+        price: 100,
+        currency: "0xfee",
+        quantity: 1,
+        status: { value: "Placed" },
+      },
+    ]);
+    useCartStore.setState({
+      items: [makeItem("7001", "1", "100")],
+      inlineErrors: {},
+      isOpen: true,
+      lastActionError: null,
+    });
+
+    render(<CartSidebar />);
+    await user.click(screen.getByRole("button", { name: /complete purchase/i }));
+
+    await waitFor(() => {
+      expect(mockAccountExecute).toHaveBeenCalledTimes(1);
+    });
+    expect(consoleInfoSpy).toHaveBeenCalledWith(
+      expect.stringContaining("[cart-checkout] validate.item.skip_onchain"),
+      expect.objectContaining({
+        orderId: "7001",
+      }),
+    );
+    expect(consoleInfoSpy).toHaveBeenCalledWith(
+      expect.stringContaining("[cart-checkout] checkout.execute.success"),
+      expect.objectContaining({
+        txHash: "0xcheckout",
+      }),
+    );
+  });
+
+  it("checkout_bypasses_all_prechecks_when_bypass_flag_is_enabled", async () => {
+    const user = userEvent.setup();
+    vi.stubEnv("NEXT_PUBLIC_MARKETPLACE_BYPASS_CHECKOUT_VALIDATION", "true");
+    mockUseAccount.mockReturnValue({
+      account: { address: "0xwallet", execute: mockAccountExecute },
+      isConnected: true,
+      status: "connected",
+      address: "0xwallet",
+    });
+    mockListCollectionListings.mockResolvedValue([]);
+    mockGetValidity.mockResolvedValue(["0x0", "0x0"]);
+    useCartStore.setState({
+      items: [makeItem("7001", "1", "100")],
+      inlineErrors: {},
+      isOpen: true,
+      lastActionError: null,
+    });
+
+    render(<CartSidebar />);
+    await user.click(screen.getByRole("button", { name: /complete purchase/i }));
+
+    await waitFor(() => {
+      expect(mockAccountExecute).toHaveBeenCalledTimes(1);
+    });
+    expect(mockListCollectionListings).not.toHaveBeenCalled();
+    expect(mockGetValidity).not.toHaveBeenCalled();
+    expect(screen.queryByText(/listing is stale or unavailable/i)).toBeNull();
+    expect(await screen.findByText(/purchase complete/i)).toBeVisible();
+  });
+
+  it("checkout_keeps_purchase_execute_call_after_single_approval", async () => {
+    const user = userEvent.setup();
+    mockUseAccount.mockReturnValue({
+      account: { address: "0xwallet", execute: mockAccountExecute },
+      isConnected: true,
+      status: "connected",
+      address: "0xwallet",
+    });
+    mockListCollectionListings.mockResolvedValue([
+      {
+        id: 7001,
+        tokenId: 1,
+        price: 100,
+        currency: "0xfee",
+        quantity: 1,
+        status: { value: "Placed" },
+      },
+    ]);
+    useCartStore.setState({
+      items: [makeItem("7001", "1", "100")],
+      inlineErrors: {},
+      isOpen: true,
+      lastActionError: null,
+    });
+
+    render(<CartSidebar />);
+    await user.click(screen.getByRole("button", { name: /complete purchase/i }));
+
+    await waitFor(() => {
+      expect(mockAccountExecute).toHaveBeenCalledTimes(1);
+    });
+    const txCalls = mockAccountExecute.mock.calls[0]?.[0];
+    expect(txCalls).toHaveLength(2);
+    expect(txCalls?.[0]).toMatchObject({
+      contractAddress: "0xfee",
+      entrypoint: "approve",
+      calldata: ["0xmarket", "105", "0"],
+    });
+    expect(txCalls?.[1]).toMatchObject({
+      contractAddress: "0xmarket",
+      entrypoint: "execute",
+    });
+  });
+
+  it("checkout_prefers_marketplace_contract_over_world_address_for_approval", async () => {
+    const user = userEvent.setup();
+    mockManifestWorldAddress.current = "0xworld";
+    mockUseAccount.mockReturnValue({
+      account: { address: "0xwallet", execute: mockAccountExecute },
+      isConnected: true,
+      status: "connected",
+      address: "0xwallet",
+    });
+    mockListCollectionListings.mockResolvedValue([
+      {
+        id: 7001,
+        tokenId: 1,
+        price: 100,
+        currency: "0xfee",
+        quantity: 1,
+        status: { value: "Placed" },
+      },
+    ]);
+    useCartStore.setState({
+      items: [makeItem("7001", "1", "100")],
+      inlineErrors: {},
+      isOpen: true,
+      lastActionError: null,
+    });
+
+    render(<CartSidebar />);
+    await user.click(screen.getByRole("button", { name: /complete purchase/i }));
+
+    await waitFor(() => {
+      expect(mockAccountExecute).toHaveBeenCalledTimes(1);
+    });
+    const txCalls = mockAccountExecute.mock.calls[0]?.[0];
+    expect(txCalls?.[0]).toMatchObject({
+      contractAddress: "0xfee",
+      entrypoint: "approve",
+      calldata: ["0xmarket", "105", "0"],
+    });
+  });
+
+  it("checkout_always_approves_marketplace_contract_from_manifest", async () => {
+    const user = userEvent.setup();
+    mockUseAccount.mockReturnValue({
+      account: { address: "0xwallet", execute: mockAccountExecute },
+      isConnected: true,
+      status: "connected",
+      address: "0xwallet",
+    });
+    mockListCollectionListings.mockResolvedValue([
+      {
+        id: 7001,
+        tokenId: 1,
+        price: 100,
+        currency: "0xfee",
+        quantity: 1,
+        status: { value: "Placed" },
+      },
+    ]);
+    useCartStore.setState({
+      items: [makeItem("7001", "1", "100")],
+      inlineErrors: {},
+      isOpen: true,
+      lastActionError: null,
+    });
+
+    render(<CartSidebar />);
+    await user.click(screen.getByRole("button", { name: /complete purchase/i }));
+
+    await waitFor(() => {
+      expect(mockAccountExecute).toHaveBeenCalledTimes(1);
+    });
+    const txCalls = mockAccountExecute.mock.calls[0]?.[0];
+    expect(txCalls?.[0]).toMatchObject({
+      contractAddress: "0xfee",
+      entrypoint: "approve",
+      calldata: ["0xmarket", "105", "0"],
+    });
+    expect(txCalls?.[1]).toMatchObject({
+      contractAddress: "0xmarket",
+      entrypoint: "execute",
+    });
+  });
+
+  it("checkout_preserves_zero_quantity_for_execute", async () => {
+    const user = userEvent.setup();
+    mockUseAccount.mockReturnValue({
+      account: { address: "0xwallet", execute: mockAccountExecute },
+      isConnected: true,
+      status: "connected",
+      address: "0xwallet",
+    });
+    mockListCollectionListings.mockResolvedValue([
+      {
+        id: 7001,
+        tokenId: 1,
+        price: 100,
+        currency: "0xfee",
+        quantity: 0,
+        status: { value: "Placed" },
+      },
+    ]);
+    useCartStore.setState({
+      items: [{
+        ...makeItem("7001", "1", "100"),
+        quantity: "0",
+      }],
+      inlineErrors: {},
+      isOpen: true,
+      lastActionError: null,
+    });
+
+    render(<CartSidebar />);
+    await user.click(screen.getByRole("button", { name: /complete purchase/i }));
+
+    await waitFor(() => {
+      expect(mockAccountExecute).toHaveBeenCalledTimes(1);
+    });
+    const txCalls = mockAccountExecute.mock.calls[0]?.[0];
+    expect(txCalls?.[1]).toMatchObject({
+      contractAddress: "0xmarket",
+      entrypoint: "execute",
+      // u256-encoded tokenId/assetId + quantity=0
+      calldata: ["7001", "0xabc", "1", "0", "1", "0", "0", "1", "500", "0x049fb4281d13e1f5f488540cd051e1507149e99cc2e22635101041ec5e4e4557"],
+    });
   });
 
   it("refresh_listing_clears_inline_error_when_listing_recovers", async () => {
@@ -506,7 +880,7 @@ describe("cart sidebar", () => {
     render(<CartSidebar />);
     await user.click(screen.getByRole("button", { name: /complete purchase/i }));
     expect(await screen.findByText(/checkout blocked due to stale listings/i)).toBeVisible();
-    expect(mockArcadeExecute).not.toHaveBeenCalled();
+    expect(mockAccountExecute).not.toHaveBeenCalled();
 
     await user.click(screen.getByRole("button", { name: /remove stale/i }));
     await waitFor(() => {
@@ -516,7 +890,7 @@ describe("cart sidebar", () => {
     await user.click(screen.getByRole("button", { name: /retry checkout/i }));
 
     await waitFor(() => {
-      expect(mockArcadeExecute).toHaveBeenCalledTimes(1);
+      expect(mockAccountExecute).toHaveBeenCalledTimes(1);
     });
     expect(await screen.findByText(/purchase complete/i)).toBeVisible();
   });

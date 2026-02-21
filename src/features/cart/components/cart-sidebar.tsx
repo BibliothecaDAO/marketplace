@@ -44,6 +44,59 @@ function clientFeeReceiverForCurrency(currency: string): string {
 }
 
 const STALE_LISTING_ERROR = "Listing is stale or unavailable.";
+const OWN_LISTING_ERROR = "Cannot buy your own listing.";
+const CHECKOUT_LOG_PREFIX = "[cart-checkout]";
+
+type CheckoutDiagnosticsConfig = {
+  debugEnabled: boolean;
+  strictOnChainValidation: boolean;
+  bypassCheckoutValidation: boolean;
+};
+
+function parseBooleanEnvFlag(value: string | undefined, fallback: boolean) {
+  if (!value) {
+    return fallback;
+  }
+
+  const normalized = value.trim().toLowerCase();
+  if (normalized === "1" || normalized === "true" || normalized === "yes") {
+    return true;
+  }
+  if (normalized === "0" || normalized === "false" || normalized === "no") {
+    return false;
+  }
+
+  return fallback;
+}
+
+function getCheckoutDiagnosticsConfig(): CheckoutDiagnosticsConfig {
+  return {
+    debugEnabled: parseBooleanEnvFlag(
+      process.env.NEXT_PUBLIC_MARKETPLACE_CHECKOUT_DEBUG,
+      false,
+    ),
+    strictOnChainValidation: parseBooleanEnvFlag(
+      process.env.NEXT_PUBLIC_MARKETPLACE_STRICT_ONCHAIN_VALIDATION,
+      true,
+    ),
+    bypassCheckoutValidation: parseBooleanEnvFlag(
+      process.env.NEXT_PUBLIC_MARKETPLACE_BYPASS_CHECKOUT_VALIDATION,
+      false,
+    ),
+  };
+}
+
+function logCheckoutDiagnostics(
+  enabled: boolean,
+  event: string,
+  payload: Record<string, unknown>,
+) {
+  if (!enabled) {
+    return;
+  }
+
+  console.info(`${CHECKOUT_LOG_PREFIX} ${event}`, payload);
+}
 
 function asRecord(value: unknown) {
   return value && typeof value === "object"
@@ -260,13 +313,118 @@ function listingMatchesCartItem(
   );
 }
 
+function listingOwnerAddress(listing: unknown): string | null {
+  const fields = asRecord(listing);
+  if (!fields) {
+    return null;
+  }
+
+  const nestedOrder = asRecord(fields.order);
+  const nestedListing = asRecord(fields.listing);
+  return firstString([fields, nestedOrder, nestedListing], [
+    "owner",
+    "seller",
+    "maker",
+    "account",
+    "from",
+  ]);
+}
+
 type ProviderManifest = {
   abis?: unknown[];
   contracts?: Array<{
     tag?: string;
+    address?: string;
     abi?: unknown[];
   }>;
 };
+
+const U128_MASK = (BigInt(1) << BigInt(128)) - BigInt(1);
+
+function toUint256Calldata(amount: bigint): [string, string] {
+  const low = (amount & U128_MASK).toString();
+  const high = (amount >> BigInt(128)).toString();
+  return [low, high];
+}
+
+function resolveMarketplaceContractAddress(
+  provider: ArcadeProvider,
+) {
+  const manifest = (provider as unknown as { manifest?: ProviderManifest })
+    .manifest;
+  if (!manifest?.contracts || manifest.contracts.length === 0) {
+    return null;
+  }
+
+  const exactMarketplace = manifest.contracts.find((contract) => {
+    if (typeof contract.address !== "string") {
+      return false;
+    }
+    if (typeof contract.tag !== "string") {
+      return false;
+    }
+    const normalizedTag = contract.tag.trim().toLowerCase();
+    return (
+      normalizedTag === "marketplace" ||
+      normalizedTag.endsWith("-marketplace") ||
+      normalizedTag.endsWith("::marketplace")
+    );
+  });
+  if (exactMarketplace?.address) {
+    return exactMarketplace.address;
+  }
+
+  const tagged = manifest.contracts.find((contract) =>
+    typeof contract.address === "string" &&
+    typeof contract.tag === "string" &&
+    contract.tag.toLowerCase().includes("marketplace"),
+  );
+  if (tagged?.address) {
+    return tagged.address;
+  }
+
+  const firstWithAddress = manifest.contracts.find(
+    (contract) => typeof contract.address === "string",
+  );
+  return firstWithAddress?.address ?? null;
+}
+
+function resolveDojoCallContractAddress(
+  provider: ArcadeProvider,
+  call: unknown,
+) {
+  const record = asRecord(call);
+  if (!record) {
+    return null;
+  }
+
+  const contractAddress = firstString([record], ["contractAddress", "address"]);
+  if (contractAddress) {
+    return contractAddress;
+  }
+
+  const contractName = firstString([record], ["contractName", "name"]);
+  if (!contractName || contractName.trim().toLowerCase() !== "marketplace") {
+    return null;
+  }
+
+  return resolveMarketplaceContractAddress(provider);
+}
+
+function resolveWorldAddress(provider: ArcadeProvider) {
+  const manifest = (provider as unknown as {
+    manifest?: { world?: { address?: string } };
+  }).manifest;
+  return manifest?.world?.address ?? null;
+}
+
+function normalizeAddressKey(address: string): string {
+  try {
+    return `0x${BigInt(address).toString(16)}`.toLowerCase();
+  } catch {
+    return address.trim().toLowerCase();
+  }
+}
 
 function hydrateContractAbis(
   provider: ArcadeProvider,
@@ -282,6 +440,15 @@ function hydrateContractAbis(
       contract.abi = manifest.abis;
     }
   });
+}
+
+function normalizeExecuteQuantity(quantity: string): string {
+  const parsed = parseBigInt(quantity);
+  if (parsed === null || parsed < BigInt(0)) {
+    return "0";
+  }
+
+  return parsed.toString();
 }
 
 export function CartSidebar() {
@@ -304,6 +471,14 @@ export function CartSidebar() {
   });
   const { client } = useMarketplaceClient();
   const { sdkConfig, chainLabel } = getMarketplaceRuntimeConfig();
+  const {
+    debugEnabled,
+    strictOnChainValidation,
+    bypassCheckoutValidation,
+  } = useMemo(
+    () => getCheckoutDiagnosticsConfig(),
+    [],
+  );
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [refreshingRows, setRefreshingRows] = useState<Record<string, boolean>>(
     {},
@@ -436,11 +611,23 @@ export function CartSidebar() {
   }, [client, items]);
 
   const handleCheckout = async () => {
+    logCheckoutDiagnostics(debugEnabled, "checkout.start", {
+      itemCount: items.length,
+      strictOnChainValidation,
+      bypassCheckoutValidation,
+      hasClient: !!client,
+      isConnected,
+      walletAddress: account?.address ?? null,
+    });
+
     if (!account || !isConnected) {
       setCheckoutStatus({
         kind: "error",
         tone: "error",
         message: "Connect wallet before checkout.",
+      });
+      logCheckoutDiagnostics(debugEnabled, "checkout.blocked.wallet", {
+        reason: "Wallet is not connected.",
       });
       return;
     }
@@ -451,6 +638,9 @@ export function CartSidebar() {
         tone: "error",
         message: "Marketplace client is not ready.",
       });
+      logCheckoutDiagnostics(debugEnabled, "checkout.blocked.client", {
+        reason: "Marketplace client is missing.",
+      });
       return;
     }
 
@@ -460,74 +650,259 @@ export function CartSidebar() {
 
     try {
       const validateOnChainValidity = async (item: (typeof items)[number]) => {
+        logCheckoutDiagnostics(debugEnabled, "validate.onchain.request", {
+          orderId: item.orderId,
+          collection: item.collection,
+          tokenId: item.tokenId,
+        });
         try {
           const validityResult = await arcadeProvider.marketplace.getValidity(
             item.orderId,
             item.collection,
             item.tokenId,
           );
-          return extractValidityFlag(validityResult) === true;
-        } catch {
+          const parsedValidity = extractValidityFlag(validityResult);
+          const isValid = parsedValidity === true;
+          logCheckoutDiagnostics(debugEnabled, "validate.onchain.response", {
+            orderId: item.orderId,
+            parsedValidity,
+            isValid,
+            rawResult: validityResult,
+          });
+          return isValid;
+        } catch (error) {
+          logCheckoutDiagnostics(debugEnabled, "validate.onchain.error", {
+            orderId: item.orderId,
+            message: error instanceof Error ? error.message : "Unknown error",
+          });
           return false;
         }
       };
 
-      const validateItem = async (item: (typeof items)[number]) => {
+      type ValidationReason = "stale" | "ownListing";
+      type ValidationResult = {
+        item: (typeof items)[number];
+        isValid: boolean;
+        reason?: ValidationReason;
+      };
+
+      const validateItem = async (
+        item: (typeof items)[number],
+      ): Promise<ValidationResult> => {
         try {
+          logCheckoutDiagnostics(debugEnabled, "validate.item.listings.request", {
+            orderId: item.orderId,
+            collection: item.collection,
+            tokenId: item.tokenId,
+            projectId: item.projectId ?? null,
+            verifyOwnership: true,
+          });
           const listings = await client.listCollectionListings({
             collection: item.collection,
             tokenId: item.tokenId,
             projectId: item.projectId,
             verifyOwnership: true,
           });
-          const hasMatchingListing = listings.some((listing) => listingMatchesCartItem(listing, item));
+          logCheckoutDiagnostics(debugEnabled, "validate.item.listings.response", {
+            orderId: item.orderId,
+            listingCount: listings.length,
+          });
+          const matchingListing =
+            listings.find((listing) => listingMatchesCartItem(listing, item)) ??
+            null;
+          const hasMatchingListing = !!matchingListing;
+          logCheckoutDiagnostics(debugEnabled, "validate.item.listings.match", {
+            orderId: item.orderId,
+            hasMatchingListing,
+          });
           if (!hasMatchingListing) {
-            return false;
+            return { item, isValid: false, reason: "stale" };
           }
 
-          return await validateOnChainValidity(item);
-        } catch {
-          return false;
+          const listingOwner = listingOwnerAddress(matchingListing);
+          if (
+            listingOwner &&
+            normalizeAddressKey(listingOwner) ===
+              normalizeAddressKey(account.address)
+          ) {
+            logCheckoutDiagnostics(debugEnabled, "validate.item.own_listing", {
+              orderId: item.orderId,
+              owner: listingOwner,
+              walletAddress: account.address,
+            });
+            return { item, isValid: false, reason: "ownListing" };
+          }
+
+          if (!strictOnChainValidation) {
+            logCheckoutDiagnostics(debugEnabled, "validate.item.skip_onchain", {
+              orderId: item.orderId,
+              reason: "Strict on-chain precheck disabled by env flag.",
+            });
+            return { item, isValid: true };
+          }
+
+          const isOnChainValid = await validateOnChainValidity(item);
+          return {
+            item,
+            isValid: isOnChainValid,
+            reason: isOnChainValid ? undefined : "stale",
+          };
+        } catch (error) {
+          logCheckoutDiagnostics(debugEnabled, "validate.item.error", {
+            orderId: item.orderId,
+            message: error instanceof Error ? error.message : "Unknown error",
+          });
+          return { item, isValid: false, reason: "stale" };
         }
       };
 
-      const validations = await Promise.all(
-        items.map(async (item) => ({ item, isValid: await validateItem(item) })),
-      );
+      const validations: ValidationResult[] = bypassCheckoutValidation
+        ? items.map((item) => ({ item, isValid: true }))
+        : await Promise.all(items.map((item) => validateItem(item)));
+
+      if (bypassCheckoutValidation) {
+        logCheckoutDiagnostics(debugEnabled, "checkout.validation.bypassed", {
+          itemCount: items.length,
+        });
+      }
 
       const invalidRows = validations.filter((entry) => !entry.isValid);
+      logCheckoutDiagnostics(debugEnabled, "checkout.validation.summary", {
+        validations: validations.map(({ item, isValid }) => ({
+          orderId: item.orderId,
+          tokenId: item.tokenId,
+          isValid,
+        })),
+      });
       if (invalidRows.length > 0) {
-        invalidRows.forEach(({ item }) => {
-          setItemError(item.orderId, STALE_LISTING_ERROR);
+        const hasOwnListingError = invalidRows.some(
+          ({ reason }) => reason === "ownListing",
+        );
+        logCheckoutDiagnostics(debugEnabled, "checkout.blocked.stale", {
+          invalidRows: invalidRows.map(({ item, reason }) => ({
+            orderId: item.orderId,
+            reason: reason ?? "stale",
+          })),
+        });
+        invalidRows.forEach(({ item, reason }) => {
+          setItemError(
+            item.orderId,
+            reason === "ownListing" ? OWN_LISTING_ERROR : STALE_LISTING_ERROR,
+          );
         });
         setCheckoutStatus({
-          kind: "stale",
+          kind: hasOwnListingError ? "error" : "stale",
           tone: "error",
-          message:
-            "Checkout blocked due to stale listings. Remove stale rows or refresh them, then retry checkout.",
+          message: hasOwnListingError
+            ? "Checkout blocked: cart contains your own listing. Remove it, then retry checkout."
+            : "Checkout blocked due to stale listings. Remove stale rows or refresh them, then retry checkout.",
         });
         return;
       }
 
-      const dojoCalls = items.map((item) =>
-        arcadeProvider.marketplace.buildExecuteCalldata(
-          item.orderId,
-          item.collection,
-          item.tokenId,
-          item.currency,
-          item.quantity,
-          true,
-          effectiveFeeConfig.feeNum,
-          effectiveFeeConfig.feeReceiver ?? clientFeeReceiverForCurrency(item.currency),
-        ),
-      );
+      const marketplaceContractAddress =
+        resolveMarketplaceContractAddress(arcadeProvider);
+      if (!marketplaceContractAddress) {
+        setCheckoutStatus({
+          kind: "error",
+          tone: "error",
+          message: "Marketplace contract address is unavailable for checkout.",
+        });
+        logCheckoutDiagnostics(debugEnabled, "checkout.blocked.approval", {
+          reason: "Marketplace contract address could not be resolved.",
+        });
+        return;
+      }
 
-      hydrateContractAbis(arcadeProvider);
-      const result = await arcadeProvider.execute(
-        account,
-        dojoCalls,
-        NAMESPACE,
-      );
+      if (!cartCurrency) {
+        setCheckoutStatus({
+          kind: "error",
+          tone: "error",
+          message: "Cart currency is unavailable for checkout.",
+        });
+        logCheckoutDiagnostics(debugEnabled, "checkout.blocked.approval", {
+          reason: "Cart currency missing.",
+        });
+        return;
+      }
+
+      const executeCalls = items.map((item) => {
+        const executeQuantity = normalizeExecuteQuantity(item.quantity);
+        const clientReceiver =
+          effectiveFeeConfig.feeReceiver ?? clientFeeReceiverForCurrency(item.currency);
+        logCheckoutDiagnostics(debugEnabled, "checkout.execute.calldata", {
+          orderId: item.orderId,
+          collection: item.collection,
+          tokenId: item.tokenId,
+          currency: item.currency,
+          quantity: executeQuantity,
+          royalties: true,
+          clientFee: effectiveFeeConfig.feeNum,
+          clientReceiver,
+        });
+        const tokenIdBigInt = BigInt(item.tokenId);
+        const [tokenIdLow, tokenIdHigh] = toUint256Calldata(tokenIdBigInt);
+        return {
+          contractAddress: marketplaceContractAddress,
+          entrypoint: "execute",
+          calldata: [
+            item.orderId,
+            item.collection,
+            tokenIdLow, tokenIdHigh,
+            tokenIdLow, tokenIdHigh,
+            executeQuantity,
+            "1",
+            effectiveFeeConfig.feeNum.toString(),
+            clientReceiver,
+          ],
+        };
+      });
+      const approvalSpenderAddress = marketplaceContractAddress;
+
+      const approveCalls: Array<{
+        contractAddress: string;
+        entrypoint: string;
+        calldata: string[];
+      }> = [];
+      const approvalAmount = total;
+      if (approvalAmount > BigInt(0)) {
+        const [amountLow, amountHigh] = toUint256Calldata(approvalAmount);
+        logCheckoutDiagnostics(debugEnabled, "checkout.approve.calldata", {
+          currency: cartCurrency,
+          spender: approvalSpenderAddress,
+          amount: approvalAmount.toString(),
+          subtotal: subtotal.toString(),
+          marketplaceFee: marketplaceFee.toString(),
+          royaltyEstimate: royaltyEstimate.toString(),
+          total: total.toString(),
+          amountLow,
+          amountHigh,
+          mode: "set",
+        });
+        approveCalls.push({
+          contractAddress: cartCurrency,
+          entrypoint: "approve",
+          calldata: [approvalSpenderAddress, amountLow, amountHigh],
+        });
+      }
+
+      const txCalls = [...approveCalls, ...executeCalls];
+      logCheckoutDiagnostics(debugEnabled, "checkout.execute.request", {
+        callCount: txCalls.length,
+      });
+      logCheckoutDiagnostics(debugEnabled, "checkout.execute.calls", {
+        calls: txCalls.map((call) => ({
+          contractAddress: "contractAddress" in call ? call.contractAddress : null,
+          contractName: "contractName" in call ? call.contractName : null,
+          entrypoint: call.entrypoint,
+          calldata: call.calldata,
+        })),
+      });
+      const result = await account.execute(txCalls);
+      logCheckoutDiagnostics(debugEnabled, "checkout.execute.success", {
+        txHash: result.transaction_hash,
+        callCount: txCalls.length,
+      });
       clearCart();
       setCheckoutStatus({
         kind: "success",
@@ -538,6 +913,9 @@ export function CartSidebar() {
     } catch (error) {
       const message =
         error instanceof Error ? error.message : "Checkout transaction failed.";
+      logCheckoutDiagnostics(debugEnabled, "checkout.execute.error", {
+        message,
+      });
       setCheckoutStatus({
         kind: "error",
         tone: "error",
@@ -560,15 +938,37 @@ export function CartSidebar() {
 
     setRefreshingRows((state) => ({ ...state, [item.orderId]: true }));
     try {
+      logCheckoutDiagnostics(debugEnabled, "refresh.listings.request", {
+        orderId: item.orderId,
+        collection: item.collection,
+        tokenId: item.tokenId,
+        verifyOwnership: true,
+      });
       const listings = await client.listCollectionListings({
         collection: item.collection,
         tokenId: item.tokenId,
         projectId: item.projectId,
         verifyOwnership: true,
       });
-      const hasMatchingListing = listings.some((listing) => listingMatchesCartItem(listing, item));
+      logCheckoutDiagnostics(debugEnabled, "refresh.listings.response", {
+        orderId: item.orderId,
+        listingCount: listings.length,
+      });
+      const matchingListing =
+        listings.find((listing) => listingMatchesCartItem(listing, item)) ??
+        null;
+      const hasMatchingListing = !!matchingListing;
+      const listingOwner = matchingListing
+        ? listingOwnerAddress(matchingListing)
+        : null;
+      const isOwnListing = !!(
+        listingOwner &&
+        account?.address &&
+        normalizeAddressKey(listingOwner) ===
+          normalizeAddressKey(account.address)
+      );
       let isOnChainValid = false;
-      if (hasMatchingListing) {
+      if (hasMatchingListing && !isOwnListing && strictOnChainValidation) {
         try {
           const validityResult = await arcadeProvider.marketplace.getValidity(
             item.orderId,
@@ -576,11 +976,22 @@ export function CartSidebar() {
             item.tokenId,
           );
           isOnChainValid = extractValidityFlag(validityResult) === true;
+          logCheckoutDiagnostics(debugEnabled, "refresh.onchain.response", {
+            orderId: item.orderId,
+            isOnChainValid,
+            rawResult: validityResult,
+          });
         } catch {
           isOnChainValid = false;
         }
+      } else if (hasMatchingListing && !isOwnListing && !strictOnChainValidation) {
+        isOnChainValid = true;
+        logCheckoutDiagnostics(debugEnabled, "refresh.skip_onchain", {
+          orderId: item.orderId,
+          reason: "Strict on-chain precheck disabled by env flag.",
+        });
       }
-      const isValid = hasMatchingListing && isOnChainValid;
+      const isValid = hasMatchingListing && !isOwnListing && isOnChainValid;
       if (isValid) {
         clearItemError(item.orderId);
         setCheckoutStatus({
@@ -591,12 +1002,16 @@ export function CartSidebar() {
         return;
       }
 
-      setItemError(item.orderId, STALE_LISTING_ERROR);
+      setItemError(
+        item.orderId,
+        isOwnListing ? OWN_LISTING_ERROR : STALE_LISTING_ERROR,
+      );
       setCheckoutStatus({
-        kind: "stale",
+        kind: isOwnListing ? "error" : "stale",
         tone: "error",
-        message:
-          "Listing is still stale or unavailable. Remove stale rows or refresh them, then retry checkout.",
+        message: isOwnListing
+          ? "This row is your own listing and cannot be purchased. Remove it, then retry checkout."
+          : "Listing is still stale or unavailable. Remove stale rows or refresh them, then retry checkout.",
       });
     } catch {
       setItemError(item.orderId, STALE_LISTING_ERROR);
