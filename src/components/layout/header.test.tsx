@@ -1,4 +1,4 @@
-import { render, screen } from "@testing-library/react";
+import { render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { Header } from "./header";
@@ -123,9 +123,43 @@ describe("Header", () => {
   it("shows_portfolio_link_for_address_lookup", () => {
     render(<Header />);
 
-    const portfolioLink = screen.getByRole("link", { name: /portfolio/i });
-    expect(portfolioLink).toBeVisible();
-    expect(portfolioLink).toHaveAttribute("href", "/portfolio");
+    const portfolioLinks = screen.getAllByRole("link", { name: /portfolio/i });
+    expect(portfolioLinks.length).toBeGreaterThan(0);
+    expect(portfolioLinks[0]).toHaveAttribute("href", "/portfolio");
+  });
+
+  it("desktop_portfolio_and_connect_controls_are_hidden_on_mobile_breakpoints", () => {
+    render(<Header />);
+
+    const desktopPortfolioLink = screen
+      .getAllByRole("link", { name: /portfolio/i })
+      .find((link) => link.getAttribute("href") === "/portfolio");
+    expect(desktopPortfolioLink).toBeTruthy();
+    expect(desktopPortfolioLink?.className).toContain("hidden");
+    expect(desktopPortfolioLink?.className).toContain("sm:inline-flex");
+
+    const desktopConnectButton = screen
+      .getAllByRole("button", { name: /connect wallet/i })
+      .find((button) => button.className.includes("sm:inline-flex"));
+    expect(desktopConnectButton).toBeTruthy();
+    expect(desktopConnectButton?.className).toContain("hidden");
+  });
+
+  it("mobile_menu_contains_portfolio_and_connect_actions", async () => {
+    const user = userEvent.setup();
+    render(<Header />);
+
+    await user.click(screen.getByRole("button", { name: /open menu/i }));
+
+    const mobileMenuDialog = await screen.findByRole("dialog");
+    const mobilePortfolioLink = within(mobileMenuDialog).getByRole("link", {
+      name: /portfolio/i,
+    });
+    expect(mobilePortfolioLink).toHaveAttribute("href", "/portfolio");
+
+    expect(
+      within(mobileMenuDialog).getByRole("button", { name: /connect wallet/i }),
+    ).toBeVisible();
   });
 
   it("login_opens_wallet_modal_with_all_connectors", async () => {
