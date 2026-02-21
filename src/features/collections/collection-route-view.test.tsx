@@ -9,6 +9,32 @@ const { mockUseCollectionQuery, mockUseCollectionTraitMetadataQuery, mockUseColl
   mockUseCollectionTraitMetadataQuery: vi.fn(),
   mockUseCollectionListingsQuery: vi.fn(),
 }));
+const {
+  mockCartAddCandidates,
+  mockCartSetOpen,
+  setMockCartItems,
+  getMockCartItems,
+  setMockVisibleTokens,
+  getMockVisibleTokens,
+  mockSweepBarRender,
+} = vi.hoisted(() => {
+  let mockCartItems: Array<Record<string, unknown>> = [];
+  let mockVisibleTokens: Array<Record<string, unknown>> = [];
+
+  return {
+    mockCartAddCandidates: vi.fn(),
+    mockCartSetOpen: vi.fn(),
+    setMockCartItems: (items: Array<Record<string, unknown>>) => {
+      mockCartItems = items;
+    },
+    getMockCartItems: () => mockCartItems,
+    setMockVisibleTokens: (tokens: Array<Record<string, unknown>>) => {
+      mockVisibleTokens = tokens;
+    },
+    getMockVisibleTokens: () => mockVisibleTokens,
+    mockSweepBarRender: vi.fn(),
+  };
+});
 
 vi.mock("@/lib/marketplace/hooks", () => ({
   useCollectionQuery: mockUseCollectionQuery,
@@ -20,6 +46,17 @@ vi.mock("@/features/collections/collection-token-grid", () => ({
   CollectionTokenGrid: (props: Record<string, unknown>) => (
     <div data-testid="collection-token-grid">
       Token Grid: {props.address as string} | Sort: {String(props.sortMode ?? "recent")}
+      <div data-testid="token-grid-sweep-preview">
+        {Array.from((props.sweepPreviewOrderIds as Set<string> | undefined) ?? []).join(",")}
+      </div>
+      <button
+        onClick={() =>
+          (props.onTokensChange as ((tokens: Array<Record<string, unknown>>) => void) | undefined)?.(getMockVisibleTokens())
+        }
+        type="button"
+      >
+        Emit visible tokens
+      </button>
     </div>
   ),
 }));
@@ -34,6 +71,41 @@ vi.mock("@/features/collections/trait-filter-sidebar", () => ({
   TraitFilterSidebar: () => (
     <div data-testid="trait-filter-sidebar">Trait Sidebar</div>
   ),
+}));
+vi.mock("@/features/cart/store/cart-store", () => ({
+  CART_MAX_ITEMS: 25,
+  useCartStore: (
+    selector: (state: {
+      items: Array<Record<string, unknown>>;
+      addCandidates: typeof mockCartAddCandidates;
+      setOpen: typeof mockCartSetOpen;
+    }) => unknown,
+  ) =>
+    selector({
+      items: getMockCartItems(),
+      addCandidates: mockCartAddCandidates,
+      setOpen: mockCartSetOpen,
+    }),
+}));
+vi.mock("@/features/collections/sweep-bar", () => ({
+  SweepBar: (props: Record<string, unknown>) => {
+    mockSweepBarRender(props);
+    const count = Number(props.count ?? 0);
+    const maxCount = Number(props.maxCount ?? 0);
+    const candidates = (props.candidates as Array<{ orderId: string }> | undefined) ?? [];
+    const onCountChange = props.onCountChange as ((next: number) => void) | undefined;
+    const onSweep = props.onSweep as (() => void) | undefined;
+
+    return (
+      <div data-testid="sweep-bar">
+        <span data-testid="sweep-count">{count}</span>
+        <span data-testid="sweep-max-count">{maxCount}</span>
+        <span data-testid="sweep-candidate-order-ids">{candidates.map((item) => item.orderId).join(",")}</span>
+        <button onClick={() => onCountChange?.(2)} type="button">Set sweep count 2</button>
+        <button onClick={() => onSweep?.()} type="button">Commit sweep</button>
+      </div>
+    );
+  },
 }));
 
 const collections: SeedCollection[] = [
@@ -53,11 +125,24 @@ function successQuery(data: unknown) {
   };
 }
 
+function token(tokenId: string) {
+  return {
+    token_id: tokenId,
+    metadata: { name: `Token #${tokenId}` },
+  };
+}
+
 describe("collection route view", () => {
   beforeEach(() => {
     mockUseCollectionQuery.mockReset();
     mockUseCollectionTraitMetadataQuery.mockReset();
     mockUseCollectionListingsQuery.mockReset();
+    mockCartAddCandidates.mockReset();
+    mockCartSetOpen.mockReset();
+    mockSweepBarRender.mockReset();
+    mockCartAddCandidates.mockReturnValue({ ok: true });
+    setMockCartItems([]);
+    setMockVisibleTokens([]);
     mockUseCollectionTraitMetadataQuery.mockReturnValue({
       data: [],
       isLoading: false,
@@ -216,5 +301,46 @@ describe("collection route view", () => {
 
     expect(onSortModeChange).toHaveBeenCalledWith("price-asc");
     expect(screen.getByText(/sort: recent/i)).toBeVisible();
+  });
+
+  it("collection_route_sweep_adds_cheapest_candidates_and_resets_count", async () => {
+    mockUseCollectionQuery.mockReturnValue(successQuery(null));
+    mockUseCollectionListingsQuery.mockReturnValue(successQuery([
+      { id: 11, tokenId: 1, price: 300, currency: "0xfee", quantity: 1 },
+      { id: 12, tokenId: 2, price: 100, currency: "0xfee", quantity: 1 },
+      { id: 13, tokenId: 3, price: 200, currency: "0xfee", quantity: 1 },
+    ]));
+    setMockCartItems([
+      {
+        orderId: "12",
+        collection: "0xabc",
+        tokenId: "2",
+        price: "100",
+        currency: "0xfee",
+        quantity: "1",
+      },
+    ]);
+    setMockVisibleTokens([token("1"), token("2"), token("3")]);
+    const user = userEvent.setup();
+
+    render(<CollectionRouteView address="0xabc" collections={collections} />);
+
+    await user.click(screen.getByRole("button", { name: /emit visible tokens/i }));
+
+    expect(screen.getByTestId("sweep-bar")).toBeVisible();
+    expect(screen.getByTestId("sweep-max-count")).toHaveTextContent("2");
+    expect(screen.getByTestId("sweep-candidate-order-ids")).toHaveTextContent("13,11");
+
+    await user.click(screen.getByRole("button", { name: /set sweep count 2/i }));
+    expect(screen.getByTestId("token-grid-sweep-preview")).toHaveTextContent("13,11");
+
+    await user.click(screen.getByRole("button", { name: /commit sweep/i }));
+
+    expect(mockCartAddCandidates).toHaveBeenCalledWith([
+      expect.objectContaining({ orderId: "13", tokenId: "3", price: "200" }),
+      expect.objectContaining({ orderId: "11", tokenId: "1", price: "300" }),
+    ]);
+    expect(mockCartSetOpen).toHaveBeenCalledWith(true);
+    expect(screen.getByTestId("sweep-count")).toHaveTextContent("0");
   });
 });

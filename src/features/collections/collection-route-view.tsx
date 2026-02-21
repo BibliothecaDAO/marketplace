@@ -1,12 +1,15 @@
 "use client";
 
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import {
   useCollectionListingsQuery,
   useCollectionQuery,
+  useCollectionTokensQuery,
   useCollectionTraitMetadataQuery,
 } from "@/lib/marketplace/hooks";
 import {
+  displayTokenId,
+  formatNumberish,
   formatPriceForDisplay,
 } from "@/lib/marketplace/token-display";
 import { TokenSymbol } from "@/components/ui/token-symbol";
@@ -27,9 +30,12 @@ import { CollectionMarketPanel } from "@/features/collections/collection-market-
 import { CollectionTokenGrid } from "@/features/collections/collection-token-grid";
 import { TraitFilterSidebar } from "@/features/collections/trait-filter-sidebar";
 import {
+  cartItemFromTokenListing,
   cheapestListingByTokenId,
 } from "@/features/cart/listing-utils";
+import { CART_MAX_ITEMS, useCartStore } from "@/features/cart/store/cart-store";
 import { type CollectionSortMode } from "@/features/collections/collection-query-params";
+import { SweepBar } from "@/features/collections/sweep-bar";
 
 const EMPTY_ACTIVE_FILTERS: ActiveFilters = {};
 
@@ -87,6 +93,20 @@ function floorFromListings(
   return price ? { price, currency } : null;
 }
 
+function compareBigIntStrings(left: string, right: string) {
+  try {
+    const leftValue = BigInt(left);
+    const rightValue = BigInt(right);
+    if (leftValue === rightValue) {
+      return 0;
+    }
+
+    return leftValue < rightValue ? -1 : 1;
+  } catch {
+    return left.localeCompare(right);
+  }
+}
+
 export function CollectionRouteView({
   address,
   collections,
@@ -96,6 +116,9 @@ export function CollectionRouteView({
   onSortModeChange,
   onNavigate,
 }: CollectionRouteViewProps) {
+  const cartItems = useCartStore((state) => state.items);
+  const addCandidates = useCartStore((state) => state.addCandidates);
+  const setCartOpen = useCartStore((state) => state.setOpen);
   const runtimeCollections = useMemo(
     () => collections ?? getMarketplaceRuntimeConfig().collections,
     [collections],
@@ -109,6 +132,8 @@ export function CollectionRouteView({
     [address, runtimeCollections],
   );
   const projectId = selectedCollection?.projectId;
+  const sweepScopeKey = `${address}-${projectId ?? "default"}`;
+  const [sweepCount, setSweepCount] = useState(0);
   const collection = useCollectionQuery({ address, projectId, fetchImages: true });
   const traitMetadataQuery = useCollectionTraitMetadataQuery({ address, projectId });
   const listingQuery = useCollectionListingsQuery({
@@ -125,14 +150,98 @@ export function CollectionRouteView({
     ? collectionName(collection.data.metadata, address)
     : null;
 
+  // Fetch listed tokens directly so sweep candidates don't depend on
+  // a child-to-parent callback. TanStack Query deduplicates with the grid.
+  const listedTokenIds = useMemo(() => {
+    const ids = new Set<string>();
+    for (const id of cheapestListings.keys()) {
+      if (!id) continue;
+      ids.add(id);
+      // Also add hex variant so the SDK resolves either form.
+      if (/^\d+$/.test(id)) {
+        try {
+          ids.add(`0x${BigInt(id).toString(16)}`);
+        } catch {
+          // skip
+        }
+      }
+    }
+    return Array.from(ids);
+  }, [cheapestListings]);
+
+  const listedTokensQuery = useCollectionTokensQuery(
+    {
+      address,
+      project: projectId,
+      tokenIds: listedTokenIds.length > 0 ? listedTokenIds : undefined,
+      limit: Math.max(listedTokenIds.length, 1),
+      fetchImages: true,
+    },
+    { enabled: listedTokenIds.length > 0 },
+  );
+
+  const sweepCandidates = useMemo(() => {
+    const tokens = listedTokensQuery.data?.page?.tokens;
+    if (!tokens?.length) return [];
+
+    const cartOrderIds = new Set(cartItems.map((item) => item.orderId));
+    const tokenByDisplayId = new Map(
+      tokens.map((token) => [displayTokenId(token), token] as const),
+    );
+
+    const candidates = Array.from(cheapestListings.values())
+      .filter((listing) => !cartOrderIds.has(listing.orderId))
+      .map((listing) => {
+        const token = tokenByDisplayId.get(listing.tokenId);
+        if (!token) return null;
+        return cartItemFromTokenListing(token, address, listing, projectId);
+      })
+      .filter((item): item is NonNullable<typeof item> => item !== null)
+      .sort((left, right) => compareBigIntStrings(left.price, right.price));
+
+    return candidates.slice(0, CART_MAX_ITEMS);
+  }, [address, cartItems, cheapestListings, listedTokensQuery.data, projectId]);
+
+  // Build the preview set directly from cheapestListings (same key format
+  // the grid uses for lookup) so highlighting doesn't depend on listedTokensQuery.
+  const cheapestByPrice = useMemo(() => {
+    const cartOrderIds = new Set(cartItems.map((item) => item.orderId));
+    return Array.from(cheapestListings.entries())
+      .filter(([, listing]) => !cartOrderIds.has(listing.orderId))
+      .sort(([, a], [, b]) => compareBigIntStrings(a.price, b.price));
+  }, [cartItems, cheapestListings]);
+
+  const sweepMaxCount = Math.min(
+    cheapestByPrice.length,
+    Math.max(CART_MAX_ITEMS - cartItems.length, 0),
+  );
+  const clampedSweepCount = Math.min(sweepCount, sweepMaxCount);
+  const sweepPreviewTokenIds = useMemo(
+    () => new Set(cheapestByPrice.slice(0, clampedSweepCount).map(([tokenId]) => tokenId)),
+    [cheapestByPrice, clampedSweepCount],
+  );
+
   function handleChange(nextAddress: string) {
     if (onNavigate) {
       onNavigate(`/collections/${nextAddress}`);
     }
   }
 
+  function handleSweepCountChange(nextCount: number) {
+    setSweepCount(Math.min(Math.max(nextCount, 0), sweepMaxCount));
+  }
+
+  function handleSweep() {
+    const selected = sweepCandidates.slice(0, clampedSweepCount);
+    if (selected.length === 0) return;
+
+    addCandidates(selected);
+    setCartOpen(true);
+    setSweepCount(0);
+  }
+
   return (
-    <section className="w-full space-y-6">
+    <section className="w-full space-y-6 pb-20">
       {/* Collection header */}
       <div className="space-y-3 border-b border-border/60 pb-4">
         {runtimeCollections.length > 1 && (
@@ -222,11 +331,13 @@ export function CollectionRouteView({
           </TabsList>
           <TabsContent value="tokens">
             <CollectionTokenGrid
-              key={`${address}-${projectId ?? "default"}`}
+              key={sweepScopeKey}
               activeFilters={resolvedActiveFilters}
               address={address}
+
               projectId={projectId}
               sortMode={sortMode}
+              sweepPreviewTokenIds={sweepPreviewTokenIds}
             />
           </TabsContent>
           <TabsContent value="market-activity">
@@ -234,6 +345,13 @@ export function CollectionRouteView({
           </TabsContent>
         </Tabs>
       </div>
+      <SweepBar
+        candidates={sweepCandidates}
+        count={sweepCount}
+        maxCount={sweepMaxCount}
+        onCountChange={handleSweepCountChange}
+        onSweep={handleSweep}
+      />
     </section>
   );
 }
