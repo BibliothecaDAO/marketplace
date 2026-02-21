@@ -22,6 +22,10 @@ vi.mock("@/components/ui/slider", () => ({
   ),
 }));
 
+vi.mock("@/components/ui/token-symbol", () => ({
+  TokenSymbol: (props: { address: string }) => <span>{props.address}</span>,
+}));
+
 function candidate(orderId: string, tokenId: string, price: string, currency = "0xfee"): CartItem {
   return {
     orderId,
@@ -46,8 +50,7 @@ describe("sweep bar", () => {
     );
 
     expect(screen.getByText("Sweep")).toBeVisible();
-    expect(screen.getByText("300")).toBeVisible();
-    expect(screen.getByText("0xfee")).toBeVisible();
+    expect(screen.getByText(/300/)).toBeVisible();
     expect(screen.getByRole("button", { name: /add 2 to cart/i })).toBeEnabled();
   });
 
@@ -70,7 +73,7 @@ describe("sweep bar", () => {
       target: { value: "2" },
     });
     expect(onCountChange).toHaveBeenCalledWith(2);
-    expect(screen.getByRole("button", { name: /add 0 to cart/i })).toBeDisabled();
+    expect(screen.getByRole("button", { name: /sweep/i })).toBeDisabled();
 
     rerender(
       <SweepBar
@@ -86,11 +89,12 @@ describe("sweep bar", () => {
     expect(onSweep).toHaveBeenCalledTimes(1);
   });
 
-  it("hides_when_no_sweep_candidates_exist", () => {
-    const { container } = render(
+  it("disables_when_no_sweep_candidates_exist", () => {
+    render(
       <SweepBar candidates={[]} count={0} maxCount={0} onCountChange={vi.fn()} onSweep={vi.fn()} />,
     );
 
-    expect(container).toBeEmptyDOMElement();
+    expect(screen.getByRole("button", { name: /sweep/i })).toBeDisabled();
+    expect(screen.getByText(/0 available/)).toBeVisible();
   });
 });

@@ -36,10 +36,13 @@ const {
   };
 });
 
+const mockUseCollectionTokensQuery = vi.fn();
+
 vi.mock("@/lib/marketplace/hooks", () => ({
   useCollectionQuery: mockUseCollectionQuery,
   useCollectionTraitMetadataQuery: mockUseCollectionTraitMetadataQuery,
   useCollectionListingsQuery: mockUseCollectionListingsQuery,
+  useCollectionTokensQuery: (...args: unknown[]) => mockUseCollectionTokensQuery(...args),
 }));
 
 vi.mock("@/features/collections/collection-token-grid", () => ({
@@ -47,7 +50,7 @@ vi.mock("@/features/collections/collection-token-grid", () => ({
     <div data-testid="collection-token-grid">
       Token Grid: {props.address as string} | Sort: {String(props.sortMode ?? "recent")}
       <div data-testid="token-grid-sweep-preview">
-        {Array.from((props.sweepPreviewOrderIds as Set<string> | undefined) ?? []).join(",")}
+        {Array.from((props.sweepPreviewTokenIds as Set<string> | undefined) ?? []).join(",")}
       </div>
       <button
         onClick={() =>
@@ -137,12 +140,22 @@ describe("collection route view", () => {
     mockUseCollectionQuery.mockReset();
     mockUseCollectionTraitMetadataQuery.mockReset();
     mockUseCollectionListingsQuery.mockReset();
+    mockUseCollectionTokensQuery.mockReset();
     mockCartAddCandidates.mockReset();
     mockCartSetOpen.mockReset();
     mockSweepBarRender.mockReset();
     mockCartAddCandidates.mockReturnValue({ ok: true });
     setMockCartItems([]);
     setMockVisibleTokens([]);
+    mockUseCollectionTokensQuery.mockReturnValue({
+      data: null,
+      isLoading: false,
+      isSuccess: false,
+      isError: false,
+      error: null,
+      isFetching: false,
+      refetch: vi.fn(),
+    });
     mockUseCollectionTraitMetadataQuery.mockReturnValue({
       data: [],
       isLoading: false,
@@ -310,6 +323,16 @@ describe("collection route view", () => {
       { id: 12, tokenId: 2, price: 100, currency: "0xfee", quantity: 1 },
       { id: 13, tokenId: 3, price: 200, currency: "0xfee", quantity: 1 },
     ]));
+    // The route view calls useCollectionTokensQuery directly for listed tokens.
+    mockUseCollectionTokensQuery.mockReturnValue({
+      data: { page: { tokens: [token("1"), token("2"), token("3")], nextCursor: null } },
+      isLoading: false,
+      isSuccess: true,
+      isError: false,
+      error: null,
+      isFetching: false,
+      refetch: vi.fn(),
+    });
     setMockCartItems([
       {
         orderId: "12",
@@ -332,7 +355,8 @@ describe("collection route view", () => {
     expect(screen.getByTestId("sweep-candidate-order-ids")).toHaveTextContent("13,11");
 
     await user.click(screen.getByRole("button", { name: /set sweep count 2/i }));
-    expect(screen.getByTestId("token-grid-sweep-preview")).toHaveTextContent("13,11");
+    // Preview set contains token IDs (not order IDs), sorted by price ascending.
+    expect(screen.getByTestId("token-grid-sweep-preview")).toHaveTextContent("3,1");
 
     await user.click(screen.getByRole("button", { name: /commit sweep/i }));
 

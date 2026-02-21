@@ -777,16 +777,17 @@ describe("collection token grid", () => {
       <CollectionTokenGrid
         address="0xabc"
         projectId="project-a"
-        sweepPreviewTokenIds={new Set(["21"])}
+        sweepPreviewTokenIds={new Set(["1"])}
       />,
     );
 
     const previewArticle = await screen.findByRole("article", { name: "token-1" });
     const nonPreviewArticle = screen.getByRole("article", { name: "token-2" });
-    const previewWrapper = previewArticle.closest(".space-y-2");
-    const nonPreviewWrapper = nonPreviewArticle.closest(".space-y-2");
+    // The ring is on the inner wrapper div (parent of the Link/Card), not the outer .space-y-2
+    const previewRingWrapper = previewArticle.closest("a")!.parentElement!;
+    const nonPreviewRingWrapper = nonPreviewArticle.closest("a")!.parentElement!;
 
-    expect(previewWrapper).toHaveClass("ring-2", "ring-primary", "ring-offset-1", "ring-offset-background");
-    expect(nonPreviewWrapper).not.toHaveClass("ring-2");
+    expect(previewRingWrapper).toHaveClass("ring-2", "ring-primary", "ring-offset-2", "ring-offset-background");
+    expect(nonPreviewRingWrapper).not.toHaveClass("ring-2");
   });
 });

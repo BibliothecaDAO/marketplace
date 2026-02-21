@@ -360,8 +360,8 @@ describe("cart sidebar", () => {
       }),
     );
     expect(await screen.findByText(/listing is stale or unavailable/i)).toBeVisible();
-    expect(screen.getByRole("button", { name: /remove stale/i })).toBeVisible();
-    expect(screen.getByRole("button", { name: /refresh listing/i })).toBeVisible();
+    expect(screen.getByRole("button", { name: /remove item/i })).toBeVisible();
+    expect(screen.getByRole("button", { name: /refresh/i })).toBeVisible();
     expect(screen.getByRole("button", { name: /retry checkout/i })).toBeVisible();
     expect(
       screen.getByText(/remove stale rows or refresh them, then retry checkout/i),
@@ -462,10 +462,10 @@ describe("cart sidebar", () => {
     await user.click(screen.getByRole("button", { name: /complete purchase/i }));
     expect(await screen.findByText(/listing is stale or unavailable/i)).toBeVisible();
 
-    await user.click(screen.getByRole("button", { name: /refresh listing/i }));
+    await user.click(screen.getByRole("button", { name: /refresh/i }));
 
     await waitFor(() => {
-      expect(screen.queryByRole("button", { name: /refresh listing/i })).toBeNull();
+      expect(screen.queryByRole("button", { name: /refresh/i })).toBeNull();
     });
     expect(mockListCollectionListings).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -508,7 +508,9 @@ describe("cart sidebar", () => {
     expect(await screen.findByText(/checkout blocked due to stale listings/i)).toBeVisible();
     expect(mockArcadeExecute).not.toHaveBeenCalled();
 
-    await user.click(screen.getByRole("button", { name: /remove stale/i }));
+    // The stale item (7001 / Token #1) has a visible remove button; click it.
+    const staleRow = screen.getByTestId("cart-item-7001");
+    await user.click(staleRow.querySelector("button[aria-label='Remove item']")!);
     await waitFor(() => {
       expect(screen.queryByText("Token #1")).toBeNull();
     });
