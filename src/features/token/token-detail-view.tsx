@@ -179,7 +179,9 @@ export function TokenDetailView({
   const { account, address: walletAddress, isConnected } = useAccount();
   const { client } = useMarketplaceClient();
   const { collections, chainLabel } = getMarketplaceRuntimeConfig();
-  const collectionName = collections.find((c) => c.address === address)?.name ?? address;
+  const collectionName =
+    collections.find((c) => c.address === address)?.name ??
+    truncateAddress(address);
   // Human-readable price in STRK (1 STRK = 1e18 wei)
   const [priceInput, setPriceInput] = useState("1");
   const [quantityInput, setQuantityInput] = useState("1");
@@ -464,7 +466,10 @@ export function TokenDetailView({
           </li>
           <li aria-hidden>/</li>
           <li>
-            <Link href={`/collections/${address}`} className="hover:text-foreground transition-colors">
+            <Link
+              href={`/collections/${address}`}
+              className="inline-block max-w-[120px] truncate align-bottom hover:text-foreground transition-colors sm:max-w-[220px]"
+            >
               {collectionName}
             </Link>
           </li>
@@ -621,7 +626,7 @@ export function TokenDetailView({
               ) : null}
             </div>
           ) : cheapestListing ? (
-            <div className="flex items-center justify-between gap-4 rounded-sm border border-border bg-muted/20 px-4 py-3">
+            <div className="flex flex-wrap items-center justify-between gap-3 rounded-sm border border-border bg-muted/20 px-4 py-3">
               <div>
                 <p className="text-[10px] uppercase tracking-widest text-muted-foreground mb-0.5">Best price</p>
                 <p className="text-xl font-bold flex items-center gap-1.5">
@@ -725,7 +730,7 @@ export function TokenDetailView({
 
         <div className="flex flex-wrap items-center justify-between gap-2">
           <h2 className="text-sm font-medium tracking-widest uppercase text-muted-foreground">Listings</h2>
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2">
             <Button
               disabled={!cheapestListing || isOwnCheapest}
               onClick={() => {
@@ -859,7 +864,7 @@ export function TokenDetailView({
         ) : (
           <div className="rounded border border-border overflow-hidden">
             {/* Table header */}
-            <div className="grid grid-cols-[1fr_auto_auto_auto] items-center gap-x-4 px-3 py-2 bg-muted/40 border-b border-border">
+            <div className="hidden grid-cols-[1fr_auto_auto_auto] items-center gap-x-4 border-b border-border bg-muted/40 px-3 py-2 sm:grid">
               <span className="text-[10px] uppercase tracking-wider text-muted-foreground">Price</span>
               <span className="text-[10px] uppercase tracking-wider text-muted-foreground">Seller</span>
               <span className="text-[10px] uppercase tracking-wider text-muted-foreground">Expires</span>
@@ -879,9 +884,9 @@ export function TokenDetailView({
               return (
                 <div
                   key={listing.id}
-                  className="grid grid-cols-[1fr_auto_auto_auto] items-center gap-x-4 px-3 py-2.5 border-b border-border/50 last:border-b-0 hover:bg-muted/20 transition-colors"
+                  className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-x-3 gap-y-1 border-b border-border/50 px-3 py-2.5 transition-colors last:border-b-0 hover:bg-muted/20 sm:grid-cols-[1fr_auto_auto_auto] sm:gap-x-4 sm:gap-y-0"
                 >
-                  <div className="flex items-center gap-2 min-w-0">
+                  <div className="col-start-1 row-start-1 flex min-w-0 items-center gap-2">
                     <span className="text-sm font-medium text-primary font-mono flex items-center gap-1.5">
                       {formatPriceForDisplay(listing.price) ?? String(listing.price)}
                       {listing.currency ? (
@@ -896,15 +901,20 @@ export function TokenDetailView({
                   </div>
                   <Link
                     href={`/profile/${listing.owner}`}
-                    className="text-xs text-muted-foreground hover:text-foreground hover:underline font-mono transition-colors"
+                    className="col-start-1 row-start-2 max-w-[11rem] truncate text-xs text-muted-foreground font-mono transition-colors hover:text-foreground hover:underline sm:col-auto sm:row-auto sm:max-w-none"
                   >
                     {isOwnRow ? "You" : truncateAddress(listing.owner)}
                   </Link>
-                  <span className="text-xs text-muted-foreground">
+                  <span className="col-start-2 row-start-2 text-right text-xs text-muted-foreground sm:col-auto sm:row-auto sm:text-left">
                     {expiration ? formatRelativeExpiry(expiration) : "—"}
                   </span>
                   {isOwnRow ? (
-                    <Badge variant="outline" className="text-[10px] px-2 py-0.5">Your listing</Badge>
+                    <Badge
+                      variant="outline"
+                      className="col-start-2 row-start-1 justify-self-end px-2 py-0.5 text-[10px] sm:col-auto sm:row-auto"
+                    >
+                      Your listing
+                    </Badge>
                   ) : (
                     <Button
                       disabled={!hasFullCartData}
@@ -922,6 +932,7 @@ export function TokenDetailView({
                       size="sm"
                       type="button"
                       variant={isRowAdded ? "default" : "outline"}
+                      className="col-start-2 row-start-1 h-7 justify-self-end px-2 text-xs sm:col-auto sm:row-auto sm:h-8 sm:px-3 sm:text-sm"
                     >
                       {isRowAdded ? "Added" : "Add to cart"}
                     </Button>

@@ -101,7 +101,7 @@ export function Header() {
         </nav>
 
         {/* Right side actions */}
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-1 sm:gap-2">
           {/* Social icons */}
           <div className="hidden sm:flex items-center gap-1 mr-1">
             {SOCIAL_LINKS.map(({ label, href, Icon }) => (
@@ -119,7 +119,7 @@ export function Header() {
           </div>
 
           <CartSidebar />
-          <Button size="sm" variant="ghost" asChild>
+          <Button size="sm" variant="ghost" asChild className="hidden sm:inline-flex">
             <Link href="/portfolio">Portfolio</Link>
           </Button>
 
@@ -152,6 +152,7 @@ export function Header() {
             <Button
               type="button"
               size="sm"
+              className="hidden sm:inline-flex"
               onClick={() => setWalletModalOpen(true)}
               disabled={connectors.length === 0 || isBusy}
             >
@@ -224,6 +225,25 @@ export function Header() {
                     {label}
                   </a>
                 ))}
+                <Link
+                  href="/portfolio"
+                  onClick={() => setMobileMenuOpen(false)}
+                  className="px-2 py-2.5 text-sm text-muted-foreground hover:text-foreground transition-colors rounded-sm hover:bg-muted"
+                >
+                  Portfolio
+                </Link>
+                {!isConnected ? (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setWalletModalOpen(true);
+                      setMobileMenuOpen(false);
+                    }}
+                    className="px-2 py-2.5 text-left text-sm text-muted-foreground hover:text-foreground transition-colors rounded-sm hover:bg-muted"
+                  >
+                    Connect Wallet
+                  </button>
+                ) : null}
                 {isConnected && address ? (
                   <>
                     <Link

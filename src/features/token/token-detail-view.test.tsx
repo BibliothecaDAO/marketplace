@@ -1342,6 +1342,24 @@ describe("token detail view", () => {
     expect(collectionLink).toHaveAttribute("href", "/collections/0xunknown");
   });
 
+  it("breadcrumb_truncates_long_unknown_collection_address", () => {
+    const longUnknownAddress =
+      "0x0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef";
+    mockUseTokenDetailQuery.mockReturnValue(
+      successQuery({ token: { token_id: "7", image: null, metadata: { name: "Token #7" } }, orders: [], listings: [] }),
+    );
+
+    render(<TokenDetailView address={longUnknownAddress} tokenId="7" />);
+
+    const truncatedAddress = `${longUnknownAddress.slice(0, 6)}...${longUnknownAddress.slice(-4)}`;
+    const collectionLink = screen.getByRole("link", { name: truncatedAddress });
+    expect(collectionLink).toHaveAttribute(
+      "href",
+      `/collections/${longUnknownAddress}`,
+    );
+    expect(screen.queryByRole("link", { name: longUnknownAddress })).toBeNull();
+  });
+
   it("trait_box_links_to_collection_with_filter", () => {
     mockUseTokenDetailQuery.mockReturnValue(
       successQuery({
@@ -1402,5 +1420,45 @@ describe("token detail view", () => {
     const link = ownerText.closest("a");
     expect(link).not.toBeNull();
     expect(link).toHaveAttribute("href", `/profile/${ownerAddress}`);
+  });
+
+  it("listings_table_uses_mobile_friendly_grid_classes", () => {
+    mockUseCollectionListingsQuery.mockReturnValue(
+      successListingsQuery([
+        {
+          id: 1,
+          tokenId: "1",
+          quantity: 1,
+          currency: "0xstrk",
+          price: "500000000000000000",
+          owner: "0xowner1",
+          expiration: FAR_FUTURE_EXPIRATION,
+        },
+      ]),
+    );
+    mockUseTokenDetailQuery.mockReturnValue(
+      successQuery({
+        token: {
+          token_id: "1",
+          image: "https://cdn.example/1.png",
+          metadata: { name: "Token #1" },
+        },
+        orders: [],
+        listings: [],
+      }),
+    );
+
+    render(<TokenDetailView address="0xabc" tokenId="1" />);
+
+    const tableHeaderRow = screen.getByText(/^Price$/).closest("div");
+    expect(tableHeaderRow).not.toBeNull();
+    expect(tableHeaderRow?.className).toContain("hidden");
+    expect(tableHeaderRow?.className).toContain("sm:grid");
+
+    const ownerCell = screen.getByText("0xowner1");
+    const listingRow = ownerCell.closest("div");
+    expect(listingRow).not.toBeNull();
+    expect(listingRow?.className).toContain("grid-cols-[minmax(0,1fr)_auto]");
+    expect(listingRow?.className).toContain("sm:grid-cols-[1fr_auto_auto_auto]");
   });
 });
