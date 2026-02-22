@@ -551,8 +551,10 @@ describe("collection token grid", () => {
     render(<CollectionTokenGrid address="0xabc" projectId="project-a" />);
 
     expect(screen.getByRole("button", { name: /compact/i })).toBeVisible();
+    expect(screen.getByRole("button", { name: /dense/i })).toBeVisible();
     expect(screen.getByRole("button", { name: /standard/i })).toBeVisible();
     expect(screen.getByRole("button", { name: /comfort/i })).toBeVisible();
+    expect(screen.getByRole("button", { name: /list/i })).toBeVisible();
     expect(screen.getByTestId("collection-token-grid-cards")).toHaveClass(
       "grid-cols-1",
       "sm:grid-cols-2",
@@ -584,8 +586,48 @@ describe("collection token grid", () => {
     await user.click(screen.getByRole("button", { name: /compact/i }));
     expect(grid).toHaveClass("grid-cols-2", "sm:grid-cols-3", "lg:grid-cols-4");
 
+    await user.click(screen.getByRole("button", { name: /dense/i }));
+    expect(grid).toHaveClass("grid-cols-2", "sm:grid-cols-3", "lg:grid-cols-6");
+
     await user.click(screen.getByRole("button", { name: /comfort/i }));
     expect(grid).toHaveClass("grid-cols-1", "sm:grid-cols-1", "lg:grid-cols-2");
+  });
+
+  it("list_view_renders_tokens_in_a_table_layout", async () => {
+    mockUseCollectionTokensQuery.mockReturnValue({
+      data: {
+        page: {
+          tokens: [token("1")],
+          nextCursor: null,
+        },
+        error: null,
+      },
+      isLoading: false,
+      isSuccess: true,
+      isError: false,
+      error: null,
+      isFetching: false,
+      refetch: vi.fn(),
+    });
+    mockUseCollectionListingsQuery.mockReturnValue(
+      successListingsResult([
+        { id: 21, tokenId: 1, price: 200, currency: "0xfee", quantity: 1 },
+      ]),
+    );
+
+    const user = userEvent.setup();
+    render(<CollectionTokenGrid address="0xabc" projectId="project-a" />);
+
+    await user.click(screen.getByRole("button", { name: /list/i }));
+
+    const table = screen.getByTestId("collection-token-grid-table");
+    expect(table).toBeVisible();
+    expect(screen.queryByTestId("collection-token-grid-cards")).toBeNull();
+    expect(screen.getByRole("link", { name: /token #1/i })).toHaveAttribute(
+      "href",
+      "/collections/0xabc/1",
+    );
+    expect(screen.getByText("200")).toBeVisible();
   });
 
   it("tokens_reset_when_address_prop_changes", async () => {
