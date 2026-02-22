@@ -9,7 +9,6 @@ import {
 } from "@/lib/marketplace/hooks";
 import {
   displayTokenId,
-  formatNumberish,
   formatPriceForDisplay,
 } from "@/lib/marketplace/token-display";
 import { TokenSymbol } from "@/components/ui/token-symbol";
@@ -36,6 +35,7 @@ import {
 import { CART_MAX_ITEMS, useCartStore } from "@/features/cart/store/cart-store";
 import { type CollectionSortMode } from "@/features/collections/collection-query-params";
 import { SweepBar } from "@/features/collections/sweep-bar";
+import { COLLECTION_LISTING_SAMPLE_LIMIT } from "@/lib/marketplace/query-limits";
 
 const EMPTY_ACTIVE_FILTERS: ActiveFilters = {};
 
@@ -139,11 +139,16 @@ export function CollectionRouteView({
   const listingQuery = useCollectionListingsQuery({
     collection: address,
     projectId,
+    limit: COLLECTION_LISTING_SAMPLE_LIMIT,
     verifyOwnership: true,
   });
 
   const cheapestListings = cheapestListingByTokenId(listingQuery.data);
   const listingCount = Array.isArray(listingQuery.data) ? listingQuery.data.length : 0;
+  const listingCountLabel =
+    listingCount >= COLLECTION_LISTING_SAMPLE_LIMIT
+      ? `${COLLECTION_LISTING_SAMPLE_LIMIT}+`
+      : String(listingCount);
   const floor = floorFromListings(cheapestListings);
   const totalSupply = collection.data?.totalSupply;
   const displayName = collection.isSuccess && collection.data
@@ -280,7 +285,7 @@ export function CollectionRouteView({
           )}
           {listingCount > 0 && (
             <span>
-              <span className="text-foreground font-medium">{listingCount}</span>
+              <span className="text-foreground font-medium">{listingCountLabel}</span>
               {" "}listed
             </span>
           )}

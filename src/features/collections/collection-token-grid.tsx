@@ -35,6 +35,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { MarketplaceTokenCard } from "@/components/marketplace/token-card";
 import { Skeleton } from "@/components/ui/skeleton";
 import type { ActiveFilters } from "@/lib/marketplace/traits";
+import { COLLECTION_LISTING_SAMPLE_LIMIT } from "@/lib/marketplace/query-limits";
 import { cn } from "@/lib/utils";
 import {
   cartItemFromTokenListing,
@@ -215,6 +216,7 @@ export function CollectionTokenGrid({
   const listingQuery = useCollectionListingsQuery({
     collection: address,
     projectId,
+    limit: COLLECTION_LISTING_SAMPLE_LIMIT,
     verifyOwnership: true,
   });
 

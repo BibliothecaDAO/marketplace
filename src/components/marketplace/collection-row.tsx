@@ -18,6 +18,7 @@ import {
   tokenName,
   tokenPrice,
 } from "@/lib/marketplace/token-display";
+import { COLLECTION_LISTING_SAMPLE_LIMIT } from "@/lib/marketplace/query-limits";
 import { matchesHomeSearch, normalizeHomeSearchQuery } from "@/lib/marketplace/home-search";
 import { MarketplaceTokenCard } from "@/components/marketplace/token-card";
 import { Button } from "@/components/ui/button";
@@ -151,6 +152,7 @@ export function CollectionRow({
   const listingQuery = useCollectionListingsQuery({
     collection: address,
     projectId,
+    limit: COLLECTION_LISTING_SAMPLE_LIMIT,
     verifyOwnership: true,
   });
   const listedTokenIds = useMemo(
@@ -240,6 +242,10 @@ export function CollectionRow({
 
   const totalSupply = collectionQuery.data?.totalSupply;
   const listingCount = Array.isArray(listingQuery.data) ? listingQuery.data.length : 0;
+  const listingCountLabel =
+    listingCount >= COLLECTION_LISTING_SAMPLE_LIMIT
+      ? `${COLLECTION_LISTING_SAMPLE_LIMIT}+`
+      : String(listingCount);
   const floor = floorPriceFromListings(cheapestListings);
 
   return (
@@ -256,7 +262,7 @@ export function CollectionRow({
             <span>{Number(totalSupply).toLocaleString()} items</span>
           )}
           {listingCount > 0 && (
-            <span>{listingCount} listed</span>
+            <span>{listingCountLabel} listed</span>
           )}
           {floor && (
             <span className="text-foreground font-medium flex items-center gap-1">

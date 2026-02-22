@@ -278,6 +278,7 @@ describe("collection route view", () => {
       expect.objectContaining({
         collection: "0xabc",
         projectId: "project-a",
+        limit: 100,
         verifyOwnership: true,
       }),
     );
