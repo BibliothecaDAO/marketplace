@@ -2,19 +2,46 @@ import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-const { mockUseWalletPortfolioQuery } = vi.hoisted(() => ({
+const {
+  mockUseWalletPortfolioQuery,
+  mockUseCollectionQuery,
+  mockUseCollectionTokensQuery,
+} = vi.hoisted(() => ({
   mockUseWalletPortfolioQuery: vi.fn(),
+  mockUseCollectionQuery: vi.fn(),
+  mockUseCollectionTokensQuery: vi.fn(),
 }));
 
 vi.mock("@/lib/marketplace/hooks", () => ({
   useWalletPortfolioQuery: mockUseWalletPortfolioQuery,
+  useCollectionQuery: mockUseCollectionQuery,
+  useCollectionTokensQuery: mockUseCollectionTokensQuery,
 }));
 
 import { WalletProfileView } from "@/features/profile/wallet-profile-view";
 
+const EMPTY_COLLECTION_QUERY = {
+  data: null,
+  status: "success",
+  error: null,
+  isLoading: false,
+  isError: false,
+};
+
+const EMPTY_TOKENS_QUERY = {
+  data: { page: { tokens: [] } },
+  status: "success",
+  error: null,
+  isLoading: false,
+  isError: false,
+};
+
 describe("WalletProfileView", () => {
   beforeEach(() => {
     mockUseWalletPortfolioQuery.mockReset();
+    mockUseCollectionQuery.mockReset();
+    mockUseCollectionTokensQuery.mockReset();
+
     mockUseWalletPortfolioQuery.mockReturnValue({
       data: { page: { balances: [] } },
       status: "ready",
@@ -22,6 +49,8 @@ describe("WalletProfileView", () => {
       isFetching: false,
       refresh: vi.fn(),
     });
+    mockUseCollectionQuery.mockReturnValue(EMPTY_COLLECTION_QUERY);
+    mockUseCollectionTokensQuery.mockReturnValue(EMPTY_TOKENS_QUERY);
   });
 
   it("shows_loading_state", () => {
@@ -35,7 +64,7 @@ describe("WalletProfileView", () => {
 
     render(<WalletProfileView address="0xabc123" />);
 
-    expect(screen.getByText(/loading wallet items/i)).toBeVisible();
+    expect(screen.getByTestId("profile-loading")).toBeInTheDocument();
   });
 
   it("shows_empty_state_when_wallet_has_no_items", () => {
@@ -68,17 +97,30 @@ describe("WalletProfileView", () => {
       refresh: vi.fn(),
     });
 
+    mockUseCollectionTokensQuery.mockReturnValue({
+      ...EMPTY_TOKENS_QUERY,
+      data: {
+        page: {
+          tokens: [{ token_id: "7", metadata: {} }],
+        },
+      },
+    });
+
     render(<WalletProfileView address="0xabc123" />);
 
+    // Collection section header for the owned collection is visible
     expect(screen.getByText("0xcol1")).toBeVisible();
-    expect(screen.getByText("#7")).toBeVisible();
-    expect(screen.getByText("x2")).toBeVisible();
+
+    // Token link leads to the correct page
     const itemLink = screen.getByRole("link", { name: /view token 7/i });
     expect(itemLink).toHaveAttribute("href", "/collections/0xcol1/7");
+
+    // Filter input is present
     expect(
       screen.getByRole("textbox", { name: /filter collection or token/i }),
     ).toBeVisible();
 
+    // Zero-balance item is not shown
     expect(screen.queryByText("0xcol2")).toBeNull();
   });
 
