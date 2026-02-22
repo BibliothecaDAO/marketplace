@@ -36,7 +36,7 @@ export function PortfolioView({ initialAddress = "" }: PortfolioViewProps) {
 
   return (
     <main
-      className="mx-auto flex min-h-[calc(100vh-3.5rem)] w-full max-w-4xl flex-col gap-4 px-4 py-6 sm:px-6 lg:px-8"
+      className="mx-auto flex min-h-[calc(100vh-3.5rem)] w-full max-w-7xl flex-col gap-4 px-4 py-6 sm:px-6 lg:px-8"
       data-testid="portfolio-view"
     >
       <h1 className="text-2xl font-semibold tracking-tight">Portfolio</h1>
@@ -72,8 +72,7 @@ export function PortfolioView({ initialAddress = "" }: PortfolioViewProps) {
       {activeAddress ? (
         <WalletProfileView
           address={activeAddress}
-          addressLabel="Selected wallet address:"
-          title="Portfolio holdings"
+          showHeader={false}
         />
       ) : null}
     </main>

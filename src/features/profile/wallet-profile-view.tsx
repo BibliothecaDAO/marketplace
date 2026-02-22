@@ -11,6 +11,7 @@ type WalletProfileViewProps = {
   address: string;
   title?: string;
   addressLabel?: string;
+  showHeader?: boolean;
 };
 
 type PortfolioItem = {
@@ -83,6 +84,7 @@ export function WalletProfileView({
   address,
   title = "Wallet Profile",
   addressLabel = "Connected wallet address:",
+  showHeader = true,
 }: WalletProfileViewProps) {
   const portfolioQuery = useWalletPortfolioQuery(address);
   const [filterInput, setFilterInput] = useState("");
@@ -118,17 +120,19 @@ export function WalletProfileView({
   const totalCollections = collections.length;
 
   return (
-    <main
-      className="mx-auto flex min-h-[calc(100vh-3.5rem)] w-full max-w-7xl flex-col gap-6 px-4 py-6 sm:px-6 lg:px-8"
+    <div
+      className="flex w-full flex-col gap-6"
       data-testid="wallet-profile-view"
     >
-      <div className="space-y-1">
-        <h1 className="text-2xl font-semibold tracking-tight">{title}</h1>
-        <p className="text-sm text-muted-foreground">{addressLabel}</p>
-        <code className="block w-full overflow-x-auto rounded-sm border border-border/70 bg-muted/30 p-3 text-xs sm:text-sm">
-          {address}
-        </code>
-      </div>
+      {showHeader ? (
+        <div className="space-y-1">
+          <h1 className="text-2xl font-semibold tracking-tight">{title}</h1>
+          <p className="text-sm text-muted-foreground">{addressLabel}</p>
+          <code className="block w-full overflow-x-auto rounded-sm border border-border/70 bg-muted/30 p-3 text-xs sm:text-sm">
+            {address}
+          </code>
+        </div>
+      ) : null}
 
       {isLoading ? (
         <div data-testid="profile-loading" className="space-y-2 pt-2">
@@ -209,6 +213,6 @@ export function WalletProfileView({
           )}
         </div>
       )}
-    </main>
+    </div>
   );
 }
