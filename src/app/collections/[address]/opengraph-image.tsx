@@ -7,6 +7,10 @@ export const size = {
 
 export const contentType = "image/png";
 
+// Cache OG images at the edge for 5 minutes; revalidate in background for 15 minutes.
+// Matches the collection SEO data cache TTL in seo-data.ts.
+export const revalidate = 300;
+
 export default async function Image({
   params,
 }: {
