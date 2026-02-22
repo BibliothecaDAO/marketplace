@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useEffect, useMemo, useReducer, useState } from "react";
 import type { NormalizedToken } from "@cartridge/arcade/marketplace";
 import {
@@ -7,9 +8,11 @@ import {
   useCollectionTokensQuery,
 } from "@/lib/marketplace/hooks";
 import {
+  formatPriceForDisplay,
   displayTokenId,
   listingPriceByTokenId,
   tokenId,
+  tokenName,
   tokenPrice,
 } from "@/lib/marketplace/token-display";
 
@@ -34,6 +37,15 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { MarketplaceTokenCard } from "@/components/marketplace/token-card";
 import { Skeleton } from "@/components/ui/skeleton";
+import { TokenSymbol } from "@/components/ui/token-symbol";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
 import type { ActiveFilters } from "@/lib/marketplace/traits";
 import { COLLECTION_LISTING_SAMPLE_LIMIT } from "@/lib/marketplace/query-limits";
 import { cn } from "@/lib/utils";
@@ -55,10 +67,12 @@ type CollectionTokenGridProps = {
   sweepPreviewTokenIds?: Set<string>;
 };
 
-type GridDensityMode = "compact" | "standard" | "comfort";
+type GridDensityMode = "compact" | "dense" | "standard" | "comfort";
+type GridLayoutMode = GridDensityMode | "list";
 
 const GRID_CLASSES_BY_DENSITY: Record<GridDensityMode, string> = {
   compact: "grid-cols-2 sm:grid-cols-3 lg:grid-cols-4",
+  dense: "grid-cols-2 sm:grid-cols-3 lg:grid-cols-6",
   standard: "grid-cols-1 sm:grid-cols-2 lg:grid-cols-3",
   comfort: "grid-cols-1 sm:grid-cols-1 lg:grid-cols-2",
 };
@@ -180,7 +194,7 @@ export function CollectionTokenGrid({
   sweepPreviewTokenIds,
 }: CollectionTokenGridProps) {
   const { addListingToCart, isRecentlyAdded } = useAddToCartFeedback();
-  const [gridDensity, setGridDensity] = useState<GridDensityMode>("standard");
+  const [gridMode, setGridMode] = useState<GridLayoutMode>("standard");
   const tokenIdsKey = useMemo(() => tokenIds?.join(",") ?? "", [tokenIds]);
   const activeFiltersKey = useMemo(
     () =>
@@ -270,40 +284,61 @@ export function CollectionTokenGrid({
     () => sortTokens(visibleTokens, sortMode, listingPrices, listingPriceMap),
     [listingPriceMap, listingPrices, sortMode, visibleTokens],
   );
-  const gridClasses = GRID_CLASSES_BY_DENSITY[gridDensity];
+  const isListMode = gridMode === "list";
+  const gridClasses = GRID_CLASSES_BY_DENSITY[isListMode ? "standard" : gridMode];
 
   return (
     <section className="space-y-4">
       <div className="flex items-center justify-end gap-1">
         <Button
-          aria-pressed={gridDensity === "compact"}
-          onClick={() => setGridDensity("compact")}
+          aria-pressed={gridMode === "compact"}
+          onClick={() => setGridMode("compact")}
           size="sm"
           type="button"
-          variant={gridDensity === "compact" ? "default" : "outline"}
+          variant={gridMode === "compact" ? "default" : "outline"}
           className="h-7 px-2 text-xs"
         >
           Compact
         </Button>
         <Button
-          aria-pressed={gridDensity === "standard"}
-          onClick={() => setGridDensity("standard")}
+          aria-pressed={gridMode === "dense"}
+          onClick={() => setGridMode("dense")}
           size="sm"
           type="button"
-          variant={gridDensity === "standard" ? "default" : "outline"}
+          variant={gridMode === "dense" ? "default" : "outline"}
+          className="h-7 px-2 text-xs"
+        >
+          Dense
+        </Button>
+        <Button
+          aria-pressed={gridMode === "standard"}
+          onClick={() => setGridMode("standard")}
+          size="sm"
+          type="button"
+          variant={gridMode === "standard" ? "default" : "outline"}
           className="h-7 px-2 text-xs"
         >
           Standard
         </Button>
         <Button
-          aria-pressed={gridDensity === "comfort"}
-          onClick={() => setGridDensity("comfort")}
+          aria-pressed={gridMode === "comfort"}
+          onClick={() => setGridMode("comfort")}
           size="sm"
           type="button"
-          variant={gridDensity === "comfort" ? "default" : "outline"}
+          variant={gridMode === "comfort" ? "default" : "outline"}
           className="h-7 px-2 text-xs"
         >
           Comfort
+        </Button>
+        <Button
+          aria-pressed={gridMode === "list"}
+          onClick={() => setGridMode("list")}
+          size="sm"
+          type="button"
+          variant={gridMode === "list" ? "default" : "outline"}
+          className="h-7 px-2 text-xs"
+        >
+          List
         </Button>
       </div>
 
@@ -328,7 +363,7 @@ export function CollectionTokenGrid({
         </Card>
       ) : null}
 
-      {!tokenQuery.isLoading ? (
+      {!tokenQuery.isLoading && !isListMode ? (
         <div
           className={cn("grid gap-3", gridClasses)}
           data-testid="collection-token-grid-cards"
@@ -388,6 +423,91 @@ export function CollectionTokenGrid({
             );
           })}
         </div>
+      ) : null}
+
+      {!tokenQuery.isLoading && isListMode ? (
+        <Card className="py-0">
+          <CardContent className="p-0">
+            <Table data-testid="collection-token-grid-table">
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Token</TableHead>
+                  <TableHead>Price</TableHead>
+                  <TableHead className="text-right">Action</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {sortedTokens.map((token) => {
+                  const tokenKey = displayTokenId(token);
+                  const cheapestListing = listingPrices.get(tokenKey);
+                  const isAdded = isRecentlyAdded(cheapestListing?.orderId);
+                  const isSweepPreview = sweepPreviewTokenIds?.has(tokenKey) ?? false;
+                  const price =
+                    cheapestListing?.price ??
+                    listingPriceMap.get(tokenKey) ??
+                    tokenPrice(token);
+                  const displayPrice = formatPriceForDisplay(price);
+
+                  return (
+                    <TableRow key={tokenId(token)} className={cn(isSweepPreview && "bg-muted/60")}>
+                      <TableCell>
+                        <div className="space-y-0.5">
+                          <Link
+                            href={`/collections/${address}/${tokenId(token)}`}
+                            className="text-sm font-medium hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                          >
+                            {tokenName(token)}
+                          </Link>
+                          <p className="text-xs text-muted-foreground">#{tokenKey}</p>
+                        </div>
+                      </TableCell>
+                      <TableCell>
+                        {displayPrice ? (
+                          <p className="text-xs text-primary font-medium flex items-center gap-1">
+                            {displayPrice}
+                            {cheapestListing?.currency ? (
+                              <TokenSymbol
+                                address={cheapestListing.currency}
+                                className="text-muted-foreground"
+                              />
+                            ) : null}
+                          </p>
+                        ) : (
+                          <p className="text-xs text-muted-foreground">Not listed</p>
+                        )}
+                      </TableCell>
+                      <TableCell className="text-right">
+                        <Button
+                          disabled={!cheapestListing || isSweepPreview}
+                          onClick={() => {
+                            if (!cheapestListing) {
+                              return;
+                            }
+
+                            addListingToCart(
+                              cartItemFromTokenListing(
+                                token,
+                                address,
+                                cheapestListing,
+                                projectId,
+                              ),
+                            );
+                          }}
+                          size="sm"
+                          type="button"
+                          variant={isAdded ? "default" : isSweepPreview ? "secondary" : "outline"}
+                          className="w-full sm:w-auto"
+                        >
+                          {isAdded ? "Added" : isSweepPreview ? "Pending sweep" : "Add to cart"}
+                        </Button>
+                      </TableCell>
+                    </TableRow>
+                  );
+                })}
+              </TableBody>
+            </Table>
+          </CardContent>
+        </Card>
       ) : null}
 
       {tokenQuery.isSuccess && visibleTokens.length === 0 ? (
