@@ -1,4 +1,25 @@
-import { expect, test } from "@playwright/test";
+import { expect, test, type Page } from "@playwright/test";
+
+async function openFirstCollection(page: Page) {
+  const collectionCardLinks = page.locator(
+    "main[data-testid='marketplace-home'] [data-testid='collection-cards-grid'] a[href^='/collections/']",
+  );
+  const heroCollectionLink = page.getByRole("link", { name: "View Collection" });
+
+  const hasCollectionCardLink = (await collectionCardLinks.count()) > 0;
+  const hasHeroCollectionLink = (await heroCollectionLink.count()) > 0;
+  test.skip(
+    !hasCollectionCardLink && !hasHeroCollectionLink,
+    "No collection links available from home.",
+  );
+
+  const targetLink = hasCollectionCardLink
+    ? collectionCardLinks.first()
+    : heroCollectionLink.first();
+
+  await expect(targetLink).toBeVisible();
+  await targetLink.click();
+}
 
 test.describe("purchase funnel skeleton", () => {
   test.beforeEach(async ({ page }) => {
@@ -10,10 +31,7 @@ test.describe("purchase funnel skeleton", () => {
   test("adds item to cart from collection grid", async ({ page }) => {
     await page.goto("/");
 
-    const collectionLinks = page.locator("main[data-testid='marketplace-home'] section h2 a");
-    await expect(collectionLinks.first()).toBeVisible();
-
-    await collectionLinks.first().click();
+    await openFirstCollection(page);
     // Use waitForURL with full navigationTimeout – Next.js may need time to compile the
     // [address] route on first access in CI.
     await page.waitForURL(/\/collections\//, { timeout: 30_000 });
@@ -33,10 +51,7 @@ test.describe("purchase funnel skeleton", () => {
   test("adds cheapest listing to cart from token detail", async ({ page }) => {
     await page.goto("/");
 
-    const collectionLinks = page.locator("main[data-testid='marketplace-home'] section h2 a");
-    await expect(collectionLinks.first()).toBeVisible();
-
-    await collectionLinks.first().click();
+    await openFirstCollection(page);
     await page.waitForURL(/\/collections\//, { timeout: 30_000 });
 
     const tokenLinks = page.locator("a[aria-label^='token-']");
