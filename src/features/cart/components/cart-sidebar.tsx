@@ -562,6 +562,11 @@ export function CartSidebar() {
     };
   }, [client]);
 
+  const itemsKey = useMemo(
+    () => items.map((i) => `${i.orderId}:${i.price}`).join(","),
+    [items],
+  );
+
   useEffect(() => {
     let disposed = false;
 
@@ -609,7 +614,8 @@ export function CartSidebar() {
     return () => {
       disposed = true;
     };
-  }, [client, items]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [client, itemsKey]);
 
   const handleCheckout = async () => {
     logCheckoutDiagnostics(debugEnabled, "checkout.start", {
@@ -1215,43 +1221,34 @@ export function CartSidebar() {
               className="w-full space-y-1 rounded-sm border border-border/70 p-3 text-xs"
               data-testid="cart-summary"
             >
-              {(() => {
-                const CurrencyBadge = cartCurrency
-                  ? () => <TokenSymbol address={cartCurrency} className="text-muted-foreground" />
-                  : null;
-                return (
-                  <>
-                    <div className="flex items-center justify-between" data-testid="cart-summary-subtotal">
-                      <span className="text-muted-foreground">Subtotal</span>
-                      <span className="flex items-center gap-1">
-                        {formatPriceForDisplay(subtotal.toString()) ?? subtotal.toString()}
-                        {CurrencyBadge ? <CurrencyBadge /> : null}
-                      </span>
-                    </div>
-                    <div className="flex items-center justify-between" data-testid="cart-summary-marketplace-fee">
-                      <span className="text-muted-foreground">Marketplace Fee</span>
-                      <span className="flex items-center gap-1">
-                        {formatPriceForDisplay(marketplaceFee.toString()) ?? marketplaceFee.toString()}
-                        {CurrencyBadge ? <CurrencyBadge /> : null}
-                      </span>
-                    </div>
-                    <div className="flex items-center justify-between" data-testid="cart-summary-royalty">
-                      <span className="text-muted-foreground">Royalty Estimate</span>
-                      <span className="flex items-center gap-1">
-                        {formatPriceForDisplay(royaltyEstimate.toString()) ?? royaltyEstimate.toString()}
-                        {CurrencyBadge ? <CurrencyBadge /> : null}
-                      </span>
-                    </div>
-                    <div className="flex items-center justify-between font-medium" data-testid="cart-summary-total">
-                      <span>Total</span>
-                      <span className="flex items-center gap-1">
-                        {formatPriceForDisplay(total.toString()) ?? total.toString()}
-                        {CurrencyBadge ? <CurrencyBadge /> : null}
-                      </span>
-                    </div>
-                  </>
-                );
-              })()}
+              <div className="flex items-center justify-between" data-testid="cart-summary-subtotal">
+                <span className="text-muted-foreground">Subtotal</span>
+                <span className="flex items-center gap-1">
+                  {formatPriceForDisplay(subtotal.toString()) ?? subtotal.toString()}
+                  {cartCurrency ? <TokenSymbol address={cartCurrency} className="text-muted-foreground" /> : null}
+                </span>
+              </div>
+              <div className="flex items-center justify-between" data-testid="cart-summary-marketplace-fee">
+                <span className="text-muted-foreground">Marketplace Fee</span>
+                <span className="flex items-center gap-1">
+                  {formatPriceForDisplay(marketplaceFee.toString()) ?? marketplaceFee.toString()}
+                  {cartCurrency ? <TokenSymbol address={cartCurrency} className="text-muted-foreground" /> : null}
+                </span>
+              </div>
+              <div className="flex items-center justify-between" data-testid="cart-summary-royalty">
+                <span className="text-muted-foreground">Royalty Estimate</span>
+                <span className="flex items-center gap-1">
+                  {formatPriceForDisplay(royaltyEstimate.toString()) ?? royaltyEstimate.toString()}
+                  {cartCurrency ? <TokenSymbol address={cartCurrency} className="text-muted-foreground" /> : null}
+                </span>
+              </div>
+              <div className="flex items-center justify-between font-medium" data-testid="cart-summary-total">
+                <span>Total</span>
+                <span className="flex items-center gap-1">
+                  {formatPriceForDisplay(total.toString()) ?? total.toString()}
+                  {cartCurrency ? <TokenSymbol address={cartCurrency} className="text-muted-foreground" /> : null}
+                </span>
+              </div>
             </div>
             {hasInsufficientBalance ? (
               <p className="text-xs text-destructive text-center" data-testid="cart-insufficient-balance">

@@ -38,7 +38,7 @@ function SweepThumbnails({ items }: { items: CartItem[] }) {
 
   return (
     <div className="flex items-end">
-      <div className="flex" style={{ marginLeft: 0 }}>
+      <div className="flex">
         {visible.map((item, index) => (
           <div
             key={item.orderId}

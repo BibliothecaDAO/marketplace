@@ -152,6 +152,46 @@ describe("marketplace seo data", () => {
     expect(mockGetCollection).not.toHaveBeenCalled();
   });
 
+  it("fetches_collection_and_token_in_parallel", async () => {
+    const callLog: string[] = [];
+    const delay = 50;
+
+    mockGetCollection.mockImplementation(async () => {
+      callLog.push("collection:start");
+      await new Promise((r) => setTimeout(r, delay));
+      callLog.push("collection:end");
+      return {
+        address: "0xabc",
+        metadata: { name: "Genesis", image: "https://cdn.example.com/genesis.png" },
+      };
+    });
+
+    mockGetToken.mockImplementation(async () => {
+      callLog.push("token:start");
+      await new Promise((r) => setTimeout(r, delay));
+      callLog.push("token:end");
+      return {
+        token: {
+          token_id: "1",
+          metadata: { name: "Token #1", image: "https://cdn.example.com/1.png" },
+          image: null,
+        },
+      };
+    });
+
+    const { getTokenSeoData } = await import("@/lib/marketplace/seo-data");
+    const start = Date.now();
+    await getTokenSeoData("0xabc", "1");
+    const elapsed = Date.now() - start;
+
+    // If parallel: both start before either ends
+    expect(callLog[0]).toBe("collection:start");
+    expect(callLog[1]).toBe("token:start");
+
+    // Elapsed should be ~50ms (parallel), not ~100ms (sequential)
+    expect(elapsed).toBeLessThan(delay * 2 - 10);
+  });
+
   it("returns_token_fallback_when_client_init_fails", async () => {
     mockCreateMarketplaceClient.mockImplementation(() => {
       throw new Error("init failed");

@@ -160,16 +160,26 @@ export function getMarketplaceRuntimeConfigFromEnv(
   };
 }
 
+let _cachedConfig: MarketplaceRuntimeConfig | null = null;
+
 export function getMarketplaceRuntimeConfig(): MarketplaceRuntimeConfig {
-  return getMarketplaceRuntimeConfigFromEnv({
-    NEXT_PUBLIC_MARKETPLACE_CHAIN_ID: process.env.NEXT_PUBLIC_MARKETPLACE_CHAIN_ID,
-    NEXT_PUBLIC_MARKETPLACE_COLLECTIONS:
-      process.env.NEXT_PUBLIC_MARKETPLACE_COLLECTIONS,
-    NEXT_PUBLIC_MARKETPLACE_DEFAULT_PROJECT:
-      process.env.NEXT_PUBLIC_MARKETPLACE_DEFAULT_PROJECT,
-    NEXT_PUBLIC_MARKETPLACE_RUNTIME:
-      process.env.NEXT_PUBLIC_MARKETPLACE_RUNTIME,
-    NEXT_PUBLIC_MARKETPLACE_ENABLE_DEFERRED_METADATA:
-      process.env.NEXT_PUBLIC_MARKETPLACE_ENABLE_DEFERRED_METADATA,
-  });
+  if (!_cachedConfig) {
+    _cachedConfig = getMarketplaceRuntimeConfigFromEnv({
+      NEXT_PUBLIC_MARKETPLACE_CHAIN_ID: process.env.NEXT_PUBLIC_MARKETPLACE_CHAIN_ID,
+      NEXT_PUBLIC_MARKETPLACE_COLLECTIONS:
+        process.env.NEXT_PUBLIC_MARKETPLACE_COLLECTIONS,
+      NEXT_PUBLIC_MARKETPLACE_DEFAULT_PROJECT:
+        process.env.NEXT_PUBLIC_MARKETPLACE_DEFAULT_PROJECT,
+      NEXT_PUBLIC_MARKETPLACE_RUNTIME:
+        process.env.NEXT_PUBLIC_MARKETPLACE_RUNTIME,
+      NEXT_PUBLIC_MARKETPLACE_ENABLE_DEFERRED_METADATA:
+        process.env.NEXT_PUBLIC_MARKETPLACE_ENABLE_DEFERRED_METADATA,
+    });
+  }
+  return _cachedConfig;
+}
+
+/** @internal — exposed for test teardown only */
+export function _resetConfigCache() {
+  _cachedConfig = null;
 }

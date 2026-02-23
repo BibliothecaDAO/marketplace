@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useMemo, useReducer, useState } from "react";
+import { useEffect, useMemo, useReducer, useRef, useState } from "react";
 import type { NormalizedToken } from "@cartridge/arcade/marketplace";
 import {
   useCollectionListingsQuery,
@@ -219,6 +219,11 @@ export function CollectionTokenGrid({
     verifyOwnership: false,
   });
 
+  const onTokensChangeRef = useRef(onTokensChange);
+  useEffect(() => {
+    onTokensChangeRef.current = onTokensChange;
+  });
+
   useEffect(() => {
     dispatch({ type: "RESET" });
   }, [address, projectId, limit, tokenIdsKey, activeFiltersKey]);
@@ -230,8 +235,8 @@ export function CollectionTokenGrid({
   }, [tokenQuery.data, tokenQuery.isSuccess]);
 
   useEffect(() => {
-    onTokensChange?.(pagination.tokens);
-  }, [pagination.tokens, onTokensChange]);
+    onTokensChangeRef.current?.(pagination.tokens);
+  }, [pagination.tokens]);
 
   const listingPrices = cheapestListingByTokenId(listingQuery.data);
   const listingPriceMap = listingPriceByTokenId(listingQuery.data);

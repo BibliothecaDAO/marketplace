@@ -6,7 +6,15 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { useAccount, useConnect, useDisconnect } from "@starknet-react/core";
 import { Github, Menu, MessageSquare, Twitter } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { CartSidebar } from "@/features/cart/components/cart-sidebar";
+import dynamic from "next/dynamic";
+
+const CartSidebar = dynamic(
+  () =>
+    import("@/features/cart/components/cart-sidebar").then((m) => ({
+      default: m.CartSidebar,
+    })),
+  { ssr: false },
+);
 import {
   Dialog,
   DialogContent,

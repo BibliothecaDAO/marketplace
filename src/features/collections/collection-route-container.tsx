@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo } from "react";
+import { useCallback, useMemo } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import type { SeedCollection } from "@/lib/marketplace/config";
 import { CollectionRouteView } from "@/features/collections/collection-route-view";
@@ -37,23 +37,29 @@ export function CollectionRouteContainer({
   const activeFilters = discoveryState.activeFilters;
   const sortMode = discoveryState.sortMode;
 
-  function handleActiveFiltersChange(nextFilters: ActiveFilters) {
-    const nextParams = collectionDiscoveryStateToSearchParams(
-      new URLSearchParams(searchParams.toString()),
-      { activeFilters: nextFilters, sortMode },
-    );
-    const query = nextParams.toString();
-    router.push(query ? `${pathname}?${query}` : pathname);
-  }
+  const handleActiveFiltersChange = useCallback(
+    (nextFilters: ActiveFilters) => {
+      const nextParams = collectionDiscoveryStateToSearchParams(
+        new URLSearchParams(searchParams.toString()),
+        { activeFilters: nextFilters, sortMode },
+      );
+      const query = nextParams.toString();
+      router.push(query ? `${pathname}?${query}` : pathname);
+    },
+    [searchParams, sortMode, pathname, router],
+  );
 
-  function handleSortModeChange(nextSortMode: CollectionSortMode) {
-    const nextParams = collectionDiscoveryStateToSearchParams(
-      new URLSearchParams(searchParams.toString()),
-      { activeFilters, sortMode: nextSortMode },
-    );
-    const query = nextParams.toString();
-    router.push(query ? `${pathname}?${query}` : pathname);
-  }
+  const handleSortModeChange = useCallback(
+    (nextSortMode: CollectionSortMode) => {
+      const nextParams = collectionDiscoveryStateToSearchParams(
+        new URLSearchParams(searchParams.toString()),
+        { activeFilters, sortMode: nextSortMode },
+      );
+      const query = nextParams.toString();
+      router.push(query ? `${pathname}?${query}` : pathname);
+    },
+    [searchParams, activeFilters, pathname, router],
+  );
 
   return (
     <CollectionRouteView

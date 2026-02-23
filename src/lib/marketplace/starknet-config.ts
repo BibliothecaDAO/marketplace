@@ -7,7 +7,13 @@ type MarketplaceChainLabel = MarketplaceRuntimeConfig["chainLabel"];
 
 const CARTRIDGE_RPC_BASE_URL = "https://api.cartridge.gg/x/starknet";
 
-const controllerConnector = new ControllerConnector();
+let _controllerConnector: ControllerConnector | null = null;
+function getControllerConnector() {
+  if (!_controllerConnector) {
+    _controllerConnector = new ControllerConnector();
+  }
+  return _controllerConnector;
+}
 
 export function buildStarknetConfig(chainLabel: MarketplaceChainLabel) {
   return {
@@ -18,7 +24,7 @@ export function buildStarknetConfig(chainLabel: MarketplaceChainLabel) {
       }),
     }),
     explorer: cartridge,
-    connectors: [controllerConnector, ready(), braavos()],
+    connectors: [getControllerConnector(), ready(), braavos()],
     defaultChainId:
       chainLabel === "SN_MAIN"
         ? mainnet.id

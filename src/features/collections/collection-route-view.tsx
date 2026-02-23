@@ -26,7 +26,15 @@ import {
   getMarketplaceRuntimeConfig,
 } from "@/lib/marketplace/config";
 import { type ActiveFilters, type TraitSelection } from "@/lib/marketplace/traits";
-import { CollectionMarketPanel } from "@/features/collections/collection-market-panel";
+import dynamic from "next/dynamic";
+
+const CollectionMarketPanel = dynamic(
+  () =>
+    import("@/features/collections/collection-market-panel").then((m) => ({
+      default: m.CollectionMarketPanel,
+    })),
+  { ssr: false },
+);
 import { CollectionTokenGrid } from "@/features/collections/collection-token-grid";
 import { TraitFilterSidebar } from "@/features/collections/trait-filter-sidebar";
 import {
@@ -119,6 +127,10 @@ export function CollectionRouteView({
   onNavigate,
 }: CollectionRouteViewProps) {
   const cartItems = useCartStore((state) => state.items);
+  const cartOrderIds = useMemo(
+    () => new Set(cartItems.map((item) => item.orderId)),
+    [cartItems],
+  );
   const addCandidates = useCartStore((state) => state.addCandidates);
   const setCartOpen = useCartStore((state) => state.setOpen);
   const runtimeCollections = useMemo(
@@ -186,7 +198,6 @@ export function CollectionRouteView({
   const sweepCandidates = useMemo(() => {
     if (!visibleTokens.length) return [];
 
-    const cartOrderIds = new Set(cartItems.map((item) => item.orderId));
     const tokenByDisplayId = new Map(
       visibleTokens.map((token) => [displayTokenId(token), token] as const),
     );
@@ -202,16 +213,15 @@ export function CollectionRouteView({
       .sort((left, right) => compareBigIntStrings(left.price, right.price));
 
     return candidates.slice(0, CART_MAX_ITEMS);
-  }, [address, cartItems, cheapestListings, projectId, visibleTokens]);
+  }, [address, cartOrderIds, cheapestListings, projectId, visibleTokens]);
 
   // Build the preview set directly from cheapestListings (same key format
   // the grid uses for lookup) so highlighting doesn't depend on listedTokensQuery.
   const cheapestByPrice = useMemo(() => {
-    const cartOrderIds = new Set(cartItems.map((item) => item.orderId));
     return Array.from(cheapestListings.entries())
       .filter(([, listing]) => !cartOrderIds.has(listing.orderId))
       .sort(([, a], [, b]) => compareBigIntStrings(a.price, b.price));
-  }, [cartItems, cheapestListings]);
+  }, [cartOrderIds, cheapestListings]);
 
   const sweepMaxCount = Math.min(
     cheapestByPrice.length,
@@ -235,24 +245,27 @@ export function CollectionRouteView({
     });
   }, [sweepScopeKey]);
 
-  function handleChange(nextAddress: string) {
-    if (onNavigate) {
-      onNavigate(`/collections/${nextAddress}`);
-    }
-  }
+  const handleChange = useCallback(
+    (nextAddress: string) => {
+      onNavigate?.(`/collections/${nextAddress}`);
+    },
+    [onNavigate],
+  );
 
-  function handleSweepCountChange(nextCount: number) {
-    setSweepCount(Math.min(Math.max(nextCount, 0), sweepMaxCount));
-  }
+  const handleSweepCountChange = useCallback(
+    (nextCount: number) => {
+      setSweepCount(Math.min(Math.max(nextCount, 0), sweepMaxCount));
+    },
+    [sweepMaxCount],
+  );
 
-  function handleSweep() {
+  const handleSweep = useCallback(() => {
     const selected = sweepCandidates.slice(0, clampedSweepCount);
     if (selected.length === 0) return;
-
     addCandidates(selected);
     setCartOpen(true);
     setSweepCount(0);
-  }
+  }, [sweepCandidates, clampedSweepCount, addCandidates, setCartOpen]);
 
   return (
     <section className="w-full space-y-6 pb-20">
