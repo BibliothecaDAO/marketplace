@@ -425,4 +425,55 @@ describe("collection route view", () => {
     const contentContainer = screen.getByTestId("collection-content-container");
     expect(within(contentContainer).getByTestId("sweep-bar")).toBeVisible();
   });
+
+  describe("collection name priority", () => {
+    it("displays_seed_collection_name_over_sdk_metadata_name", () => {
+      mockUseCollectionQuery.mockReturnValue(
+        successQuery({
+          address: "0xabc",
+          metadata: { name: "Kilvkipkilv" },
+          totalSupply: BigInt(5),
+        }),
+      );
+
+      render(<CollectionRouteView address="0xabc" collections={collections} />);
+
+      expect(screen.getByRole("heading", { name: "Genesis" })).toBeVisible();
+      expect(screen.queryByText("Kilvkipkilv")).toBeNull();
+    });
+
+    it("falls_back_to_sdk_metadata_name_when_seed_name_is_absent", () => {
+      const noNameCollections: SeedCollection[] = [
+        { address: "0xabc", name: "", projectId: "project-a" },
+      ];
+      mockUseCollectionQuery.mockReturnValue(
+        successQuery({
+          address: "0xabc",
+          metadata: { name: "SDK Collection" },
+          totalSupply: BigInt(5),
+        }),
+      );
+
+      render(<CollectionRouteView address="0xabc" collections={noNameCollections} />);
+
+      expect(screen.getByRole("heading", { name: "SDK Collection" })).toBeVisible();
+    });
+
+    it("falls_back_to_address_when_both_seed_and_metadata_names_are_empty", () => {
+      const noNameCollections: SeedCollection[] = [
+        { address: "0xabc", name: "", projectId: "project-a" },
+      ];
+      mockUseCollectionQuery.mockReturnValue(
+        successQuery({
+          address: "0xabc",
+          metadata: { name: "" },
+          totalSupply: BigInt(5),
+        }),
+      );
+
+      render(<CollectionRouteView address="0xabc" collections={noNameCollections} />);
+
+      expect(screen.getByRole("heading", { name: "0xabc" })).toBeVisible();
+    });
+  });
 });

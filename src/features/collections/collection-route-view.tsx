@@ -189,9 +189,11 @@ export function CollectionRouteView({
       : String(listingCount);
   const floor = floorFromListings(cheapestListings);
   const totalSupply = collection.data?.totalSupply;
-  const displayName = collection.isSuccess && collection.data
-    ? collectionName(collection.data.metadata, address)
-    : null;
+  const seedName = selectedCollection?.name?.trim() || null;
+  const displayName = seedName
+    ?? (collection.isSuccess && collection.data
+      ? collectionName(collection.data.metadata, address)
+      : null);
 
   const visibleTokens = visibleTokensByScope[sweepScopeKey] ?? EMPTY_VISIBLE_TOKENS;
 
