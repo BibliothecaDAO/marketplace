@@ -13,82 +13,51 @@ import {
   useMarketplaceCollection,
   useMarketplaceCollectionListings,
   useMarketplaceCollectionOrders,
-  useMarketplaceCollectionTokens,
   useMarketplaceToken,
   useMarketplaceTokenBalances,
 } from "@cartridge/arcade/marketplace/react";
-import type { TraitMetadataRow } from "@/lib/marketplace/traits";
-
-function alternateTokenId(rawTokenId: string) {
-  const tokenId = rawTokenId.trim();
-  if (!tokenId) {
-    return null;
-  }
-
-  if (/^0x[0-9a-fA-F]+$/.test(tokenId)) {
-    try {
-      return BigInt(tokenId).toString();
-    } catch {
-      return null;
-    }
-  }
-
-  if (/^\d+$/.test(tokenId)) {
-    try {
-      return `0x${BigInt(tokenId).toString(16)}`;
-    } catch {
-      return null;
-    }
-  }
-
-  return null;
-}
+import {
+  alternateTokenId,
+  expandTokenIdVariants,
+} from "@/lib/marketplace/token-id";
+import type { TraitSelection } from "@/lib/marketplace/traits";
+import { aggregateTraitSummaryPages, aggregateTraitValuePages } from "@/lib/marketplace/traits";
 
 function hasUsableToken(data: TokenDetails | null | undefined): data is TokenDetails {
   return data !== null && data !== undefined && data.token !== null && data.token !== undefined;
 }
 
-type TraitMetadataApiPayload = {
-  traitMetadata?: TraitMetadataRow[];
-};
-
-function traitMetadataRoutePath(options: { address: string; projectId?: string }) {
-  const params = new URLSearchParams();
-  if (options.projectId) {
-    params.set("projectId", options.projectId);
+function normalizeCollectionAddress(address: string) {
+  const trimmed = address.trim().toLowerCase();
+  if (!trimmed) {
+    return "";
   }
 
-  const query = params.toString();
-  const encodedAddress = encodeURIComponent(options.address);
-  return query
-    ? `/api/collections/${encodedAddress}/trait-metadata?${query}`
-    : `/api/collections/${encodedAddress}/trait-metadata`;
+  if (!/^0x[0-9a-f]+$/.test(trimmed)) {
+    return trimmed;
+  }
+
+  try {
+    return `0x${BigInt(trimmed).toString(16)}`;
+  } catch {
+    return trimmed;
+  }
 }
 
-async function fetchTraitMetadataFromRoute(options: {
-  address: string;
-  projectId?: string;
-}): Promise<TraitMetadataRow[]> {
-  const response = await fetch(traitMetadataRoutePath(options), {
-    method: "GET",
-    headers: { accept: "application/json" },
-  });
-
-  if (!response.ok) {
-    let detail = "";
-    try {
-      detail = (await response.text()).trim();
-    } catch {
-      // no-op: keep fallback message below
-    }
-
-    throw new Error(
-      `failed to load trait metadata${detail ? `: ${detail}` : ""}`,
-    );
+function collectionScopedTokenIdCandidates(collection: string, tokenId: string) {
+  const normalizedCollection = normalizeCollectionAddress(collection);
+  if (!normalizedCollection) {
+    return [];
   }
 
-  const payload = (await response.json()) as TraitMetadataApiPayload;
-  return Array.isArray(payload.traitMetadata) ? payload.traitMetadata : [];
+  const candidates = new Set<string>();
+  const alternate = alternateTokenId(tokenId);
+  candidates.add(`${normalizedCollection}:${tokenId}`);
+  if (alternate && alternate !== tokenId) {
+    candidates.add(`${normalizedCollection}:${alternate}`);
+  }
+
+  return Array.from(candidates);
 }
 
 export function useCollectionQuery(options: CollectionSummaryOptions) {
@@ -101,8 +70,24 @@ export function useCollectionTokensQuery(
   options: FetchCollectionTokensOptions,
   queryOptions?: { enabled?: boolean },
 ) {
-  return useMarketplaceCollectionTokens(options, {
-    enabled: (queryOptions?.enabled ?? true) && !!options.address,
+  const enabled = (queryOptions?.enabled ?? true) && !!options.address;
+  return useQuery({
+    queryKey: [
+      "collection-tokens",
+      options.address,
+      options.project,
+      options.cursor,
+      options.tokenIds,
+      options.attributeFilters,
+      options.limit,
+    ] as const,
+    queryFn: async () => {
+      const { fetchCollectionTokens } = await import(
+        "@cartridge/arcade/marketplace"
+      );
+      return fetchCollectionTokens(options);
+    },
+    enabled,
   });
 }
 
@@ -123,6 +108,17 @@ export function useTokenDetailQuery(options: TokenDetailsOptions) {
   const enabled = !!options.collection && !!tokenId;
   const altTokenId = alternateTokenId(tokenId);
   const hasAlternateTokenId = !!altTokenId && altTokenId !== tokenId;
+  const scopedTokenIdCandidates = collectionScopedTokenIdCandidates(
+    options.collection,
+    tokenId,
+  );
+  const scopedPrimaryTokenId = scopedTokenIdCandidates[0] ?? tokenId;
+  const scopedSecondaryTokenId = scopedTokenIdCandidates[1] ?? scopedPrimaryTokenId;
+  const hasScopedPrimaryTokenId = scopedPrimaryTokenId !== tokenId;
+  const hasScopedSecondaryTokenId =
+    scopedSecondaryTokenId !== scopedPrimaryTokenId &&
+    scopedSecondaryTokenId !== tokenId &&
+    scopedSecondaryTokenId !== altTokenId;
 
   const primaryQuery = useMarketplaceToken(options, {
     enabled,
@@ -144,8 +140,63 @@ export function useTokenDetailQuery(options: TokenDetailsOptions) {
     },
   );
 
+  const shouldEnableScopedPrimaryQuery =
+    enabled &&
+    hasScopedPrimaryTokenId &&
+    primaryQuery.status !== "pending" &&
+    (primaryQuery.status === "error" || !hasUsableToken(primaryQuery.data)) &&
+    (!hasAlternateTokenId ||
+      (alternateQuery.status !== "pending" &&
+        (alternateQuery.status === "error" || !hasUsableToken(alternateQuery.data))));
+
+  const scopedPrimaryQuery = useMarketplaceToken(
+    {
+      ...options,
+      tokenId: scopedPrimaryTokenId,
+    },
+    {
+      enabled: shouldEnableScopedPrimaryQuery,
+    },
+  );
+
+  const shouldEnableScopedSecondaryQuery =
+    shouldEnableScopedPrimaryQuery &&
+    hasScopedSecondaryTokenId &&
+    scopedPrimaryQuery.status !== "pending" &&
+    (scopedPrimaryQuery.status === "error" || !hasUsableToken(scopedPrimaryQuery.data));
+
+  const scopedSecondaryQuery = useMarketplaceToken(
+    {
+      ...options,
+      tokenId: scopedSecondaryTokenId,
+    },
+    {
+      enabled: shouldEnableScopedSecondaryQuery,
+    },
+  );
+
   if (hasUsableToken(primaryQuery.data)) {
     return primaryQuery;
+  }
+
+  if (shouldEnableAlternateQuery) {
+    if (hasUsableToken(alternateQuery.data)) {
+      return alternateQuery;
+    }
+  }
+
+  if (shouldEnableScopedPrimaryQuery) {
+    if (hasUsableToken(scopedPrimaryQuery.data)) {
+      return scopedPrimaryQuery;
+    }
+  }
+
+  if (shouldEnableScopedSecondaryQuery) {
+    return scopedSecondaryQuery;
+  }
+
+  if (shouldEnableScopedPrimaryQuery) {
+    return scopedPrimaryQuery;
   }
 
   if (shouldEnableAlternateQuery) {
@@ -160,8 +211,7 @@ export function useTokenOwnershipQuery(options: {
   tokenId: string;
   accountAddress?: string;
 }) {
-  const alt = alternateTokenId(options.tokenId);
-  const tokenIds = alt ? [options.tokenId, alt] : [options.tokenId];
+  const tokenIds = expandTokenIdVariants([options.tokenId]);
   return useMarketplaceTokenBalances(
     {
       contractAddresses: [options.collection],
@@ -175,14 +225,54 @@ export function useTokenOwnershipQuery(options: {
   );
 }
 
-export function useCollectionTraitMetadataQuery(options: {
+export function useTraitNamesSummaryQuery(options: {
   address: string;
   projectId?: string;
 }) {
   return useQuery({
-    queryKey: ["collection-trait-metadata", options.address, options.projectId] as const,
-    queryFn: async () => fetchTraitMetadataFromRoute(options),
+    queryKey: ["trait-names-summary", options.address, options.projectId] as const,
+    queryFn: async () => {
+      const { fetchTraitNamesSummary } = await import(
+        "@cartridge/arcade/marketplace"
+      );
+      const result = await fetchTraitNamesSummary({
+        address: options.address,
+        defaultProjectId: options.projectId,
+      });
+      return aggregateTraitSummaryPages(result.pages);
+    },
     enabled: !!options.address,
+  });
+}
+
+export function useTraitValuesQuery(options: {
+  address: string;
+  traitName: string | null;
+  otherTraitFilters?: TraitSelection[];
+  projectId?: string;
+}) {
+  return useQuery({
+    queryKey: [
+      "trait-values",
+      options.address,
+      options.traitName,
+      options.otherTraitFilters,
+      options.projectId,
+    ] as const,
+    queryFn: async () => {
+      if (!options.traitName) return [];
+      const { fetchTraitValues } = await import(
+        "@cartridge/arcade/marketplace"
+      );
+      const result = await fetchTraitValues({
+        address: options.address,
+        traitName: options.traitName,
+        otherTraitFilters: options.otherTraitFilters,
+        defaultProjectId: options.projectId,
+      });
+      return aggregateTraitValuePages(result.pages);
+    },
+    enabled: !!options.address && !!options.traitName,
   });
 }
 
@@ -190,8 +280,7 @@ export function useTokenHolderQuery(options: {
   collection: string;
   tokenId: string;
 }) {
-  const alt = alternateTokenId(options.tokenId);
-  const tokenIds = alt ? [options.tokenId, alt] : [options.tokenId];
+  const tokenIds = expandTokenIdVariants([options.tokenId]);
   return useMarketplaceTokenBalances(
     {
       contractAddresses: [options.collection],

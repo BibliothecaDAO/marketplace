@@ -19,6 +19,7 @@ import {
   tokenPrice,
 } from "@/lib/marketplace/token-display";
 import { COLLECTION_LISTING_SAMPLE_LIMIT } from "@/lib/marketplace/query-limits";
+import { expandTokenIdVariants } from "@/lib/marketplace/token-id";
 import { matchesHomeSearch, normalizeHomeSearchQuery } from "@/lib/marketplace/home-search";
 import { MarketplaceTokenCard } from "@/components/marketplace/token-card";
 import { Button } from "@/components/ui/button";
@@ -87,25 +88,7 @@ function listingTokenIds(listings: unknown[] | undefined, limit: number) {
   const ids = fallbackTokensFromListings(listings, limit).map((token) =>
     String(token.token_id ?? "").trim(),
   );
-  const expanded = new Set<string>();
-
-  for (const id of ids) {
-    if (!id) {
-      continue;
-    }
-
-    expanded.add(id);
-
-    if (/^\d+$/.test(id)) {
-      try {
-        expanded.add(`0x${BigInt(id).toString(16)}`);
-      } catch {
-        // Skip malformed token IDs.
-      }
-    }
-  }
-
-  return Array.from(expanded);
+  return expandTokenIdVariants(ids);
 }
 
 function floorPriceFromListings(
@@ -153,7 +136,7 @@ export function CollectionRow({
     collection: address,
     projectId,
     limit: COLLECTION_LISTING_SAMPLE_LIMIT,
-    verifyOwnership: true,
+    verifyOwnership: false,
   });
   const listedTokenIds = useMemo(
     () => listingTokenIds(listingQuery.data, 12),

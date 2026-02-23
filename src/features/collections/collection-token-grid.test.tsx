@@ -279,7 +279,7 @@ describe("collection token grid", () => {
 
     expect(mockUseCollectionTokensQuery).toHaveBeenCalledWith(
       expect.objectContaining({
-        attributeFilters: { Background: new Set(["Blue"]) },
+        attributeFilters: { Background: ["Blue"] },
       }),
     );
   });
@@ -320,7 +320,7 @@ describe("collection token grid", () => {
     expect(await screen.findByText("Token #1")).toBeVisible();
     expect(mockUseCollectionTokensQuery).toHaveBeenCalledWith(
       expect.objectContaining({
-        attributeFilters: { Background: new Set(["Blue"]) },
+        attributeFilters: { Background: ["Blue"] },
       }),
     );
   });
@@ -386,7 +386,7 @@ describe("collection token grid", () => {
         collection: "0xabc",
         projectId: "project-a",
         limit: 100,
-        verifyOwnership: true,
+        verifyOwnership: false,
       }),
     );
   });
@@ -434,6 +434,49 @@ describe("collection token grid", () => {
     );
     expect(mockCartSetOpen).toHaveBeenCalledWith(true);
     expect(screen.getByRole("button", { name: /added/i })).toBeVisible();
+  });
+
+  it("token_grid_matches_collection_scoped_listing_token_ids", async () => {
+    mockUseCollectionTokensQuery.mockReturnValue({
+      data: {
+        page: {
+          tokens: [
+            token("1", {
+              image: "https://cdn.example/1.png",
+              metadata: { name: "Token #1" },
+            }),
+          ],
+          nextCursor: null,
+        },
+        error: null,
+      },
+      isLoading: false,
+      isSuccess: true,
+      isError: false,
+      error: null,
+      isFetching: false,
+      refetch: vi.fn(),
+    });
+    mockUseCollectionListingsQuery.mockReturnValue(
+      successListingsResult([
+        { id: 21, tokenId: "0xabc:0x1", price: 120, currency: "0xfee", quantity: 1 },
+      ]),
+    );
+
+    const user = userEvent.setup();
+    render(<CollectionTokenGrid address="0xabc" projectId="project-a" />);
+
+    expect(await screen.findByText("120")).toBeVisible();
+    await user.click(screen.getByRole("button", { name: /add to cart/i }));
+
+    expect(mockCartAddItem).toHaveBeenCalledWith(
+      expect.objectContaining({
+        orderId: "21",
+        collection: "0xabc",
+        tokenId: "1",
+        price: "120",
+      }),
+    );
   });
 
   it("token_grid_add_to_cart_ignores_expired_listings", async () => {
@@ -667,7 +710,7 @@ describe("collection token grid", () => {
     const filtersB: ActiveFilters = { Background: new Set(["Red"]) };
 
     mockUseCollectionTokensQuery.mockImplementation((options) => {
-      const hasBlue = options?.attributeFilters?.Background?.has("Blue");
+      const hasBlue = options?.attributeFilters?.Background?.includes("Blue");
       const tokens = hasBlue ? [token("10")] : [token("20")];
       return {
         data: { page: { tokens, nextCursor: null }, error: null },
@@ -754,6 +797,65 @@ describe("collection token grid", () => {
     expect(
       screen.getAllByRole("article").map((card) => card.getAttribute("aria-label")),
     ).toEqual(["token-2", "token-1", "token-3"]);
+  });
+
+  it("price_sort_includes_listed_tokens_resolved_by_padded_token_ids", async () => {
+    const padded1120 = `0x${"460".padStart(64, "0")}`;
+    mockUseCollectionTokensQuery.mockImplementation((options) => {
+      if (Array.isArray(options?.tokenIds)) {
+        const includesPadded = options.tokenIds.includes(padded1120);
+        return {
+          data: {
+            page: {
+              tokens: includesPadded
+                ? [token("0x460", { metadata: { name: "Token #1120" } })]
+                : [],
+              nextCursor: null,
+            },
+            error: null,
+          },
+          isLoading: false,
+          isSuccess: true,
+          isError: false,
+          error: null,
+          isFetching: false,
+          refetch: vi.fn(),
+        };
+      }
+
+      return {
+        data: {
+          page: {
+            tokens: [token("1"), token("2"), token("3")],
+            nextCursor: null,
+          },
+          error: null,
+        },
+        isLoading: false,
+        isSuccess: true,
+        isError: false,
+        error: null,
+        isFetching: false,
+        refetch: vi.fn(),
+      };
+    });
+    mockUseCollectionListingsQuery.mockReturnValue(
+      successListingsResult([
+        { id: 99, tokenId: 1120, price: 44, currency: "0xfee", quantity: 1 },
+      ]),
+    );
+
+    render(
+      <CollectionTokenGrid
+        address="0xabc"
+        projectId="project-a"
+        sortMode="price-asc"
+      />,
+    );
+
+    expect(
+      await screen.findByRole("article", { name: "token-1120" }),
+    ).toBeVisible();
   });
 
   it("applies_price_descending_sort_when_requested", async () => {

@@ -410,6 +410,7 @@ describe("cart sidebar", () => {
       expect.objectContaining({
         collection: "0xabc",
         tokenId: "1",
+        limit: 100,
         verifyOwnership: true,
       }),
     );
@@ -845,6 +846,7 @@ describe("cart sidebar", () => {
       expect.objectContaining({
         collection: "0xabc",
         tokenId: "1",
+        limit: 100,
         verifyOwnership: true,
       }),
     );

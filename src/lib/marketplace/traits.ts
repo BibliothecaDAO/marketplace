@@ -40,6 +40,21 @@ type TraitValueFetcher = (
   options: FetchTraitValuesOptions,
 ) => Promise<FetchTraitValuesResult>;
 
+export type FetchTraitNamesSummaryOptions = {
+  address: string;
+  projects?: string[];
+  defaultProjectId?: string;
+};
+
+type FetchTraitNamesSummaryResult = {
+  pages: TraitNameSummaryPage[];
+  errors: Array<{ projectId?: string; error: Error }>;
+};
+
+type TraitNamesSummaryFetcher = (
+  options: FetchTraitNamesSummaryOptions,
+) => Promise<FetchTraitNamesSummaryResult>;
+
 export type ActiveFilters = Record<string, Set<string>>;
 export type AvailableFilters = Record<string, Record<string, number>>;
 export type TraitMetadataRow = {
@@ -99,6 +114,27 @@ export function aggregateTraitValuePages(pages: TraitValuePage[]) {
   return Array.from(map.entries())
     .map(([traitValue, count]) => ({ traitValue, count }))
     .sort((a, b) => a.traitValue.localeCompare(b.traitValue));
+}
+
+async function defaultFetchTraitNamesSummary(
+  options: FetchTraitNamesSummaryOptions,
+) {
+  const marketplace = await import("@cartridge/arcade/marketplace");
+  return marketplace.fetchTraitNamesSummary(options);
+}
+
+export async function fetchTraitNamesSummary(
+  options: FetchTraitNamesSummaryOptions,
+  dependencies?: { fetchTraitNamesSummary?: TraitNamesSummaryFetcher },
+) {
+  const fetcher =
+    dependencies?.fetchTraitNamesSummary ?? defaultFetchTraitNamesSummary;
+  const result = await fetcher(options);
+
+  return {
+    traitNames: aggregateTraitSummaryPages(result.pages),
+    errors: result.errors,
+  };
 }
 
 async function defaultFetchTraitValues(options: FetchTraitValuesOptions) {

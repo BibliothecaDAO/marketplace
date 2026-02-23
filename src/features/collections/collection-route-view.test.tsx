@@ -4,9 +4,10 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { CollectionRouteView } from "@/features/collections/collection-route-view";
 import type { SeedCollection } from "@/lib/marketplace/config";
 
-const { mockUseCollectionQuery, mockUseCollectionTraitMetadataQuery, mockUseCollectionListingsQuery } = vi.hoisted(() => ({
+const { mockUseCollectionQuery, mockUseTraitNamesSummaryQuery, mockUseTraitValuesQuery, mockUseCollectionListingsQuery } = vi.hoisted(() => ({
   mockUseCollectionQuery: vi.fn(),
-  mockUseCollectionTraitMetadataQuery: vi.fn(),
+  mockUseTraitNamesSummaryQuery: vi.fn(),
+  mockUseTraitValuesQuery: vi.fn(),
   mockUseCollectionListingsQuery: vi.fn(),
 }));
 const {
@@ -17,6 +18,7 @@ const {
   setMockVisibleTokens,
   getMockVisibleTokens,
   mockSweepBarRender,
+  mockTokenGridRender,
 } = vi.hoisted(() => {
   let mockCartItems: Array<Record<string, unknown>> = [];
   let mockVisibleTokens: Array<Record<string, unknown>> = [];
@@ -33,6 +35,7 @@ const {
     },
     getMockVisibleTokens: () => mockVisibleTokens,
     mockSweepBarRender: vi.fn(),
+    mockTokenGridRender: vi.fn(),
   };
 });
 
@@ -40,28 +43,32 @@ const mockUseCollectionTokensQuery = vi.fn();
 
 vi.mock("@/lib/marketplace/hooks", () => ({
   useCollectionQuery: mockUseCollectionQuery,
-  useCollectionTraitMetadataQuery: mockUseCollectionTraitMetadataQuery,
+  useTraitNamesSummaryQuery: mockUseTraitNamesSummaryQuery,
+  useTraitValuesQuery: mockUseTraitValuesQuery,
   useCollectionListingsQuery: mockUseCollectionListingsQuery,
   useCollectionTokensQuery: (...args: unknown[]) => mockUseCollectionTokensQuery(...args),
 }));
 
 vi.mock("@/features/collections/collection-token-grid", () => ({
-  CollectionTokenGrid: (props: Record<string, unknown>) => (
-    <div data-testid="collection-token-grid">
-      Token Grid: {props.address as string} | Sort: {String(props.sortMode ?? "recent")}
-      <div data-testid="token-grid-sweep-preview">
-        {Array.from((props.sweepPreviewTokenIds as Set<string> | undefined) ?? []).join(",")}
+  CollectionTokenGrid: (props: Record<string, unknown>) => {
+    mockTokenGridRender(props);
+    return (
+      <div data-testid="collection-token-grid">
+        Token Grid: {props.address as string} | Sort: {String(props.sortMode ?? "recent")}
+        <div data-testid="token-grid-sweep-preview">
+          {Array.from((props.sweepPreviewTokenIds as Set<string> | undefined) ?? []).join(",")}
+        </div>
+        <button
+          onClick={() =>
+            (props.onTokensChange as ((tokens: Array<Record<string, unknown>>) => void) | undefined)?.(getMockVisibleTokens())
+          }
+          type="button"
+        >
+          Emit visible tokens
+        </button>
       </div>
-      <button
-        onClick={() =>
-          (props.onTokensChange as ((tokens: Array<Record<string, unknown>>) => void) | undefined)?.(getMockVisibleTokens())
-        }
-        type="button"
-      >
-        Emit visible tokens
-      </button>
-    </div>
-  ),
+    );
+  },
 }));
 
 vi.mock("@/features/collections/collection-market-panel", () => ({
@@ -138,12 +145,14 @@ function token(tokenId: string) {
 describe("collection route view", () => {
   beforeEach(() => {
     mockUseCollectionQuery.mockReset();
-    mockUseCollectionTraitMetadataQuery.mockReset();
+    mockUseTraitNamesSummaryQuery.mockReset();
+    mockUseTraitValuesQuery.mockReset();
     mockUseCollectionListingsQuery.mockReset();
     mockUseCollectionTokensQuery.mockReset();
     mockCartAddCandidates.mockReset();
     mockCartSetOpen.mockReset();
     mockSweepBarRender.mockReset();
+    mockTokenGridRender.mockReset();
     mockCartAddCandidates.mockReturnValue({ ok: true });
     setMockCartItems([]);
     setMockVisibleTokens([]);
@@ -156,10 +165,19 @@ describe("collection route view", () => {
       isFetching: false,
       refetch: vi.fn(),
     });
-    mockUseCollectionTraitMetadataQuery.mockReturnValue({
+    mockUseTraitNamesSummaryQuery.mockReturnValue({
       data: [],
       isLoading: false,
       isSuccess: true,
+      isError: false,
+      error: null,
+      isFetching: false,
+      refetch: vi.fn(),
+    });
+    mockUseTraitValuesQuery.mockReturnValue({
+      data: null,
+      isLoading: false,
+      isSuccess: false,
       isError: false,
       error: null,
       isFetching: false,
@@ -259,17 +277,17 @@ describe("collection route view", () => {
     expect(screen.queryByText(/cursor:/i)).toBeNull();
   });
 
-  it("fetches_trait_metadata_from_sdk_for_active_collection", () => {
+  it("fetches_trait_names_summary_from_sdk_for_active_collection", () => {
     mockUseCollectionQuery.mockReturnValue(successQuery(null));
 
     render(<CollectionRouteView address="0xabc" collections={collections} />);
 
-    expect(mockUseCollectionTraitMetadataQuery).toHaveBeenCalledWith(
+    expect(mockUseTraitNamesSummaryQuery).toHaveBeenCalledWith(
       expect.objectContaining({ address: "0xabc", projectId: "project-a" }),
     );
   });
 
-  it("collection_route_uses_verified_listings_query", () => {
+  it("collection_route_uses_unverified_listings_query_for_browse", () => {
     mockUseCollectionQuery.mockReturnValue(successQuery(null));
 
     render(<CollectionRouteView address="0xabc" collections={collections} />);
@@ -279,9 +297,39 @@ describe("collection route view", () => {
         collection: "0xabc",
         projectId: "project-a",
         limit: 100,
-        verifyOwnership: true,
+        verifyOwnership: false,
       }),
     );
+  });
+
+  it("does_not_issue_secondary_token_query_for_sweep_candidates", () => {
+    mockUseCollectionQuery.mockReturnValue(successQuery(null));
+
+    render(<CollectionRouteView address="0xabc" collections={collections} />);
+
+    expect(mockUseCollectionTokensQuery).not.toHaveBeenCalled();
+  });
+
+  it("keeps_on_tokens_change_callback_stable_within_same_scope", async () => {
+    mockUseCollectionQuery.mockReturnValue(successQuery(null));
+    setMockVisibleTokens([token("1")]);
+    const user = userEvent.setup();
+
+    render(<CollectionRouteView address="0xabc" collections={collections} />);
+    const firstProps = mockTokenGridRender.mock.lastCall?.[0] as
+      | Record<string, unknown>
+      | undefined;
+    const firstCallback = firstProps?.onTokensChange;
+
+    await user.click(screen.getByRole("button", { name: /emit visible tokens/i }));
+
+    const secondProps = mockTokenGridRender.mock.lastCall?.[0] as
+      | Record<string, unknown>
+      | undefined;
+    const secondCallback = secondProps?.onTokensChange;
+
+    expect(typeof firstCallback).toBe("function");
+    expect(secondCallback).toBe(firstCallback);
   });
 
   it("contract_type_not_shown_to_users", () => {

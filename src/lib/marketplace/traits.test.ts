@@ -6,6 +6,7 @@ import {
   computeAvailableFilters,
   computePrecomputedFilters,
   fetchFilteredTraitValues,
+  fetchTraitNamesSummary,
   filterTokensByActiveFilters,
   tokenMatchesActiveFilters,
 } from "@/lib/marketplace/traits";
@@ -123,6 +124,43 @@ describe("marketplace trait utilities", () => {
 
     expect(Array.from(roundTripped.Background).sort()).toEqual(["Blue", "Red"]);
     expect(Array.from(roundTripped.Eyes).sort()).toEqual(["Big"]);
+  });
+
+  it("trait_names_summary_calls_fetcher_and_aggregates", async () => {
+    const fetcher = vi.fn(async () => ({
+      pages: [
+        {
+          projectId: "project-a",
+          traits: [
+            { traitName: "Background", valueCount: 2 },
+            { traitName: "Eyes", valueCount: 3 },
+          ],
+        },
+        {
+          projectId: "project-b",
+          traits: [
+            { traitName: "Background", valueCount: 4 },
+            { traitName: "Mouth", valueCount: 1 },
+          ],
+        },
+      ],
+      errors: [],
+    }));
+
+    const result = await fetchTraitNamesSummary(
+      { address: "0xabc", projects: ["project-a", "project-b"] },
+      { fetchTraitNamesSummary: fetcher },
+    );
+
+    expect(fetcher).toHaveBeenCalledWith(
+      expect.objectContaining({ address: "0xabc" }),
+    );
+    expect(result.traitNames).toEqual([
+      { traitName: "Background", valueCount: 6 },
+      { traitName: "Eyes", valueCount: 3 },
+      { traitName: "Mouth", valueCount: 1 },
+    ]);
+    expect(result.errors).toEqual([]);
   });
 
   it("token_matches_filters_and_batch_filter_are_consistent", () => {

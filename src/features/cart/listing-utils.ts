@@ -4,6 +4,7 @@ import {
   tokenImage,
   tokenName,
 } from "@/lib/marketplace/token-display";
+import { normalizeCollectionTokenId } from "@/lib/marketplace/token-id";
 import type { CartItem } from "@/features/cart/store/cart-store";
 
 export type CheapestListing = {
@@ -158,7 +159,7 @@ function normalizeListing(
     "orderId",
     "order_id",
   ]);
-  const tokenId = firstNumberish([fields, nestedOrder], ["tokenId", "token_id"]);
+  const tokenIdRaw = firstNumberish([fields, nestedOrder], ["tokenId", "token_id"]);
   const price = firstNumberish([fields, nestedOrder], [
     "price",
     "listingPrice",
@@ -167,6 +168,8 @@ function normalizeListing(
   const quantity =
     firstNumberish([fields, nestedOrder], ["quantity", "qty"]) ?? "1";
   const currency = firstString([fields, nestedOrder], ["currency"]);
+
+  const tokenId = tokenIdRaw ? normalizeCollectionTokenId(tokenIdRaw) : null;
 
   if (!orderId || !tokenId || !price || !currency) {
     return null;

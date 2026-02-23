@@ -1,11 +1,12 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
+import type { NormalizedToken } from "@cartridge/arcade/marketplace";
 import {
   useCollectionListingsQuery,
   useCollectionQuery,
-  useCollectionTokensQuery,
-  useCollectionTraitMetadataQuery,
+  useTraitNamesSummaryQuery,
+  useTraitValuesQuery,
 } from "@/lib/marketplace/hooks";
 import {
   displayTokenId,
@@ -24,7 +25,7 @@ import {
   type SeedCollection,
   getMarketplaceRuntimeConfig,
 } from "@/lib/marketplace/config";
-import type { ActiveFilters } from "@/lib/marketplace/traits";
+import { type ActiveFilters, type TraitSelection } from "@/lib/marketplace/traits";
 import { CollectionMarketPanel } from "@/features/collections/collection-market-panel";
 import { CollectionTokenGrid } from "@/features/collections/collection-token-grid";
 import { TraitFilterSidebar } from "@/features/collections/trait-filter-sidebar";
@@ -38,6 +39,7 @@ import { SweepBar } from "@/features/collections/sweep-bar";
 import { COLLECTION_LISTING_SAMPLE_LIMIT } from "@/lib/marketplace/query-limits";
 
 const EMPTY_ACTIVE_FILTERS: ActiveFilters = {};
+const EMPTY_VISIBLE_TOKENS: NormalizedToken[] = [];
 
 type CollectionRouteViewProps = {
   address: string;
@@ -134,13 +136,37 @@ export function CollectionRouteView({
   const projectId = selectedCollection?.projectId;
   const sweepScopeKey = `${address}-${projectId ?? "default"}`;
   const [sweepCount, setSweepCount] = useState(0);
+  const [visibleTokensByScope, setVisibleTokensByScope] = useState<
+    Record<string, NormalizedToken[]>
+  >({});
   const collection = useCollectionQuery({ address, projectId, fetchImages: true });
-  const traitMetadataQuery = useCollectionTraitMetadataQuery({ address, projectId });
+  const traitNamesQuery = useTraitNamesSummaryQuery({ address, projectId });
+  const [openTraitName, setOpenTraitName] = useState<string | null>(null);
+
+  const otherTraitFilters = useMemo(() => {
+    if (!openTraitName) return undefined;
+    const result: TraitSelection[] = [];
+    for (const [name, values] of Object.entries(resolvedActiveFilters)) {
+      if (name === openTraitName) continue;
+      for (const value of values) {
+        result.push({ name, value });
+      }
+    }
+    return result.length > 0 ? result : undefined;
+  }, [openTraitName, resolvedActiveFilters]);
+
+  const traitValuesQuery = useTraitValuesQuery({
+    address,
+    traitName: openTraitName,
+    otherTraitFilters,
+    projectId,
+  });
+
   const listingQuery = useCollectionListingsQuery({
     collection: address,
     projectId,
     limit: COLLECTION_LISTING_SAMPLE_LIMIT,
-    verifyOwnership: true,
+    verifyOwnership: false,
   });
 
   const cheapestListings = cheapestListingByTokenId(listingQuery.data);
@@ -155,43 +181,14 @@ export function CollectionRouteView({
     ? collectionName(collection.data.metadata, address)
     : null;
 
-  // Fetch listed tokens directly so sweep candidates don't depend on
-  // a child-to-parent callback. TanStack Query deduplicates with the grid.
-  const listedTokenIds = useMemo(() => {
-    const ids = new Set<string>();
-    for (const id of cheapestListings.keys()) {
-      if (!id) continue;
-      ids.add(id);
-      // Also add hex variant so the SDK resolves either form.
-      if (/^\d+$/.test(id)) {
-        try {
-          ids.add(`0x${BigInt(id).toString(16)}`);
-        } catch {
-          // skip
-        }
-      }
-    }
-    return Array.from(ids);
-  }, [cheapestListings]);
-
-  const listedTokensQuery = useCollectionTokensQuery(
-    {
-      address,
-      project: projectId,
-      tokenIds: listedTokenIds.length > 0 ? listedTokenIds : undefined,
-      limit: Math.max(listedTokenIds.length, 1),
-      fetchImages: true,
-    },
-    { enabled: listedTokenIds.length > 0 },
-  );
+  const visibleTokens = visibleTokensByScope[sweepScopeKey] ?? EMPTY_VISIBLE_TOKENS;
 
   const sweepCandidates = useMemo(() => {
-    const tokens = listedTokensQuery.data?.page?.tokens;
-    if (!tokens?.length) return [];
+    if (!visibleTokens.length) return [];
 
     const cartOrderIds = new Set(cartItems.map((item) => item.orderId));
     const tokenByDisplayId = new Map(
-      tokens.map((token) => [displayTokenId(token), token] as const),
+      visibleTokens.map((token) => [displayTokenId(token), token] as const),
     );
 
     const candidates = Array.from(cheapestListings.values())
@@ -205,7 +202,7 @@ export function CollectionRouteView({
       .sort((left, right) => compareBigIntStrings(left.price, right.price));
 
     return candidates.slice(0, CART_MAX_ITEMS);
-  }, [address, cartItems, cheapestListings, listedTokensQuery.data, projectId]);
+  }, [address, cartItems, cheapestListings, projectId, visibleTokens]);
 
   // Build the preview set directly from cheapestListings (same key format
   // the grid uses for lookup) so highlighting doesn't depend on listedTokensQuery.
@@ -225,6 +222,18 @@ export function CollectionRouteView({
     () => new Set(cheapestByPrice.slice(0, clampedSweepCount).map(([tokenId]) => tokenId)),
     [cheapestByPrice, clampedSweepCount],
   );
+  const handleTokensChange = useCallback((tokens: NormalizedToken[]) => {
+    setVisibleTokensByScope((current) => {
+      if (current[sweepScopeKey] === tokens) {
+        return current;
+      }
+
+      return {
+        ...current,
+        [sweepScopeKey]: tokens,
+      };
+    });
+  }, [sweepScopeKey]);
 
   function handleChange(nextAddress: string) {
     if (onNavigate) {
@@ -322,10 +331,14 @@ export function CollectionRouteView({
       <div className="grid gap-6 xl:grid-cols-[280px_1fr]">
         <div className="sticky top-20 self-start" data-testid="trait-sidebar-container">
           <TraitFilterSidebar
+            traitNames={traitNamesQuery.data ?? []}
             activeFilters={resolvedActiveFilters}
             onActiveFiltersChange={onActiveFiltersChange}
-            traitMetadata={traitMetadataQuery.data ?? []}
-            isLoading={traitMetadataQuery.isLoading}
+            isLoading={traitNamesQuery.isLoading}
+            traitValues={traitValuesQuery.data ?? null}
+            isLoadingValues={traitValuesQuery.isLoading}
+            openTraitName={openTraitName}
+            onOpenTraitNameChange={setOpenTraitName}
           />
         </div>
 
@@ -340,6 +353,7 @@ export function CollectionRouteView({
                 key={sweepScopeKey}
                 activeFilters={resolvedActiveFilters}
                 address={address}
+                onTokensChange={handleTokensChange}
                 projectId={projectId}
                 sortMode={sortMode}
                 sweepPreviewTokenIds={sweepPreviewTokenIds}

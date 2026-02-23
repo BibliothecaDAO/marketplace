@@ -129,6 +129,37 @@ describe("useHomePageData", () => {
     );
   });
 
+  it("preserves_raw_token_id_in_trending_href_for_hex_tokens", () => {
+    mockUseCollectionTokensQuery.mockReturnValue(
+      successQuery({
+        page: {
+          tokens: [token("0x000000000000000000000000000000000000000000000000000000000000000a")],
+        },
+      }),
+    );
+    mockUseCollectionListingsQuery.mockReturnValue(
+      successQuery([
+        {
+          id: "11",
+          tokenId: "10",
+          price: "100",
+          currency: "0xfee",
+          quantity: "1",
+          status: "placed",
+        },
+      ]),
+    );
+    vi.spyOn(Math, "random").mockReturnValue(0.01);
+
+    const { result } = renderHook(() => useHomePageData());
+
+    expect(result.current.trendingTokens[0]).toEqual(
+      expect.objectContaining({
+        href: "/collections/0xabc/0x000000000000000000000000000000000000000000000000000000000000000a",
+      }),
+    );
+  });
+
   it("returns_isLoading_while_queries_pending", () => {
     mockUseCollectionTokensQuery.mockReturnValue(
       {
@@ -158,6 +189,18 @@ describe("useHomePageData", () => {
       expect.objectContaining({ address: "0xabc", name: "Genesis" }),
       expect.objectContaining({ address: "0xdef", name: "Artifacts" }),
     ]);
+  });
+
+  it("uses_unverified_listing_reads_for_browse_data", () => {
+    renderHook(() => useHomePageData());
+
+    expect(mockUseCollectionListingsQuery).toHaveBeenCalledWith(
+      expect.objectContaining({
+        collection: expect.any(String),
+        limit: 100,
+        verifyOwnership: false,
+      }),
+    );
   });
 
   it("handles_empty_config", () => {
