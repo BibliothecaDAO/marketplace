@@ -5,24 +5,9 @@ import { Card, CardContent } from "@/components/ui/card";
 import { MarketplaceTokenCard } from "@/components/marketplace/token-card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useCollectionQuery, useCollectionTokensQuery } from "@/lib/marketplace/hooks";
+import { expandTokenIdVariants } from "@/lib/marketplace/token-id";
 import { tokenId } from "@/lib/marketplace/token-display";
 import { cn } from "@/lib/utils";
-
-// Expand each token ID to include both decimal and hex variants so the SDK
-// can match whichever format it stores internally (mirrors CollectionTokenGrid).
-function expandTokenIds(ids: string[]): string[] {
-  const expanded = new Set<string>();
-  for (const id of ids) {
-    if (!id) continue;
-    expanded.add(id);
-    if (/^\d+$/.test(id)) {
-      try { expanded.add(`0x${BigInt(id).toString(16)}`); } catch { /* skip */ }
-    } else if (/^0x[0-9a-fA-F]+$/.test(id)) {
-      try { expanded.add(BigInt(id).toString()); } catch { /* skip */ }
-    }
-  }
-  return Array.from(expanded);
-}
 
 type GridDensityMode = "compact" | "standard";
 
@@ -42,7 +27,10 @@ export function CollectionHoldingSection({
   tokenIds,
   density,
 }: CollectionHoldingSectionProps) {
-  const expandedTokenIds = useMemo(() => expandTokenIds(tokenIds), [tokenIds]);
+  const expandedTokenIds = useMemo(
+    () => expandTokenIdVariants(tokenIds),
+    [tokenIds],
+  );
 
   const collectionQuery = useCollectionQuery({ address: collectionAddress });
   const tokensQuery = useCollectionTokensQuery({

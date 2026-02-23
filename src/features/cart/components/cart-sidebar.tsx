@@ -27,6 +27,7 @@ import {
   SheetTitle,
 } from "@/components/ui/sheet";
 import { getMarketplaceRuntimeConfig } from "@/lib/marketplace/config";
+import { CART_LISTING_VALIDATION_LIMIT } from "@/lib/marketplace/query-limits";
 import { useCartStore } from "@/features/cart/store/cart-store";
 
 const CLIENT_FEE_BPS = 500;
@@ -695,12 +696,14 @@ export function CartSidebar() {
             collection: item.collection,
             tokenId: item.tokenId,
             projectId: item.projectId ?? null,
+            limit: CART_LISTING_VALIDATION_LIMIT,
             verifyOwnership: true,
           });
           const listings = await client.listCollectionListings({
             collection: item.collection,
             tokenId: item.tokenId,
             projectId: item.projectId,
+            limit: CART_LISTING_VALIDATION_LIMIT,
             verifyOwnership: true,
           });
           logCheckoutDiagnostics(debugEnabled, "validate.item.listings.response", {
@@ -942,12 +945,14 @@ export function CartSidebar() {
         orderId: item.orderId,
         collection: item.collection,
         tokenId: item.tokenId,
+        limit: CART_LISTING_VALIDATION_LIMIT,
         verifyOwnership: true,
       });
       const listings = await client.listCollectionListings({
         collection: item.collection,
         tokenId: item.tokenId,
         projectId: item.projectId,
+        limit: CART_LISTING_VALIDATION_LIMIT,
         verifyOwnership: true,
       });
       logCheckoutDiagnostics(debugEnabled, "refresh.listings.response", {

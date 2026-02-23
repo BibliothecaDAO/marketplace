@@ -386,7 +386,7 @@ describe("collection token grid", () => {
         collection: "0xabc",
         projectId: "project-a",
         limit: 100,
-        verifyOwnership: true,
+        verifyOwnership: false,
       }),
     );
   });
@@ -434,6 +434,49 @@ describe("collection token grid", () => {
     );
     expect(mockCartSetOpen).toHaveBeenCalledWith(true);
     expect(screen.getByRole("button", { name: /added/i })).toBeVisible();
+  });
+
+  it("token_grid_matches_collection_scoped_listing_token_ids", async () => {
+    mockUseCollectionTokensQuery.mockReturnValue({
+      data: {
+        page: {
+          tokens: [
+            token("1", {
+              image: "https://cdn.example/1.png",
+              metadata: { name: "Token #1" },
+            }),
+          ],
+          nextCursor: null,
+        },
+        error: null,
+      },
+      isLoading: false,
+      isSuccess: true,
+      isError: false,
+      error: null,
+      isFetching: false,
+      refetch: vi.fn(),
+    });
+    mockUseCollectionListingsQuery.mockReturnValue(
+      successListingsResult([
+        { id: 21, tokenId: "0xabc:0x1", price: 120, currency: "0xfee", quantity: 1 },
+      ]),
+    );
+
+    const user = userEvent.setup();
+    render(<CollectionTokenGrid address="0xabc" projectId="project-a" />);
+
+    expect(await screen.findByText("120")).toBeVisible();
+    await user.click(screen.getByRole("button", { name: /add to cart/i }));
+
+    expect(mockCartAddItem).toHaveBeenCalledWith(
+      expect.objectContaining({
+        orderId: "21",
+        collection: "0xabc",
+        tokenId: "1",
+        price: "120",
+      }),
+    );
   });
 
   it("token_grid_add_to_cart_ignores_expired_listings", async () => {

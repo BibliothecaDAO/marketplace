@@ -174,6 +174,40 @@ describe("marketplace hooks", () => {
     expect(result.current).toBe(fallbackResult);
   });
 
+  it("useTokenDetailQuery_uses_scoped_token_id_when_unscoped_lookup_fails", async () => {
+    const scopedResult = {
+      status: "success",
+      data: { token: { token_id: "1", metadata: { name: "Token #1" } } },
+    };
+
+    mockUseMarketplaceToken.mockImplementation((options: { tokenId: string }) => {
+      if (options.tokenId === "1") {
+        return { status: "success", data: null };
+      }
+      if (options.tokenId === "0x1") {
+        return { status: "success", data: null };
+      }
+      if (options.tokenId === "0xabc:1") {
+        return scopedResult;
+      }
+      if (options.tokenId === "0xabc:0x1") {
+        return { status: "success", data: null };
+      }
+      return { status: "pending", data: null };
+    });
+
+    const { useTokenDetailQuery } = await import("@/lib/marketplace/hooks");
+    const { result } = renderHook(
+      () => useTokenDetailQuery({ collection: "0xabc", tokenId: "1", fetchImages: true }),
+    );
+
+    expect(mockUseMarketplaceToken).toHaveBeenCalledWith(
+      expect.objectContaining({ tokenId: "0xabc:1" }),
+      expect.objectContaining({ enabled: true }),
+    );
+    expect(result.current).toBe(scopedResult);
+  });
+
   it("useTokenOwnershipQuery_passes_alt_token_ids", async () => {
     mockUseMarketplaceTokenBalances.mockReturnValue({ status: "success", data: { page: { balances: [] } } });
 

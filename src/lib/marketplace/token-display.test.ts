@@ -378,6 +378,20 @@ describe("listingPriceByTokenId", () => {
     expect(map.get("1120")).toBe("77");
   });
 
+  it("normalizes_collection_scoped_token_id_when_mapping_prices", () => {
+    const listings = [
+      {
+        token_id: "0xabc:0x460",
+        order: {
+          listing_price: "77",
+        },
+      },
+    ];
+
+    const map = listingPriceByTokenId(listings);
+    expect(map.get("1120")).toBe("77");
+  });
+
   it("keeps current price when new price cannot be parsed as bigint", () => {
     // Plain decimal strings that can't be compared via BigInt() should keep the first
     // But actually plain decimal strings ARE valid for BigInt... test with non-hex non-numeric

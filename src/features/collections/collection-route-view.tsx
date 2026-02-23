@@ -36,6 +36,7 @@ import { CART_MAX_ITEMS, useCartStore } from "@/features/cart/store/cart-store";
 import { type CollectionSortMode } from "@/features/collections/collection-query-params";
 import { SweepBar } from "@/features/collections/sweep-bar";
 import { COLLECTION_LISTING_SAMPLE_LIMIT } from "@/lib/marketplace/query-limits";
+import { expandTokenIdVariants } from "@/lib/marketplace/token-id";
 
 const EMPTY_ACTIVE_FILTERS: ActiveFilters = {};
 
@@ -140,7 +141,7 @@ export function CollectionRouteView({
     collection: address,
     projectId,
     limit: COLLECTION_LISTING_SAMPLE_LIMIT,
-    verifyOwnership: true,
+    verifyOwnership: false,
   });
 
   const cheapestListings = cheapestListingByTokenId(listingQuery.data);
@@ -158,20 +159,7 @@ export function CollectionRouteView({
   // Fetch listed tokens directly so sweep candidates don't depend on
   // a child-to-parent callback. TanStack Query deduplicates with the grid.
   const listedTokenIds = useMemo(() => {
-    const ids = new Set<string>();
-    for (const id of cheapestListings.keys()) {
-      if (!id) continue;
-      ids.add(id);
-      // Also add hex variant so the SDK resolves either form.
-      if (/^\d+$/.test(id)) {
-        try {
-          ids.add(`0x${BigInt(id).toString(16)}`);
-        } catch {
-          // skip
-        }
-      }
-    }
-    return Array.from(ids);
+    return expandTokenIdVariants(cheapestListings.keys());
   }, [cheapestListings]);
 
   const listedTokensQuery = useCollectionTokensQuery(

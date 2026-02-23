@@ -1,4 +1,5 @@
 import type { NormalizedToken } from "@cartridge/arcade/marketplace";
+import { normalizeCollectionTokenId } from "@/lib/marketplace/token-id";
 
 function normalizeMetadata(token: NormalizedToken) {
   return token.metadata as Record<string, unknown> | null;
@@ -249,11 +250,14 @@ export function listingPriceByTokenId(listings: unknown[] | undefined) {
       normalizeStatus(fields.state) ??
       normalizeStatus(nestedOrder?.status) ??
       normalizeStatus(nestedOrder?.state);
-    const listingTokenId =
+    const listingTokenIdRaw =
       formatNumberish(fields.tokenId) ??
       formatNumberish(fields.token_id) ??
       formatNumberish(nestedOrder?.tokenId) ??
       formatNumberish(nestedOrder?.token_id);
+    const listingTokenId = listingTokenIdRaw
+      ? normalizeCollectionTokenId(listingTokenIdRaw)
+      : null;
     const listingPrice =
       formatNumberish(fields.price) ??
       formatNumberish(fields.listing_price) ??

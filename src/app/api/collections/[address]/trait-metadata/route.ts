@@ -6,8 +6,10 @@ const EDGE_CACHE_CONTROL = "public, s-maxage=300, stale-while-revalidate=900";
 const DEFAULT_PROJECT_ID = "arcade-main";
 const TORII_SQL_TIMEOUT_MS = 4_000;
 const TRAIT_SAMPLE_ROW_LIMIT = 10_000;
+const TRAIT_FALLBACK_SAMPLE_ROW_LIMIT = 4_000;
+const TRAIT_RESULT_ROW_LIMIT = 512;
 
-export const runtime = "nodejs";
+export const runtime = "edge";
 export const dynamic = "force-dynamic";
 
 type RouteContext = {
@@ -63,14 +65,64 @@ function padHexAddress(value: string) {
   return `0x${hex.padStart(64, "0")}`;
 }
 
+function escapeSqlLiteral(value: string) {
+  return value.replaceAll("'", "''");
+}
+
 function buildTraitMetadataQuery(address: string) {
+  const normalizedAddress = address.trim().toLowerCase();
   const paddedAddress = padHexAddress(address);
-  // Aggregating over the full dataset frequently times out on larger collections.
-  // Pull a bounded sample of raw rows, then aggregate in-process for predictable latency.
-  return `SELECT trait_name, trait_value
-FROM token_attributes
-WHERE token_id LIKE '${paddedAddress}:%'
-LIMIT ${TRAIT_SAMPLE_ROW_LIMIT}`;
+  const escapedAddress = escapeSqlLiteral(normalizedAddress);
+  const escapedPaddedAddress = escapeSqlLiteral(paddedAddress);
+
+  return `WITH scoped_tokens AS (
+  SELECT
+    token_id,
+    lower(contract_address) || ':' || lower(token_id) AS scoped_token_id
+  FROM tokens
+  WHERE lower(contract_address) IN ('${escapedAddress}', '${escapedPaddedAddress}')
+  LIMIT ${TRAIT_SAMPLE_ROW_LIMIT}
+),
+trait_rows AS (
+  SELECT
+    token_attributes.trait_name AS trait_name,
+    token_attributes.trait_value AS trait_value
+  FROM token_attributes
+  INNER JOIN scoped_tokens
+    ON token_attributes.token_id = scoped_tokens.token_id
+    OR lower(token_attributes.token_id) = scoped_tokens.scoped_token_id
+)
+SELECT
+  trait_name,
+  trait_value,
+  COUNT(*) AS count
+FROM trait_rows
+GROUP BY trait_name, trait_value
+ORDER BY count DESC, trait_name ASC, trait_value ASC
+LIMIT ${TRAIT_RESULT_ROW_LIMIT}`;
+}
+
+function buildTraitMetadataFallbackQuery(address: string) {
+  const normalizedAddress = address.trim().toLowerCase();
+  const paddedAddress = padHexAddress(address);
+  const escapedAddress = escapeSqlLiteral(normalizedAddress);
+  const escapedPaddedAddress = escapeSqlLiteral(paddedAddress);
+
+  return `WITH sampled_traits AS (
+  SELECT trait_name, trait_value
+  FROM token_attributes
+  WHERE token_id LIKE '${escapedAddress}:%'
+    OR token_id LIKE '${escapedPaddedAddress}:%'
+  LIMIT ${TRAIT_FALLBACK_SAMPLE_ROW_LIMIT}
+)
+SELECT
+  trait_name,
+  trait_value,
+  COUNT(*) AS count
+FROM sampled_traits
+GROUP BY trait_name, trait_value
+ORDER BY count DESC, trait_name ASC, trait_value ASC
+LIMIT ${TRAIT_RESULT_ROW_LIMIT}`;
 }
 
 function extractRows(payload: unknown): TraitMetadataSqlRow[] {
@@ -145,25 +197,52 @@ function aggregateTraitMetadata(rows: TraitMetadataSqlRow[]): TraitMetadataRow[]
 
 async function fetchTraitMetadata(address: string, projectId: string) {
   const query = buildTraitMetadataQuery(address);
-  const response = await fetch(
-    `https://api.cartridge.gg/x/${encodeURIComponent(projectId)}/torii/sql`,
-    {
-      method: "POST",
-      headers: {
-        "content-type": "application/json",
-      },
-      body: query,
-      signal: AbortSignal.timeout(TORII_SQL_TIMEOUT_MS),
-    },
-  );
+  const fallbackQuery = buildTraitMetadataFallbackQuery(address);
 
-  if (!response.ok) {
-    const detail = (await response.text().catch(() => "")).trim();
-    throw new Error(`torii sql failed (${response.status})${detail ? `: ${detail}` : ""}`);
+  async function runQuery(sql: string) {
+    const response = await fetch(
+      `https://api.cartridge.gg/x/${encodeURIComponent(projectId)}/torii/sql`,
+      {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+        },
+        body: sql,
+        signal: AbortSignal.timeout(TORII_SQL_TIMEOUT_MS),
+      },
+    );
+
+    if (!response.ok) {
+      const detail = (await response.text().catch(() => "")).trim();
+      throw new Error(`torii sql failed (${response.status})${detail ? `: ${detail}` : ""}`);
+    }
+
+    const payload = await response.json().catch(() => []);
+    return aggregateTraitMetadata(extractRows(payload));
   }
 
-  const payload = await response.json().catch(() => []);
-  return aggregateTraitMetadata(extractRows(payload));
+  function isTimeoutError(error: unknown) {
+    if (!error || typeof error !== "object") {
+      return false;
+    }
+
+    const name =
+      "name" in error && typeof error.name === "string" ? error.name : "";
+    const message =
+      "message" in error && typeof error.message === "string" ? error.message : "";
+
+    return name === "TimeoutError" || name === "AbortError" || /timeout|timed out/i.test(message);
+  }
+
+  try {
+    return await runQuery(query);
+  } catch (error) {
+    if (!isTimeoutError(error)) {
+      throw error;
+    }
+
+    return runQuery(fallbackQuery);
+  }
 }
 
 export async function GET(request: Request, context: RouteContext) {

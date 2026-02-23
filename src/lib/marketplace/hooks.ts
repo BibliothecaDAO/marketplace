@@ -17,35 +17,47 @@ import {
   useMarketplaceToken,
   useMarketplaceTokenBalances,
 } from "@cartridge/arcade/marketplace/react";
+import {
+  alternateTokenId,
+  expandTokenIdVariants,
+} from "@/lib/marketplace/token-id";
 import type { TraitMetadataRow } from "@/lib/marketplace/traits";
-
-function alternateTokenId(rawTokenId: string) {
-  const tokenId = rawTokenId.trim();
-  if (!tokenId) {
-    return null;
-  }
-
-  if (/^0x[0-9a-fA-F]+$/.test(tokenId)) {
-    try {
-      return BigInt(tokenId).toString();
-    } catch {
-      return null;
-    }
-  }
-
-  if (/^\d+$/.test(tokenId)) {
-    try {
-      return `0x${BigInt(tokenId).toString(16)}`;
-    } catch {
-      return null;
-    }
-  }
-
-  return null;
-}
 
 function hasUsableToken(data: TokenDetails | null | undefined): data is TokenDetails {
   return data !== null && data !== undefined && data.token !== null && data.token !== undefined;
+}
+
+function normalizeCollectionAddress(address: string) {
+  const trimmed = address.trim().toLowerCase();
+  if (!trimmed) {
+    return "";
+  }
+
+  if (!/^0x[0-9a-f]+$/.test(trimmed)) {
+    return trimmed;
+  }
+
+  try {
+    return `0x${BigInt(trimmed).toString(16)}`;
+  } catch {
+    return trimmed;
+  }
+}
+
+function collectionScopedTokenIdCandidates(collection: string, tokenId: string) {
+  const normalizedCollection = normalizeCollectionAddress(collection);
+  if (!normalizedCollection) {
+    return [];
+  }
+
+  const candidates = new Set<string>();
+  const alternate = alternateTokenId(tokenId);
+  candidates.add(`${normalizedCollection}:${tokenId}`);
+  if (alternate && alternate !== tokenId) {
+    candidates.add(`${normalizedCollection}:${alternate}`);
+  }
+
+  return Array.from(candidates);
 }
 
 type TraitMetadataApiPayload = {
@@ -123,6 +135,17 @@ export function useTokenDetailQuery(options: TokenDetailsOptions) {
   const enabled = !!options.collection && !!tokenId;
   const altTokenId = alternateTokenId(tokenId);
   const hasAlternateTokenId = !!altTokenId && altTokenId !== tokenId;
+  const scopedTokenIdCandidates = collectionScopedTokenIdCandidates(
+    options.collection,
+    tokenId,
+  );
+  const scopedPrimaryTokenId = scopedTokenIdCandidates[0] ?? tokenId;
+  const scopedSecondaryTokenId = scopedTokenIdCandidates[1] ?? scopedPrimaryTokenId;
+  const hasScopedPrimaryTokenId = scopedPrimaryTokenId !== tokenId;
+  const hasScopedSecondaryTokenId =
+    scopedSecondaryTokenId !== scopedPrimaryTokenId &&
+    scopedSecondaryTokenId !== tokenId &&
+    scopedSecondaryTokenId !== altTokenId;
 
   const primaryQuery = useMarketplaceToken(options, {
     enabled,
@@ -144,8 +167,63 @@ export function useTokenDetailQuery(options: TokenDetailsOptions) {
     },
   );
 
+  const shouldEnableScopedPrimaryQuery =
+    enabled &&
+    hasScopedPrimaryTokenId &&
+    primaryQuery.status !== "pending" &&
+    (primaryQuery.status === "error" || !hasUsableToken(primaryQuery.data)) &&
+    (!hasAlternateTokenId ||
+      (alternateQuery.status !== "pending" &&
+        (alternateQuery.status === "error" || !hasUsableToken(alternateQuery.data))));
+
+  const scopedPrimaryQuery = useMarketplaceToken(
+    {
+      ...options,
+      tokenId: scopedPrimaryTokenId,
+    },
+    {
+      enabled: shouldEnableScopedPrimaryQuery,
+    },
+  );
+
+  const shouldEnableScopedSecondaryQuery =
+    shouldEnableScopedPrimaryQuery &&
+    hasScopedSecondaryTokenId &&
+    scopedPrimaryQuery.status !== "pending" &&
+    (scopedPrimaryQuery.status === "error" || !hasUsableToken(scopedPrimaryQuery.data));
+
+  const scopedSecondaryQuery = useMarketplaceToken(
+    {
+      ...options,
+      tokenId: scopedSecondaryTokenId,
+    },
+    {
+      enabled: shouldEnableScopedSecondaryQuery,
+    },
+  );
+
   if (hasUsableToken(primaryQuery.data)) {
     return primaryQuery;
+  }
+
+  if (shouldEnableAlternateQuery) {
+    if (hasUsableToken(alternateQuery.data)) {
+      return alternateQuery;
+    }
+  }
+
+  if (shouldEnableScopedPrimaryQuery) {
+    if (hasUsableToken(scopedPrimaryQuery.data)) {
+      return scopedPrimaryQuery;
+    }
+  }
+
+  if (shouldEnableScopedSecondaryQuery) {
+    return scopedSecondaryQuery;
+  }
+
+  if (shouldEnableScopedPrimaryQuery) {
+    return scopedPrimaryQuery;
   }
 
   if (shouldEnableAlternateQuery) {
@@ -160,8 +238,7 @@ export function useTokenOwnershipQuery(options: {
   tokenId: string;
   accountAddress?: string;
 }) {
-  const alt = alternateTokenId(options.tokenId);
-  const tokenIds = alt ? [options.tokenId, alt] : [options.tokenId];
+  const tokenIds = expandTokenIdVariants([options.tokenId]);
   return useMarketplaceTokenBalances(
     {
       contractAddresses: [options.collection],
@@ -190,8 +267,7 @@ export function useTokenHolderQuery(options: {
   collection: string;
   tokenId: string;
 }) {
-  const alt = alternateTokenId(options.tokenId);
-  const tokenIds = alt ? [options.tokenId, alt] : [options.tokenId];
+  const tokenIds = expandTokenIdVariants([options.tokenId]);
   return useMarketplaceTokenBalances(
     {
       contractAddresses: [options.collection],

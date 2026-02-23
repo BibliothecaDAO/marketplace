@@ -15,24 +15,6 @@ import {
   tokenName,
   tokenPrice,
 } from "@/lib/marketplace/token-display";
-
-// Expand token IDs from a listing price map to include both decimal and hex forms,
-// which the SDK may need to resolve either variant.
-function expandedListingTokenIds(priceMap: Map<string, unknown>): string[] {
-  const expanded = new Set<string>();
-  for (const id of priceMap.keys()) {
-    if (!id) continue;
-    expanded.add(id);
-    if (/^\d+$/.test(id)) {
-      try {
-        expanded.add(`0x${BigInt(id).toString(16)}`);
-      } catch {
-        // skip malformed ids
-      }
-    }
-  }
-  return Array.from(expanded);
-}
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { MarketplaceTokenCard } from "@/components/marketplace/token-card";
@@ -48,6 +30,7 @@ import {
 } from "@/components/ui/table";
 import type { ActiveFilters } from "@/lib/marketplace/traits";
 import { COLLECTION_LISTING_SAMPLE_LIMIT } from "@/lib/marketplace/query-limits";
+import { expandTokenIdVariants } from "@/lib/marketplace/token-id";
 import { cn } from "@/lib/utils";
 import {
   cartItemFromTokenListing,
@@ -231,7 +214,7 @@ export function CollectionTokenGrid({
     collection: address,
     projectId,
     limit: COLLECTION_LISTING_SAMPLE_LIMIT,
-    verifyOwnership: true,
+    verifyOwnership: false,
   });
 
   useEffect(() => {
@@ -254,7 +237,10 @@ export function CollectionTokenGrid({
   // When sorting by price, explicitly fetch the listed token IDs so they are
   // present in the grid regardless of which page of the general query they fall on.
   const listedQueryTokenIds = useMemo(
-    () => (sortMode !== "recent" ? expandedListingTokenIds(listingPriceMap) : []),
+    () =>
+      (sortMode !== "recent"
+        ? expandTokenIdVariants(listingPriceMap.keys())
+        : []),
     [listingPriceMap, sortMode],
   );
   const listedTokensQuery = useCollectionTokensQuery(

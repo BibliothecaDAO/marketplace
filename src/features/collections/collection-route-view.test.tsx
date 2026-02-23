@@ -269,7 +269,7 @@ describe("collection route view", () => {
     );
   });
 
-  it("collection_route_uses_verified_listings_query", () => {
+  it("collection_route_uses_unverified_listings_query_for_browse", () => {
     mockUseCollectionQuery.mockReturnValue(successQuery(null));
 
     render(<CollectionRouteView address="0xabc" collections={collections} />);
@@ -279,7 +279,7 @@ describe("collection route view", () => {
         collection: "0xabc",
         projectId: "project-a",
         limit: 100,
-        verifyOwnership: true,
+        verifyOwnership: false,
       }),
     );
   });

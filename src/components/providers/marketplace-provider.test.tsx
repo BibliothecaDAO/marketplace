@@ -81,7 +81,7 @@ describe("marketplace provider", () => {
 
   it("wraps app with starknet, query, and marketplace providers", () => {
     const mockQueryClient = { query: "client" };
-    const sdkConfig = { chainId: "0x534e5f4d41494e" };
+    const sdkConfig = { chainId: "0x534e5f4d41494e", runtime: "edge" };
     const starknetConfig = {
       chains: [{ id: "mainnet" }, { id: "sepolia" }],
       provider: vi.fn(),
@@ -92,6 +92,7 @@ describe("marketplace provider", () => {
     mockGetMarketplaceRuntimeConfig.mockReturnValue({
       chainLabel: "SN_MAIN",
       sdkConfig,
+      featureFlags: { enableDeferredMetadataHydration: false },
       warnings: [],
       collections: [],
     });

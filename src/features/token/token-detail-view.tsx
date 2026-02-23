@@ -32,6 +32,7 @@ import {
   getTokenSymbol,
 } from "@/lib/marketplace/token-display";
 import { calculateMarketplaceFee, parseBigInt } from "@/lib/marketplace/fees";
+import { TOKEN_DETAIL_LISTING_LIMIT } from "@/lib/marketplace/query-limits";
 import type { CheapestListing } from "@/features/cart/listing-utils";
 import {
   cartItemFromTokenListing,
@@ -174,6 +175,7 @@ export function TokenDetailView({
   tokenId,
   projectId,
 }: TokenDetailViewProps) {
+  const detailLookupTokenId = tokenId.trim() || tokenId;
   const normalizedTokenId = formatNumberish(tokenId) ?? tokenId;
   const { addListingToCart, isRecentlyAdded } = useAddToCartFeedback();
   const { account, address: walletAddress, isConnected } = useAccount();
@@ -209,7 +211,7 @@ export function TokenDetailView({
   });
   const detailQuery = useTokenDetailQuery({
     collection: address,
-    tokenId: normalizedTokenId,
+    tokenId: detailLookupTokenId,
     projectId,
     fetchImages: true,
   });
@@ -217,6 +219,7 @@ export function TokenDetailView({
     collection: address,
     tokenId: normalizedTokenId,
     projectId,
+    limit: TOKEN_DETAIL_LISTING_LIMIT,
     verifyOwnership: true,
   });
   const nowEpochSeconds = Math.floor(Date.now() / 1000);

@@ -123,7 +123,7 @@ export function useHomePageData() {
     collection: featuredAddress,
     projectId: featuredProjectId,
     limit: COLLECTION_LISTING_SAMPLE_LIMIT,
-    verifyOwnership: true,
+    verifyOwnership: false,
   });
 
   const cheapestListings = useMemo(

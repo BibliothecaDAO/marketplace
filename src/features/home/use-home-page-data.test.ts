@@ -160,6 +160,18 @@ describe("useHomePageData", () => {
     ]);
   });
 
+  it("uses_unverified_listing_reads_for_browse_data", () => {
+    renderHook(() => useHomePageData());
+
+    expect(mockUseCollectionListingsQuery).toHaveBeenCalledWith(
+      expect.objectContaining({
+        collection: expect.any(String),
+        limit: 100,
+        verifyOwnership: false,
+      }),
+    );
+  });
+
   it("handles_empty_config", () => {
     mockGetConfig.mockReturnValue({
       chainLabel: "SN_MAIN",

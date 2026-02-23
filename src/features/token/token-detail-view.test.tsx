@@ -559,12 +559,13 @@ describe("token detail view", () => {
         collection: "0x123",
         tokenId: "7",
         projectId: "my-project",
+        limit: 100,
         verifyOwnership: true,
       }),
     );
   });
 
-  it("normalizes_hex_route_token_id_for_detail_and_listings_queries", () => {
+  it("preserves_hex_route_token_id_for_detail_query_and_normalizes_for_listings_query", () => {
     mockUseTokenDetailQuery.mockReturnValue(
       successQuery({
         token: {
@@ -584,7 +585,7 @@ describe("token detail view", () => {
     expect(mockUseTokenDetailQuery).toHaveBeenCalledWith(
       expect.objectContaining({
         collection: "0x123",
-        tokenId: "1120",
+        tokenId: "0x460",
         projectId: "my-project",
         fetchImages: true,
       }),
@@ -595,6 +596,7 @@ describe("token detail view", () => {
         collection: "0x123",
         tokenId: "1120",
         projectId: "my-project",
+        limit: 100,
         verifyOwnership: true,
       }),
     );
