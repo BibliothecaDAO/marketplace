@@ -4,9 +4,10 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { CollectionRouteView } from "@/features/collections/collection-route-view";
 import type { SeedCollection } from "@/lib/marketplace/config";
 
-const { mockUseCollectionQuery, mockUseCollectionTraitMetadataQuery, mockUseCollectionListingsQuery } = vi.hoisted(() => ({
+const { mockUseCollectionQuery, mockUseTraitNamesSummaryQuery, mockUseTraitValuesQuery, mockUseCollectionListingsQuery } = vi.hoisted(() => ({
   mockUseCollectionQuery: vi.fn(),
-  mockUseCollectionTraitMetadataQuery: vi.fn(),
+  mockUseTraitNamesSummaryQuery: vi.fn(),
+  mockUseTraitValuesQuery: vi.fn(),
   mockUseCollectionListingsQuery: vi.fn(),
 }));
 const {
@@ -42,7 +43,8 @@ const mockUseCollectionTokensQuery = vi.fn();
 
 vi.mock("@/lib/marketplace/hooks", () => ({
   useCollectionQuery: mockUseCollectionQuery,
-  useCollectionTraitMetadataQuery: mockUseCollectionTraitMetadataQuery,
+  useTraitNamesSummaryQuery: mockUseTraitNamesSummaryQuery,
+  useTraitValuesQuery: mockUseTraitValuesQuery,
   useCollectionListingsQuery: mockUseCollectionListingsQuery,
   useCollectionTokensQuery: (...args: unknown[]) => mockUseCollectionTokensQuery(...args),
 }));
@@ -143,7 +145,8 @@ function token(tokenId: string) {
 describe("collection route view", () => {
   beforeEach(() => {
     mockUseCollectionQuery.mockReset();
-    mockUseCollectionTraitMetadataQuery.mockReset();
+    mockUseTraitNamesSummaryQuery.mockReset();
+    mockUseTraitValuesQuery.mockReset();
     mockUseCollectionListingsQuery.mockReset();
     mockUseCollectionTokensQuery.mockReset();
     mockCartAddCandidates.mockReset();
@@ -162,10 +165,19 @@ describe("collection route view", () => {
       isFetching: false,
       refetch: vi.fn(),
     });
-    mockUseCollectionTraitMetadataQuery.mockReturnValue({
+    mockUseTraitNamesSummaryQuery.mockReturnValue({
       data: [],
       isLoading: false,
       isSuccess: true,
+      isError: false,
+      error: null,
+      isFetching: false,
+      refetch: vi.fn(),
+    });
+    mockUseTraitValuesQuery.mockReturnValue({
+      data: null,
+      isLoading: false,
+      isSuccess: false,
       isError: false,
       error: null,
       isFetching: false,
@@ -265,12 +277,12 @@ describe("collection route view", () => {
     expect(screen.queryByText(/cursor:/i)).toBeNull();
   });
 
-  it("fetches_trait_metadata_from_sdk_for_active_collection", () => {
+  it("fetches_trait_names_summary_from_sdk_for_active_collection", () => {
     mockUseCollectionQuery.mockReturnValue(successQuery(null));
 
     render(<CollectionRouteView address="0xabc" collections={collections} />);
 
-    expect(mockUseCollectionTraitMetadataQuery).toHaveBeenCalledWith(
+    expect(mockUseTraitNamesSummaryQuery).toHaveBeenCalledWith(
       expect.objectContaining({ address: "0xabc", projectId: "project-a" }),
     );
   });

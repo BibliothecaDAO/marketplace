@@ -2,53 +2,96 @@ import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 import { TraitFilterSidebar } from "@/features/collections/trait-filter-sidebar";
-import type { ActiveFilters, TraitMetadataRow } from "@/lib/marketplace/traits";
+import type { ActiveFilters, TraitNameSummary, TraitValueRow } from "@/lib/marketplace/traits";
+import { useState } from "react";
 
-function row(traitName: string, traitValue: string, count = 1): TraitMetadataRow {
-  return { traitName, traitValue, count };
+function traitName(name: string, valueCount = 1): TraitNameSummary {
+  return { traitName: name, valueCount };
 }
 
-async function openTraitGroup(user: ReturnType<typeof userEvent.setup>, traitName: string) {
-  await user.click(screen.getByRole("button", { name: new RegExp(traitName, "i") }));
+function traitValue(value: string, count = 1): TraitValueRow {
+  return { traitValue: value, count };
+}
+
+function openTraitGroup(user: ReturnType<typeof userEvent.setup>, name: string) {
+  return user.click(screen.getByRole("button", { name: new RegExp(name, "i") }));
+}
+
+type WrapperProps = {
+  traitNames: TraitNameSummary[];
+  traitValues?: TraitValueRow[] | null;
+  activeFilters?: ActiveFilters;
+  onActiveFiltersChange?: (filters: ActiveFilters) => void;
+  isLoading?: boolean;
+  isLoadingValues?: boolean;
+  initialOpenTraitName?: string | null;
+};
+
+function SidebarWrapper({
+  traitNames,
+  traitValues = null,
+  traitValuesByGroup,
+  activeFilters = {},
+  onActiveFiltersChange,
+  isLoading,
+  isLoadingValues,
+  initialOpenTraitName = null,
+}: WrapperProps & { traitValuesByGroup?: Record<string, TraitValueRow[]> }) {
+  const [openTraitName, setOpenTraitName] = useState<string | null>(initialOpenTraitName);
+  const resolvedValues = traitValuesByGroup && openTraitName
+    ? traitValuesByGroup[openTraitName] ?? null
+    : traitValues;
+  return (
+    <TraitFilterSidebar
+      traitNames={traitNames}
+      activeFilters={activeFilters}
+      onActiveFiltersChange={onActiveFiltersChange ?? vi.fn()}
+      isLoading={isLoading}
+      traitValues={resolvedValues}
+      isLoadingValues={isLoadingValues}
+      openTraitName={openTraitName}
+      onOpenTraitNameChange={setOpenTraitName}
+    />
+  );
 }
 
 describe("trait filter sidebar", () => {
   it("trait_groups_are_collapsed_by_default_and_expand_on_click", async () => {
     const user = userEvent.setup();
+    const onOpen = vi.fn();
 
     render(
       <TraitFilterSidebar
+        traitNames={[traitName("Background", 2)]}
         activeFilters={{}}
         onActiveFiltersChange={vi.fn()}
-        traitMetadata={[
-          row("Background", "Blue"),
-          row("Background", "Red"),
-        ]}
+        traitValues={null}
+        openTraitName={null}
+        onOpenTraitNameChange={onOpen}
       />,
     );
 
-    expect(screen.queryByRole("button", { name: "Blue (1)" })).toBeNull();
+    expect(screen.queryByRole("searchbox")).toBeNull();
 
     await openTraitGroup(user, "Background");
 
-    expect(screen.getByRole("button", { name: "Blue (1)" })).toBeVisible();
+    expect(onOpen).toHaveBeenCalledWith("Background");
   });
 
   it("only_one_trait_group_can_be_open_at_a_time", async () => {
     const user = userEvent.setup();
 
     render(
-      <TraitFilterSidebar
-        activeFilters={{}}
-        onActiveFiltersChange={vi.fn()}
-        traitMetadata={[
-          row("Background", "Blue"),
-          row("Eyes", "Big"),
-        ]}
+      <SidebarWrapper
+        traitNames={[traitName("Background", 1), traitName("Eyes", 1)]}
+        traitValuesByGroup={{
+          Background: [traitValue("Blue")],
+          Eyes: [traitValue("Big")],
+        }}
+        initialOpenTraitName="Background"
       />,
     );
 
-    await openTraitGroup(user, "Background");
     expect(screen.getByRole("button", { name: "Blue (1)" })).toBeVisible();
 
     await openTraitGroup(user, "Eyes");
@@ -61,18 +104,13 @@ describe("trait filter sidebar", () => {
     const user = userEvent.setup();
 
     render(
-      <TraitFilterSidebar
-        activeFilters={{}}
-        onActiveFiltersChange={vi.fn()}
-        traitMetadata={[
-          row("Background", "Blue"),
-          row("Background", "Red"),
-          row("Background", "Green"),
-        ]}
+      <SidebarWrapper
+        traitNames={[traitName("Background", 3)]}
+        traitValues={[traitValue("Blue"), traitValue("Red"), traitValue("Green")]}
+        initialOpenTraitName="Background"
       />,
     );
 
-    await openTraitGroup(user, "Background");
     await user.type(screen.getByRole("searchbox", { name: /search background/i }), "re");
 
     expect(screen.queryByRole("button", { name: "Blue (1)" })).toBeNull();
@@ -82,25 +120,19 @@ describe("trait filter sidebar", () => {
 
   it("renders_trait_groups_and_toggles_selection", async () => {
     const onActiveFiltersChange = vi.fn();
-    const activeFilters: ActiveFilters = {};
     const user = userEvent.setup();
 
     render(
-      <TraitFilterSidebar
-        activeFilters={activeFilters}
+      <SidebarWrapper
+        traitNames={[traitName("Background", 2), traitName("Eyes", 2)]}
+        traitValues={[traitValue("Blue"), traitValue("Red")]}
         onActiveFiltersChange={onActiveFiltersChange}
-        traitMetadata={[
-          row("Background", "Blue"),
-          row("Background", "Red"),
-          row("Eyes", "Big"),
-          row("Eyes", "Small"),
-        ]}
+        initialOpenTraitName="Background"
       />,
     );
 
     expect(screen.getByText("Filters")).toBeVisible();
     expect(screen.getByText("Background")).toBeVisible();
-    await openTraitGroup(user, "Background");
     expect(screen.getByRole("button", { name: "Blue (1)" })).toBeVisible();
 
     await user.click(screen.getByRole("button", { name: "Blue (1)" }));
@@ -112,9 +144,12 @@ describe("trait filter sidebar", () => {
   it("empty_state_shows_no_trait_data_message", () => {
     render(
       <TraitFilterSidebar
+        traitNames={[]}
         activeFilters={{}}
         onActiveFiltersChange={vi.fn()}
-        traitMetadata={[]}
+        traitValues={null}
+        openTraitName={null}
+        onOpenTraitNameChange={vi.fn()}
       />,
     );
 
@@ -124,9 +159,12 @@ describe("trait filter sidebar", () => {
   it("loading_state_shows_loading_message", () => {
     render(
       <TraitFilterSidebar
+        traitNames={[]}
         activeFilters={{}}
         onActiveFiltersChange={vi.fn()}
-        traitMetadata={[]}
+        traitValues={null}
+        openTraitName={null}
+        onOpenTraitNameChange={vi.fn()}
         isLoading
       />,
     );
@@ -134,22 +172,20 @@ describe("trait filter sidebar", () => {
     expect(screen.getByText(/loading/i)).toBeVisible();
   });
 
-  it("renders_trait_values_from_metadata_rows", () => {
+  it("renders_trait_names_from_summary", () => {
     render(
       <TraitFilterSidebar
+        traitNames={[traitName("Background"), traitName("Eyes")]}
         activeFilters={{}}
         onActiveFiltersChange={vi.fn()}
-        traitMetadata={[
-          row("Background", "Blue"),
-          row("Eyes", "Red"),
-        ]}
+        traitValues={null}
+        openTraitName={null}
+        onOpenTraitNameChange={vi.fn()}
       />,
     );
 
     expect(screen.getByText("Background")).toBeVisible();
-    expect(screen.queryByRole("button", { name: "Blue (1)" })).toBeNull();
     expect(screen.getByText("Eyes")).toBeVisible();
-    expect(screen.queryByRole("button", { name: "Red (1)" })).toBeNull();
   });
 
   it("toggle_on_clicking_inactive_trait_adds_it_to_filters", async () => {
@@ -157,14 +193,14 @@ describe("trait filter sidebar", () => {
     const user = userEvent.setup();
 
     render(
-      <TraitFilterSidebar
-        activeFilters={{}}
+      <SidebarWrapper
+        traitNames={[traitName("Background")]}
+        traitValues={[traitValue("Blue")]}
         onActiveFiltersChange={onActiveFiltersChange}
-        traitMetadata={[row("Background", "Blue")]}
+        initialOpenTraitName="Background"
       />,
     );
 
-    await openTraitGroup(user, "Background");
     await user.click(screen.getByRole("button", { name: "Blue (1)" }));
 
     const nextFilters = onActiveFiltersChange.mock.calls[0][0] as ActiveFilters;
@@ -178,14 +214,15 @@ describe("trait filter sidebar", () => {
     const activeFilters: ActiveFilters = { Background: new Set(["Blue"]) };
 
     render(
-      <TraitFilterSidebar
+      <SidebarWrapper
+        traitNames={[traitName("Background")]}
+        traitValues={[traitValue("Blue")]}
         activeFilters={activeFilters}
         onActiveFiltersChange={onActiveFiltersChange}
-        traitMetadata={[row("Background", "Blue")]}
+        initialOpenTraitName="Background"
       />,
     );
 
-    await openTraitGroup(user, "Background");
     await user.click(screen.getByRole("button", { name: "Blue (1)" }));
 
     const nextFilters = onActiveFiltersChange.mock.calls[0][0] as ActiveFilters;
@@ -198,10 +235,12 @@ describe("trait filter sidebar", () => {
     const activeFilters: ActiveFilters = { Background: new Set(["Blue"]) };
 
     render(
-      <TraitFilterSidebar
+      <SidebarWrapper
+        traitNames={[traitName("Background")]}
+        traitValues={[traitValue("Blue")]}
         activeFilters={activeFilters}
         onActiveFiltersChange={onActiveFiltersChange}
-        traitMetadata={[row("Background", "Blue")]}
+        initialOpenTraitName="Background"
       />,
     );
 
@@ -216,24 +255,63 @@ describe("trait filter sidebar", () => {
   it("clear_button_hidden_when_no_active_filters", () => {
     render(
       <TraitFilterSidebar
+        traitNames={[traitName("Background")]}
         activeFilters={{}}
         onActiveFiltersChange={vi.fn()}
-        traitMetadata={[row("Background", "Blue")]}
+        traitValues={null}
+        openTraitName={null}
+        onOpenTraitNameChange={vi.fn()}
       />,
     );
 
     expect(screen.queryByRole("button", { name: /clear/i })).toBeNull();
   });
 
-  it("shows_count_from_metadata_row", () => {
+  it("shows_count_from_trait_values", () => {
     render(
       <TraitFilterSidebar
+        traitNames={[traitName("Background")]}
         activeFilters={{}}
         onActiveFiltersChange={vi.fn()}
-        traitMetadata={[row("Background", "Blue", 42)]}
+        traitValues={[traitValue("Blue", 42)]}
+        openTraitName="Background"
+        onOpenTraitNameChange={vi.fn()}
       />,
     );
 
-    expect(screen.queryByRole("button", { name: "Blue (42)" })).toBeNull();
+    expect(screen.getByRole("button", { name: "Blue (42)" })).toBeVisible();
+  });
+
+  it("open_group_shows_loading_state_for_values", () => {
+    render(
+      <TraitFilterSidebar
+        traitNames={[traitName("Background")]}
+        activeFilters={{}}
+        onActiveFiltersChange={vi.fn()}
+        traitValues={null}
+        isLoadingValues
+        openTraitName="Background"
+        onOpenTraitNameChange={vi.fn()}
+      />,
+    );
+
+    expect(screen.getByText(/loading values/i)).toBeVisible();
+  });
+
+  it("badge_count_shown_for_active_filters_without_values_loaded", () => {
+    render(
+      <TraitFilterSidebar
+        traitNames={[traitName("Background"), traitName("Eyes")]}
+        activeFilters={{ Background: new Set(["Blue", "Red"]) }}
+        onActiveFiltersChange={vi.fn()}
+        traitValues={null}
+        openTraitName={null}
+        onOpenTraitNameChange={vi.fn()}
+      />,
+    );
+
+    const badges = screen.getAllByText("2");
+    expect(badges.length).toBeGreaterThanOrEqual(1);
+    expect(badges[0]).toBeVisible();
   });
 });

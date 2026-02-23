@@ -21,7 +21,8 @@ import {
   alternateTokenId,
   expandTokenIdVariants,
 } from "@/lib/marketplace/token-id";
-import type { TraitMetadataRow } from "@/lib/marketplace/traits";
+import type { TraitSelection } from "@/lib/marketplace/traits";
+import { aggregateTraitSummaryPages, aggregateTraitValuePages } from "@/lib/marketplace/traits";
 
 function hasUsableToken(data: TokenDetails | null | undefined): data is TokenDetails {
   return data !== null && data !== undefined && data.token !== null && data.token !== undefined;
@@ -58,49 +59,6 @@ function collectionScopedTokenIdCandidates(collection: string, tokenId: string) 
   }
 
   return Array.from(candidates);
-}
-
-type TraitMetadataApiPayload = {
-  traitMetadata?: TraitMetadataRow[];
-};
-
-function traitMetadataRoutePath(options: { address: string; projectId?: string }) {
-  const params = new URLSearchParams();
-  if (options.projectId) {
-    params.set("projectId", options.projectId);
-  }
-
-  const query = params.toString();
-  const encodedAddress = encodeURIComponent(options.address);
-  return query
-    ? `/api/collections/${encodedAddress}/trait-metadata?${query}`
-    : `/api/collections/${encodedAddress}/trait-metadata`;
-}
-
-async function fetchTraitMetadataFromRoute(options: {
-  address: string;
-  projectId?: string;
-}): Promise<TraitMetadataRow[]> {
-  const response = await fetch(traitMetadataRoutePath(options), {
-    method: "GET",
-    headers: { accept: "application/json" },
-  });
-
-  if (!response.ok) {
-    let detail = "";
-    try {
-      detail = (await response.text()).trim();
-    } catch {
-      // no-op: keep fallback message below
-    }
-
-    throw new Error(
-      `failed to load trait metadata${detail ? `: ${detail}` : ""}`,
-    );
-  }
-
-  const payload = (await response.json()) as TraitMetadataApiPayload;
-  return Array.isArray(payload.traitMetadata) ? payload.traitMetadata : [];
 }
 
 export function useCollectionQuery(options: CollectionSummaryOptions) {
@@ -252,14 +210,54 @@ export function useTokenOwnershipQuery(options: {
   );
 }
 
-export function useCollectionTraitMetadataQuery(options: {
+export function useTraitNamesSummaryQuery(options: {
   address: string;
   projectId?: string;
 }) {
   return useQuery({
-    queryKey: ["collection-trait-metadata", options.address, options.projectId] as const,
-    queryFn: async () => fetchTraitMetadataFromRoute(options),
+    queryKey: ["trait-names-summary", options.address, options.projectId] as const,
+    queryFn: async () => {
+      const { fetchTraitNamesSummary } = await import(
+        "@cartridge/arcade/marketplace"
+      );
+      const result = await fetchTraitNamesSummary({
+        address: options.address,
+        defaultProjectId: options.projectId,
+      });
+      return aggregateTraitSummaryPages(result.pages);
+    },
     enabled: !!options.address,
+  });
+}
+
+export function useTraitValuesQuery(options: {
+  address: string;
+  traitName: string | null;
+  otherTraitFilters?: TraitSelection[];
+  projectId?: string;
+}) {
+  return useQuery({
+    queryKey: [
+      "trait-values",
+      options.address,
+      options.traitName,
+      options.otherTraitFilters,
+      options.projectId,
+    ] as const,
+    queryFn: async () => {
+      if (!options.traitName) return [];
+      const { fetchTraitValues } = await import(
+        "@cartridge/arcade/marketplace"
+      );
+      const result = await fetchTraitValues({
+        address: options.address,
+        traitName: options.traitName,
+        otherTraitFilters: options.otherTraitFilters,
+        defaultProjectId: options.projectId,
+      });
+      return aggregateTraitValuePages(result.pages);
+    },
+    enabled: !!options.address && !!options.traitName,
   });
 }
 

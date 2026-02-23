@@ -5,7 +5,8 @@ import type { NormalizedToken } from "@cartridge/arcade/marketplace";
 import {
   useCollectionListingsQuery,
   useCollectionQuery,
-  useCollectionTraitMetadataQuery,
+  useTraitNamesSummaryQuery,
+  useTraitValuesQuery,
 } from "@/lib/marketplace/hooks";
 import {
   displayTokenId,
@@ -24,7 +25,7 @@ import {
   type SeedCollection,
   getMarketplaceRuntimeConfig,
 } from "@/lib/marketplace/config";
-import type { ActiveFilters } from "@/lib/marketplace/traits";
+import { type ActiveFilters, type TraitSelection } from "@/lib/marketplace/traits";
 import { CollectionMarketPanel } from "@/features/collections/collection-market-panel";
 import { CollectionTokenGrid } from "@/features/collections/collection-token-grid";
 import { TraitFilterSidebar } from "@/features/collections/trait-filter-sidebar";
@@ -139,7 +140,28 @@ export function CollectionRouteView({
     Record<string, NormalizedToken[]>
   >({});
   const collection = useCollectionQuery({ address, projectId, fetchImages: true });
-  const traitMetadataQuery = useCollectionTraitMetadataQuery({ address, projectId });
+  const traitNamesQuery = useTraitNamesSummaryQuery({ address, projectId });
+  const [openTraitName, setOpenTraitName] = useState<string | null>(null);
+
+  const otherTraitFilters = useMemo(() => {
+    if (!openTraitName) return undefined;
+    const result: TraitSelection[] = [];
+    for (const [name, values] of Object.entries(resolvedActiveFilters)) {
+      if (name === openTraitName) continue;
+      for (const value of values) {
+        result.push({ name, value });
+      }
+    }
+    return result.length > 0 ? result : undefined;
+  }, [openTraitName, resolvedActiveFilters]);
+
+  const traitValuesQuery = useTraitValuesQuery({
+    address,
+    traitName: openTraitName,
+    otherTraitFilters,
+    projectId,
+  });
+
   const listingQuery = useCollectionListingsQuery({
     collection: address,
     projectId,
@@ -309,10 +331,14 @@ export function CollectionRouteView({
       <div className="grid gap-6 xl:grid-cols-[280px_1fr]">
         <div className="sticky top-20 self-start" data-testid="trait-sidebar-container">
           <TraitFilterSidebar
+            traitNames={traitNamesQuery.data ?? []}
             activeFilters={resolvedActiveFilters}
             onActiveFiltersChange={onActiveFiltersChange}
-            traitMetadata={traitMetadataQuery.data ?? []}
-            isLoading={traitMetadataQuery.isLoading}
+            isLoading={traitNamesQuery.isLoading}
+            traitValues={traitValuesQuery.data ?? null}
+            isLoadingValues={traitValuesQuery.isLoading}
+            openTraitName={openTraitName}
+            onOpenTraitNameChange={setOpenTraitName}
           />
         </div>
 

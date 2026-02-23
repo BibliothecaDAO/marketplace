@@ -11,6 +11,7 @@ import {
   displayTokenId,
   formatPriceForDisplay,
   formatNumberish,
+  tokenId,
   tokenImage,
   tokenName,
 } from "@/lib/marketplace/token-display";
@@ -190,12 +191,13 @@ export function useHomePageData() {
 
     return tokens
       .map((token) => {
-        const id = displayTokenId(token);
-        const listing = cheapestListings.get(id);
+        const lookupTokenId = displayTokenId(token);
+        const routeTokenId = tokenId(token);
+        const listing = cheapestListings.get(lookupTokenId);
 
         return {
           token,
-          href: `/collections/${featuredSeed.address}/${id}`,
+          href: `/collections/${featuredSeed.address}/${routeTokenId}`,
           price: listing ? formatPriceForDisplay(listing.price) : null,
           currency: listing?.currency ?? null,
           rawPrice: sortablePrice(listing?.price),

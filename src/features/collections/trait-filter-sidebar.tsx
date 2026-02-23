@@ -6,17 +6,21 @@ import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
 import {
   type ActiveFilters,
-  type TraitMetadataRow,
-  computeAvailableFilters,
+  type TraitNameSummary,
+  type TraitValueRow,
   computePrecomputedFilters,
   flattenActiveFilters,
 } from "@/lib/marketplace/traits";
 
 type TraitFilterSidebarProps = {
-  traitMetadata: TraitMetadataRow[];
+  traitNames: TraitNameSummary[];
   activeFilters: ActiveFilters;
   onActiveFiltersChange?: (filters: ActiveFilters) => void;
   isLoading?: boolean;
+  traitValues: TraitValueRow[] | null;
+  isLoadingValues?: boolean;
+  openTraitName: string | null;
+  onOpenTraitNameChange: (traitName: string | null) => void;
 };
 
 function cloneFilters(activeFilters: ActiveFilters): ActiveFilters {
@@ -26,21 +30,33 @@ function cloneFilters(activeFilters: ActiveFilters): ActiveFilters {
 }
 
 export function TraitFilterSidebar({
-  traitMetadata,
+  traitNames,
   activeFilters,
   onActiveFiltersChange,
   isLoading,
+  traitValues,
+  isLoadingValues,
+  openTraitName,
+  onOpenTraitNameChange,
 }: TraitFilterSidebarProps) {
-  const [openTraitName, setOpenTraitName] = useState<string | null>(null);
   const [searchByTraitName, setSearchByTraitName] = useState<Record<string, string>>({});
-  const availableFilters = useMemo(
-    () => computeAvailableFilters(traitMetadata, activeFilters),
-    [traitMetadata, activeFilters],
+
+  const sortedTraitNames = useMemo(
+    () => [...traitNames].sort((a, b) => a.traitName.localeCompare(b.traitName)),
+    [traitNames],
   );
-  const precomputed = useMemo(
-    () => computePrecomputedFilters(availableFilters),
-    [availableFilters],
-  );
+
+  const openGroupValues = useMemo(() => {
+    if (!traitValues || traitValues.length === 0) return [];
+    const available: Record<string, Record<string, number>> = {};
+    const traitName = openTraitName ?? "";
+    available[traitName] = {};
+    for (const row of traitValues) {
+      available[traitName][row.traitValue] = row.count;
+    }
+    return computePrecomputedFilters(available).properties[traitName] ?? [];
+  }, [traitValues, openTraitName]);
+
   const activeCount = flattenActiveFilters(activeFilters).length;
 
   function toggleFilter(traitName: string, traitValue: string) {
@@ -62,7 +78,7 @@ export function TraitFilterSidebar({
   }
 
   function toggleTraitGroup(traitName: string) {
-    setOpenTraitName((current) => (current === traitName ? null : traitName));
+    onOpenTraitNameChange(openTraitName === traitName ? null : traitName);
   }
 
   return (
@@ -95,24 +111,27 @@ export function TraitFilterSidebar({
       {/* Loading / empty states */}
       {isLoading ? (
         <p className="text-xs text-muted-foreground">Loading traits...</p>
-      ) : precomputed.attributes.length === 0 ? (
+      ) : sortedTraitNames.length === 0 ? (
         <p className="text-xs text-muted-foreground">No trait data available.</p>
       ) : null}
 
       {/* Trait groups — single-open accordion with per-group search */}
       <div className="space-y-1">
-        {precomputed.attributes.map((traitName, index) => {
+        {sortedTraitNames.map((trait, index) => {
+          const traitName = trait.traitName;
           const traitPanelId = `trait-panel-${index}`;
           const traitButtonId = `trait-toggle-${index}`;
           const isOpen = openTraitName === traitName;
           const activeInGroup = activeFilters[traitName]?.size ?? 0;
           const searchTerm = searchByTraitName[traitName] ?? "";
           const normalizedSearchTerm = searchTerm.trim().toLocaleLowerCase();
-          const traitValues = (precomputed.properties[traitName] ?? []).filter((item) =>
-            normalizedSearchTerm.length === 0
-              ? true
-              : item.property.toLocaleLowerCase().includes(normalizedSearchTerm),
-          );
+          const filteredValues = isOpen
+            ? openGroupValues.filter((item) =>
+                normalizedSearchTerm.length === 0
+                  ? true
+                  : item.property.toLocaleLowerCase().includes(normalizedSearchTerm),
+              )
+            : [];
 
           return (
             <div key={traitName} className="space-y-1">
@@ -162,10 +181,12 @@ export function TraitFilterSidebar({
                     className="h-7 text-xs"
                   />
                   <div className="flex flex-wrap gap-1.5">
-                    {traitValues.length === 0 ? (
+                    {isLoadingValues ? (
+                      <p className="text-xs text-muted-foreground">Loading values...</p>
+                    ) : filteredValues.length === 0 ? (
                       <p className="text-xs text-muted-foreground">No matches.</p>
                     ) : (
-                      traitValues.map((item) => {
+                      filteredValues.map((item) => {
                         const isActive = activeFilters[traitName]?.has(item.property) ?? false;
                         return (
                           <button
