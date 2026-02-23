@@ -1,7 +1,15 @@
-import { describe, expect, it } from "vitest";
-import { getMarketplaceRuntimeConfigFromEnv } from "@/lib/marketplace/config";
+import { beforeEach, describe, expect, it } from "vitest";
+import {
+  getMarketplaceRuntimeConfig,
+  getMarketplaceRuntimeConfigFromEnv,
+  _resetConfigCache,
+} from "@/lib/marketplace/config";
 
 describe("marketplace config", () => {
+  beforeEach(() => {
+    _resetConfigCache();
+  });
+
   it("config.parses_valid_chain_alias_and_default_project", () => {
     const result = getMarketplaceRuntimeConfigFromEnv({
       NEXT_PUBLIC_MARKETPLACE_CHAIN_ID: "SN_MAIN",
@@ -64,5 +72,17 @@ describe("marketplace config", () => {
         NEXT_PUBLIC_MARKETPLACE_RUNTIME: "dojo",
       }).sdkConfig.runtime,
     ).toBe("dojo");
+  });
+
+  it("returns_same_reference_on_repeated_calls", () => {
+    const first = getMarketplaceRuntimeConfig();
+    const second = getMarketplaceRuntimeConfig();
+    expect(first).toBe(second);
+  });
+
+  it("returns_same_collections_array_reference", () => {
+    const first = getMarketplaceRuntimeConfig().collections;
+    const second = getMarketplaceRuntimeConfig().collections;
+    expect(first).toBe(second);
   });
 });

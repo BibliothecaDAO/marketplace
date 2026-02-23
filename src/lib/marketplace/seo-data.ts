@@ -293,16 +293,30 @@ export async function getTokenSeoData(
   address: string,
   tokenId: string,
 ): Promise<TokenSeoData> {
-  const { context, collection } = await fetchCollection(address);
-  const collectionInfo = collectionMetadata(collection);
+  const context = resolveCollectionContext(address);
+  const client = await getMarketplaceClient();
+
+  // Fire both API calls in parallel — they are independent once the client exists.
+  const [rawCollection, tokenDetail] = await Promise.all([
+    client
+      ? client
+          .getCollection({
+            address,
+            projectId: context.projectId,
+            fetchImages: true,
+          })
+          .catch(() => null)
+      : Promise.resolve(null),
+    _fetchTokenWithFallbackUncached({
+      collection: address,
+      tokenId,
+      projectId: context.projectId,
+    }),
+  ]);
+
+  const collectionInfo = collectionMetadata(rawCollection);
   const collectionName = collectionInfo.name ?? context.name;
   const collectionImage = collectionInfo.image;
-
-  const tokenDetail = await fetchTokenWithFallback({
-    collection: address,
-    tokenId,
-    projectId: context.projectId,
-  });
 
   if (!tokenDetail?.token) {
     return {

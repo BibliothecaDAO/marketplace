@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo } from "react";
+import { useEffect, useMemo, useRef } from "react";
 import Link from "next/link";
 import type { NormalizedToken } from "@cartridge/arcade/marketplace";
 import {
@@ -124,6 +124,8 @@ export function CollectionRow({
   searchQuery = "",
   onSearchMatchChange,
 }: CollectionRowProps) {
+  const onSearchMatchChangeRef = useRef(onSearchMatchChange);
+  useEffect(() => { onSearchMatchChangeRef.current = onSearchMatchChange; });
   const { addListingToCart, isRecentlyAdded } = useAddToCartFeedback();
   const collectionQuery = useCollectionQuery({ address, projectId, fetchImages: false });
   const tokenQuery = useCollectionTokensQuery({
@@ -216,8 +218,8 @@ export function CollectionRow({
       : tokensForDisplay;
 
   useEffect(() => {
-    onSearchMatchChange?.(address, matchesSearch);
-  }, [address, matchesSearch, onSearchMatchChange]);
+    onSearchMatchChangeRef.current?.(address, matchesSearch);
+  }, [address, matchesSearch]);
 
   if (!matchesSearch) {
     return null;

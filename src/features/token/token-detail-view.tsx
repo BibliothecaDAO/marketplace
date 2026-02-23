@@ -222,8 +222,6 @@ export function TokenDetailView({
     limit: TOKEN_DETAIL_LISTING_LIMIT,
     verifyOwnership: true,
   });
-  const nowEpochSeconds = Math.floor(Date.now() / 1000);
-
   const { holderAddress, effectiveIsOwner, ownershipQuery } = useTokenOwnership({
     collection: address,
     tokenId: normalizedTokenId,
@@ -245,13 +243,15 @@ export function TokenDetailView({
     [detailQuery.data?.listings, listingQuery.data],
   );
   const listingRows = useMemo(
-    () =>
-      (rawListings as ListingRow[]).filter(
+    () => {
+      const now = Math.floor(Date.now() / 1000);
+      return (rawListings as ListingRow[]).filter(
         (listing) =>
           !isInactiveListing(listing) &&
-          !isExpiredListing(listing, nowEpochSeconds),
-      ),
-    [nowEpochSeconds, rawListings],
+          !isExpiredListing(listing, now),
+      );
+    },
+    [rawListings],
   );
   const cheapestListings = useMemo(
     () => cheapestListingByTokenId(listingRows as unknown[]),
@@ -307,27 +307,23 @@ export function TokenDetailView({
       }));
 
       try {
-        const fees =
+        const [fees, royaltyResponse] = await Promise.all([
           client && typeof client.getFees === "function"
-            ? await client.getFees()
-            : null;
+            ? client.getFees()
+            : Promise.resolve(null),
+          client && typeof client.getRoyaltyFee === "function"
+            ? client.getRoyaltyFee({
+                collection: address,
+                tokenId: formatNumberish(token.token_id) ?? String(token.token_id),
+                amount: listingPrice,
+              }).catch(() => null)
+            : Promise.resolve(null),
+        ]);
+
         const marketplaceFee = calculateMarketplaceFee(listingPrice, {
           feeNum: fees?.feeNum ?? DEFAULT_MARKETPLACE_FEE_NUM,
           feeDenominator: fees?.feeDenominator ?? DEFAULT_MARKETPLACE_FEE_DENOMINATOR,
         });
-
-        let royaltyResponse = null;
-        if (client && typeof client.getRoyaltyFee === "function") {
-          try {
-            royaltyResponse = await client.getRoyaltyFee({
-              collection: address,
-              tokenId: formatNumberish(token.token_id) ?? String(token.token_id),
-              amount: listingPrice,
-            });
-          } catch {
-            // royalties not configured for this collection — treat as 0
-          }
-        }
 
         if (disposed) {
           return;

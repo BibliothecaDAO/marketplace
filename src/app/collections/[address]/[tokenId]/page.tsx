@@ -1,3 +1,4 @@
+import { Suspense } from "react";
 import type { Metadata } from "next";
 import { TokenDetailView } from "@/features/token/token-detail-view";
 import { buildMarketplacePageMetadata } from "@/lib/seo/metadata";
@@ -11,7 +12,9 @@ export default async function TokenPage({ params }: TokenPageProps) {
 
   return (
     <main className="w-full px-4 py-6 sm:px-6 lg:px-8">
-      <TokenDetailView address={address} tokenId={tokenId} />
+      <Suspense>
+        <TokenDetailView address={address} tokenId={tokenId} />
+      </Suspense>
     </main>
   );
 }

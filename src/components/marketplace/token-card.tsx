@@ -1,5 +1,6 @@
 "use client";
 
+import React, { useMemo } from "react";
 import Link from "next/link";
 import type { NormalizedToken } from "@cartridge/arcade/marketplace";
 import {
@@ -84,7 +85,7 @@ function tokenAttributes(token: NormalizedToken): TokenAttributeRow[] {
   }));
 }
 
-export function MarketplaceTokenCard({
+export const MarketplaceTokenCard = React.memo(function MarketplaceTokenCard({
   token,
   href,
   price,
@@ -98,7 +99,7 @@ export function MarketplaceTokenCard({
 }: MarketplaceTokenCardProps) {
   const image = tokenImage(token);
   const displayPrice = formatPriceForDisplay(price);
-  const attributes = tokenAttributes(token);
+  const attributes = useMemo(() => tokenAttributes(token), [token]);
 
   return (
     <Link
@@ -190,4 +191,4 @@ export function MarketplaceTokenCard({
       </Card>
     </Link>
   );
-}
+});

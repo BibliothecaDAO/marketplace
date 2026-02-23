@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useMemo, useState } from "react";
+import { useDeferredValue, useMemo, useState } from "react";
 import type { CollectionOrdersOptions } from "@cartridge/arcade/marketplace";
 import {
   useCollectionListingsQuery,
@@ -249,9 +249,10 @@ export function CollectionMarketPanel({
     () => parseOrderCategory(orderCategory),
     [orderCategory],
   );
+  const deferredListingTokenId = useDeferredValue(listingTokenId);
   const listingTokenFilter = useMemo(
-    () => parseListingTokenId(listingTokenId),
-    [listingTokenId],
+    () => parseListingTokenId(deferredListingTokenId),
+    [deferredListingTokenId],
   );
 
   const orders = useCollectionOrdersQuery({

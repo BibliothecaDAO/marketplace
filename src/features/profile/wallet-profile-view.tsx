@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useDeferredValue, useMemo, useState } from "react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { useWalletPortfolioQuery } from "@/lib/marketplace/hooks";
@@ -101,8 +101,10 @@ export function WalletProfileView({
 
   const collections = useMemo(() => groupByCollection(items), [items]);
 
+  const deferredFilter = useDeferredValue(filterInput);
+
   const filteredCollections = useMemo(() => {
-    const normalized = filterInput.trim().toLowerCase();
+    const normalized = deferredFilter.trim().toLowerCase();
     if (!normalized) return collections;
     return collections
       .map(({ collectionAddress, tokenIds }) => ({
@@ -114,7 +116,7 @@ export function WalletProfileView({
           collectionAddress.toLowerCase().includes(normalized) ||
           tokenIds.length > 0,
       );
-  }, [filterInput, collections]);
+  }, [deferredFilter, collections]);
 
   const totalItems = items.length;
   const totalCollections = collections.length;
