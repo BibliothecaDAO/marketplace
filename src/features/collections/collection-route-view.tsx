@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 import type { NormalizedToken } from "@cartridge/arcade/marketplace";
 import {
   useCollectionListingsQuery,
@@ -200,6 +200,18 @@ export function CollectionRouteView({
     () => new Set(cheapestByPrice.slice(0, clampedSweepCount).map(([tokenId]) => tokenId)),
     [cheapestByPrice, clampedSweepCount],
   );
+  const handleTokensChange = useCallback((tokens: NormalizedToken[]) => {
+    setVisibleTokensByScope((current) => {
+      if (current[sweepScopeKey] === tokens) {
+        return current;
+      }
+
+      return {
+        ...current,
+        [sweepScopeKey]: tokens,
+      };
+    });
+  }, [sweepScopeKey]);
 
   function handleChange(nextAddress: string) {
     if (onNavigate) {
@@ -315,11 +327,7 @@ export function CollectionRouteView({
                 key={sweepScopeKey}
                 activeFilters={resolvedActiveFilters}
                 address={address}
-                onTokensChange={(tokens) =>
-                  setVisibleTokensByScope((current) => ({
-                    ...current,
-                    [sweepScopeKey]: tokens,
-                  }))}
+                onTokensChange={handleTokensChange}
                 projectId={projectId}
                 sortMode={sortMode}
                 sweepPreviewTokenIds={sweepPreviewTokenIds}

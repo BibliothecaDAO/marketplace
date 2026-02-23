@@ -17,6 +17,7 @@ const {
   setMockVisibleTokens,
   getMockVisibleTokens,
   mockSweepBarRender,
+  mockTokenGridRender,
 } = vi.hoisted(() => {
   let mockCartItems: Array<Record<string, unknown>> = [];
   let mockVisibleTokens: Array<Record<string, unknown>> = [];
@@ -33,6 +34,7 @@ const {
     },
     getMockVisibleTokens: () => mockVisibleTokens,
     mockSweepBarRender: vi.fn(),
+    mockTokenGridRender: vi.fn(),
   };
 });
 
@@ -46,22 +48,25 @@ vi.mock("@/lib/marketplace/hooks", () => ({
 }));
 
 vi.mock("@/features/collections/collection-token-grid", () => ({
-  CollectionTokenGrid: (props: Record<string, unknown>) => (
-    <div data-testid="collection-token-grid">
-      Token Grid: {props.address as string} | Sort: {String(props.sortMode ?? "recent")}
-      <div data-testid="token-grid-sweep-preview">
-        {Array.from((props.sweepPreviewTokenIds as Set<string> | undefined) ?? []).join(",")}
+  CollectionTokenGrid: (props: Record<string, unknown>) => {
+    mockTokenGridRender(props);
+    return (
+      <div data-testid="collection-token-grid">
+        Token Grid: {props.address as string} | Sort: {String(props.sortMode ?? "recent")}
+        <div data-testid="token-grid-sweep-preview">
+          {Array.from((props.sweepPreviewTokenIds as Set<string> | undefined) ?? []).join(",")}
+        </div>
+        <button
+          onClick={() =>
+            (props.onTokensChange as ((tokens: Array<Record<string, unknown>>) => void) | undefined)?.(getMockVisibleTokens())
+          }
+          type="button"
+        >
+          Emit visible tokens
+        </button>
       </div>
-      <button
-        onClick={() =>
-          (props.onTokensChange as ((tokens: Array<Record<string, unknown>>) => void) | undefined)?.(getMockVisibleTokens())
-        }
-        type="button"
-      >
-        Emit visible tokens
-      </button>
-    </div>
-  ),
+    );
+  },
 }));
 
 vi.mock("@/features/collections/collection-market-panel", () => ({
@@ -144,6 +149,7 @@ describe("collection route view", () => {
     mockCartAddCandidates.mockReset();
     mockCartSetOpen.mockReset();
     mockSweepBarRender.mockReset();
+    mockTokenGridRender.mockReset();
     mockCartAddCandidates.mockReturnValue({ ok: true });
     setMockCartItems([]);
     setMockVisibleTokens([]);
@@ -290,6 +296,28 @@ describe("collection route view", () => {
     render(<CollectionRouteView address="0xabc" collections={collections} />);
 
     expect(mockUseCollectionTokensQuery).not.toHaveBeenCalled();
+  });
+
+  it("keeps_on_tokens_change_callback_stable_within_same_scope", async () => {
+    mockUseCollectionQuery.mockReturnValue(successQuery(null));
+    setMockVisibleTokens([token("1")]);
+    const user = userEvent.setup();
+
+    render(<CollectionRouteView address="0xabc" collections={collections} />);
+    const firstProps = mockTokenGridRender.mock.lastCall?.[0] as
+      | Record<string, unknown>
+      | undefined;
+    const firstCallback = firstProps?.onTokensChange;
+
+    await user.click(screen.getByRole("button", { name: /emit visible tokens/i }));
+
+    const secondProps = mockTokenGridRender.mock.lastCall?.[0] as
+      | Record<string, unknown>
+      | undefined;
+    const secondCallback = secondProps?.onTokensChange;
+
+    expect(typeof firstCallback).toBe("function");
+    expect(secondCallback).toBe(firstCallback);
   });
 
   it("contract_type_not_shown_to_users", () => {
