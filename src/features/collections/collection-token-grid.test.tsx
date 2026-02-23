@@ -279,7 +279,7 @@ describe("collection token grid", () => {
 
     expect(mockUseCollectionTokensQuery).toHaveBeenCalledWith(
       expect.objectContaining({
-        attributeFilters: { Background: new Set(["Blue"]) },
+        attributeFilters: { Background: ["Blue"] },
       }),
     );
   });
@@ -320,7 +320,7 @@ describe("collection token grid", () => {
     expect(await screen.findByText("Token #1")).toBeVisible();
     expect(mockUseCollectionTokensQuery).toHaveBeenCalledWith(
       expect.objectContaining({
-        attributeFilters: { Background: new Set(["Blue"]) },
+        attributeFilters: { Background: ["Blue"] },
       }),
     );
   });
@@ -710,7 +710,7 @@ describe("collection token grid", () => {
     const filtersB: ActiveFilters = { Background: new Set(["Red"]) };
 
     mockUseCollectionTokensQuery.mockImplementation((options) => {
-      const hasBlue = options?.attributeFilters?.Background?.has("Blue");
+      const hasBlue = options?.attributeFilters?.Background?.includes("Blue");
       const tokens = hasBlue ? [token("10")] : [token("20")];
       return {
         data: { page: { tokens, nextCursor: null }, error: null },

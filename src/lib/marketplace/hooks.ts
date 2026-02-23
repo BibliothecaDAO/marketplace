@@ -13,7 +13,6 @@ import {
   useMarketplaceCollection,
   useMarketplaceCollectionListings,
   useMarketplaceCollectionOrders,
-  useMarketplaceCollectionTokens,
   useMarketplaceToken,
   useMarketplaceTokenBalances,
 } from "@cartridge/arcade/marketplace/react";
@@ -71,8 +70,24 @@ export function useCollectionTokensQuery(
   options: FetchCollectionTokensOptions,
   queryOptions?: { enabled?: boolean },
 ) {
-  return useMarketplaceCollectionTokens(options, {
-    enabled: (queryOptions?.enabled ?? true) && !!options.address,
+  const enabled = (queryOptions?.enabled ?? true) && !!options.address;
+  return useQuery({
+    queryKey: [
+      "collection-tokens",
+      options.address,
+      options.project,
+      options.cursor,
+      options.tokenIds,
+      options.attributeFilters,
+      options.limit,
+    ] as const,
+    queryFn: async () => {
+      const { fetchCollectionTokens } = await import(
+        "@cartridge/arcade/marketplace"
+      );
+      return fetchCollectionTokens(options);
+    },
+    enabled,
   });
 }
 

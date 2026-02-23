@@ -67,20 +67,25 @@ describe("marketplace hooks", () => {
     expect(result.current).toBe(expected);
   });
 
-  it("useCollectionTokensQuery_delegates_to_sdk_hook", async () => {
-    const expected = { status: "success", data: { page: { tokens: [] } } };
-    mockUseMarketplaceCollectionTokens.mockReturnValue(expected);
+  it("useCollectionTokensQuery_calls_fetchCollectionTokens", async () => {
+    const pageData = { page: { tokens: [], nextCursor: null }, error: null };
+    const mockFetchCollectionTokens = vi.fn().mockResolvedValue(pageData);
+
+    vi.doMock("@cartridge/arcade/marketplace", () => ({
+      fetchCollectionTokens: mockFetchCollectionTokens,
+    }));
 
     const { useCollectionTokensQuery } = await import("@/lib/marketplace/hooks");
     const { result } = renderHook(
       () => useCollectionTokensQuery({ address: "0xabc", limit: 12, fetchImages: true }),
+      { wrapper: makeWrapper() },
     );
 
-    expect(mockUseMarketplaceCollectionTokens).toHaveBeenCalledWith(
-      { address: "0xabc", limit: 12, fetchImages: true },
-      { enabled: true },
+    await waitFor(() => expect(result.current.isSuccess).toBe(true));
+    expect(mockFetchCollectionTokens).toHaveBeenCalledWith(
+      expect.objectContaining({ address: "0xabc", limit: 12, fetchImages: true }),
     );
-    expect(result.current).toBe(expected);
+    expect(result.current.data).toBe(pageData);
   });
 
   it("useCollectionOrdersQuery_delegates_to_sdk_hook", async () => {

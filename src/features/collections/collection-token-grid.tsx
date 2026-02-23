@@ -192,7 +192,9 @@ export function CollectionTokenGrid({
   const attributeFilters = useMemo(
     () =>
       activeFilters && Object.keys(activeFilters).length > 0
-        ? Object.fromEntries(Object.entries(activeFilters))
+        ? Object.fromEntries(
+            Object.entries(activeFilters).map(([k, v]) => [k, Array.from(v)]),
+          )
         : undefined,
     [activeFilters],
   );
