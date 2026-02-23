@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   alternateTokenId,
   canonicalizeTokenId,
+  expandTokenIdQueryVariants,
   expandTokenIdVariants,
   normalizeCollectionTokenId,
 } from "@/lib/marketplace/token-id";
@@ -31,6 +32,16 @@ describe("token id helpers", () => {
       "0x1",
       "2",
       "0x2",
+    ]);
+  });
+
+  it("expands_query_variants_with_padded_hex_for_edge_lookup", () => {
+    expect(expandTokenIdQueryVariants(["1120"])).toEqual([
+      "1120",
+      "0x460",
+      "460",
+      "0x0000000000000000000000000000000000000000000000000000000000000460",
+      "0000000000000000000000000000000000000000000000000000000000000460",
     ]);
   });
 

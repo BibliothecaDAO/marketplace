@@ -30,7 +30,7 @@ import {
 } from "@/components/ui/table";
 import type { ActiveFilters } from "@/lib/marketplace/traits";
 import { COLLECTION_LISTING_SAMPLE_LIMIT } from "@/lib/marketplace/query-limits";
-import { expandTokenIdVariants } from "@/lib/marketplace/token-id";
+import { expandTokenIdQueryVariants } from "@/lib/marketplace/token-id";
 import { cn } from "@/lib/utils";
 import {
   cartItemFromTokenListing,
@@ -239,7 +239,7 @@ export function CollectionTokenGrid({
   const listedQueryTokenIds = useMemo(
     () =>
       (sortMode !== "recent"
-        ? expandTokenIdVariants(listingPriceMap.keys())
+        ? expandTokenIdQueryVariants(listingPriceMap.keys())
         : []),
     [listingPriceMap, sortMode],
   );

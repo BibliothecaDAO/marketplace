@@ -799,6 +799,65 @@ describe("collection token grid", () => {
     ).toEqual(["token-2", "token-1", "token-3"]);
   });
 
+  it("price_sort_includes_listed_tokens_resolved_by_padded_token_ids", async () => {
+    const padded1120 = `0x${"460".padStart(64, "0")}`;
+    mockUseCollectionTokensQuery.mockImplementation((options) => {
+      if (Array.isArray(options?.tokenIds)) {
+        const includesPadded = options.tokenIds.includes(padded1120);
+        return {
+          data: {
+            page: {
+              tokens: includesPadded
+                ? [token("0x460", { metadata: { name: "Token #1120" } })]
+                : [],
+              nextCursor: null,
+            },
+            error: null,
+          },
+          isLoading: false,
+          isSuccess: true,
+          isError: false,
+          error: null,
+          isFetching: false,
+          refetch: vi.fn(),
+        };
+      }
+
+      return {
+        data: {
+          page: {
+            tokens: [token("1"), token("2"), token("3")],
+            nextCursor: null,
+          },
+          error: null,
+        },
+        isLoading: false,
+        isSuccess: true,
+        isError: false,
+        error: null,
+        isFetching: false,
+        refetch: vi.fn(),
+      };
+    });
+    mockUseCollectionListingsQuery.mockReturnValue(
+      successListingsResult([
+        { id: 99, tokenId: 1120, price: 44, currency: "0xfee", quantity: 1 },
+      ]),
+    );
+
+    render(
+      <CollectionTokenGrid
+        address="0xabc"
+        projectId="project-a"
+        sortMode="price-asc"
+      />,
+    );
+
+    expect(
+      await screen.findByRole("article", { name: "token-1120" }),
+    ).toBeVisible();
+  });
+
   it("applies_price_descending_sort_when_requested", async () => {
     mockUseCollectionTokensQuery.mockReturnValue({
       data: {

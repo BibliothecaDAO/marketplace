@@ -4,6 +4,8 @@ export type CanonicalTokenId = {
   value: bigint;
 };
 
+const PADDED_TOKEN_ID_HEX_LENGTH = 64;
+
 function parseTokenIdValue(input: string): bigint | null {
   const trimmed = input.trim();
   if (!trimmed) {
@@ -106,4 +108,64 @@ export function expandTokenIdVariants(tokenIds: Iterable<string>): string[] {
     ...orderedCanonical.flatMap((canonical) => [canonical.decimal, canonical.hex]),
     ...orderedRawUnparsed,
   ];
+}
+
+export function expandTokenIdQueryVariants(tokenIds: Iterable<string>): string[] {
+  const canonicalByDecimal = new Map<string, CanonicalTokenId>();
+  const rawUnparsed = new Set<string>();
+
+  for (const rawTokenId of tokenIds) {
+    const trimmed = rawTokenId.trim();
+    if (!trimmed) {
+      continue;
+    }
+
+    const canonical = canonicalizeTokenId(trimmed);
+    if (canonical) {
+      canonicalByDecimal.set(canonical.decimal, canonical);
+      continue;
+    }
+
+    rawUnparsed.add(trimmed);
+  }
+
+  const orderedCanonical = Array.from(canonicalByDecimal.values()).sort(
+    (left, right) => (left.value < right.value ? -1 : left.value > right.value ? 1 : 0),
+  );
+  const orderedRawUnparsed = Array.from(rawUnparsed).sort((left, right) =>
+    left.localeCompare(right),
+  );
+
+  const expanded: string[] = [];
+  const seen = new Set<string>();
+
+  function pushUnique(value: string) {
+    if (!value || seen.has(value)) {
+      return;
+    }
+
+    seen.add(value);
+    expanded.push(value);
+  }
+
+  for (const canonical of orderedCanonical) {
+    const unprefixedHex = canonical.hex.startsWith("0x")
+      ? canonical.hex.slice(2)
+      : canonical.hex;
+    const paddedHex = canonical.value
+      .toString(16)
+      .padStart(PADDED_TOKEN_ID_HEX_LENGTH, "0");
+
+    pushUnique(canonical.decimal);
+    pushUnique(canonical.hex);
+    pushUnique(unprefixedHex);
+    pushUnique(`0x${paddedHex}`);
+    pushUnique(paddedHex);
+  }
+
+  for (const raw of orderedRawUnparsed) {
+    pushUnique(raw);
+  }
+
+  return expanded;
 }
