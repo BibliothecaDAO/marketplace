@@ -284,6 +284,14 @@ describe("collection route view", () => {
     );
   });
 
+  it("does_not_issue_secondary_token_query_for_sweep_candidates", () => {
+    mockUseCollectionQuery.mockReturnValue(successQuery(null));
+
+    render(<CollectionRouteView address="0xabc" collections={collections} />);
+
+    expect(mockUseCollectionTokensQuery).not.toHaveBeenCalled();
+  });
+
   it("contract_type_not_shown_to_users", () => {
     mockUseCollectionQuery.mockReturnValue(
       successQuery({ metadata: { name: "Genesis" }, contractType: "erc721", address: "0xabc" })

@@ -1,10 +1,10 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import type { NormalizedToken } from "@cartridge/arcade/marketplace";
 import {
   useCollectionListingsQuery,
   useCollectionQuery,
-  useCollectionTokensQuery,
   useCollectionTraitMetadataQuery,
 } from "@/lib/marketplace/hooks";
 import {
@@ -36,9 +36,9 @@ import { CART_MAX_ITEMS, useCartStore } from "@/features/cart/store/cart-store";
 import { type CollectionSortMode } from "@/features/collections/collection-query-params";
 import { SweepBar } from "@/features/collections/sweep-bar";
 import { COLLECTION_LISTING_SAMPLE_LIMIT } from "@/lib/marketplace/query-limits";
-import { expandTokenIdVariants } from "@/lib/marketplace/token-id";
 
 const EMPTY_ACTIVE_FILTERS: ActiveFilters = {};
+const EMPTY_VISIBLE_TOKENS: NormalizedToken[] = [];
 
 type CollectionRouteViewProps = {
   address: string;
@@ -135,6 +135,9 @@ export function CollectionRouteView({
   const projectId = selectedCollection?.projectId;
   const sweepScopeKey = `${address}-${projectId ?? "default"}`;
   const [sweepCount, setSweepCount] = useState(0);
+  const [visibleTokensByScope, setVisibleTokensByScope] = useState<
+    Record<string, NormalizedToken[]>
+  >({});
   const collection = useCollectionQuery({ address, projectId, fetchImages: true });
   const traitMetadataQuery = useCollectionTraitMetadataQuery({ address, projectId });
   const listingQuery = useCollectionListingsQuery({
@@ -156,30 +159,14 @@ export function CollectionRouteView({
     ? collectionName(collection.data.metadata, address)
     : null;
 
-  // Fetch listed tokens directly so sweep candidates don't depend on
-  // a child-to-parent callback. TanStack Query deduplicates with the grid.
-  const listedTokenIds = useMemo(() => {
-    return expandTokenIdVariants(cheapestListings.keys());
-  }, [cheapestListings]);
-
-  const listedTokensQuery = useCollectionTokensQuery(
-    {
-      address,
-      project: projectId,
-      tokenIds: listedTokenIds.length > 0 ? listedTokenIds : undefined,
-      limit: Math.max(listedTokenIds.length, 1),
-      fetchImages: true,
-    },
-    { enabled: listedTokenIds.length > 0 },
-  );
+  const visibleTokens = visibleTokensByScope[sweepScopeKey] ?? EMPTY_VISIBLE_TOKENS;
 
   const sweepCandidates = useMemo(() => {
-    const tokens = listedTokensQuery.data?.page?.tokens;
-    if (!tokens?.length) return [];
+    if (!visibleTokens.length) return [];
 
     const cartOrderIds = new Set(cartItems.map((item) => item.orderId));
     const tokenByDisplayId = new Map(
-      tokens.map((token) => [displayTokenId(token), token] as const),
+      visibleTokens.map((token) => [displayTokenId(token), token] as const),
     );
 
     const candidates = Array.from(cheapestListings.values())
@@ -193,7 +180,7 @@ export function CollectionRouteView({
       .sort((left, right) => compareBigIntStrings(left.price, right.price));
 
     return candidates.slice(0, CART_MAX_ITEMS);
-  }, [address, cartItems, cheapestListings, listedTokensQuery.data, projectId]);
+  }, [address, cartItems, cheapestListings, projectId, visibleTokens]);
 
   // Build the preview set directly from cheapestListings (same key format
   // the grid uses for lookup) so highlighting doesn't depend on listedTokensQuery.
@@ -328,6 +315,11 @@ export function CollectionRouteView({
                 key={sweepScopeKey}
                 activeFilters={resolvedActiveFilters}
                 address={address}
+                onTokensChange={(tokens) =>
+                  setVisibleTokensByScope((current) => ({
+                    ...current,
+                    [sweepScopeKey]: tokens,
+                  }))}
                 projectId={projectId}
                 sortMode={sortMode}
                 sweepPreviewTokenIds={sweepPreviewTokenIds}
