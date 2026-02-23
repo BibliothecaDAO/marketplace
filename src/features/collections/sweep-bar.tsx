@@ -90,8 +90,8 @@ export function SweepBar({
   const currency = selectedCandidates[0]?.currency ?? candidates[0]?.currency ?? ""
 
   return (
-    <div className="fixed bottom-0 inset-x-0 z-40 border-t bg-background/95 backdrop-blur-sm">
-      <div className="mx-auto max-w-7xl px-4">
+    <div className="sticky bottom-0 z-30 rounded-md border border-border/60 bg-background/95 backdrop-blur-sm">
+      <div className="w-full px-4">
         {selectedCount > 0 && (
           <div className="overflow-x-auto pt-2 pb-1">
             <SweepThumbnails items={selectedCandidates} />

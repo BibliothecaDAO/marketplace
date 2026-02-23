@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import { useAccount, useConnect, useDisconnect } from "@starknet-react/core";
 import { Github, Menu, MessageSquare, Twitter } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -28,6 +29,7 @@ import {
   SheetTitle,
   SheetTrigger,
 } from "@/components/ui/sheet";
+import { Input } from "@/components/ui/input";
 
 function formatAddress(address: string) {
   return `${address.slice(0, 6)}...${address.slice(-4)}`;
@@ -54,11 +56,14 @@ const SOCIAL_LINKS = [
 ] as const;
 
 export function Header() {
+  const router = useRouter();
+  const searchParams = useSearchParams();
   const { address, isConnected } = useAccount();
   const { connect, connectors, isPending: isConnecting } = useConnect();
   const { disconnect, isPending: isDisconnecting } = useDisconnect();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [walletModalOpen, setWalletModalOpen] = useState(false);
+  const [searchInput, setSearchInput] = useState(() => searchParams.get("q") ?? "");
 
   const isBusy = isConnecting || isDisconnecting;
 
@@ -71,9 +76,19 @@ export function Header() {
     }
   };
 
+  const handleSearchSubmit = () => {
+    const normalized = searchInput.trim().replace(/\s+/g, " ");
+    if (normalized.length === 0) {
+      router.push("/");
+      return;
+    }
+
+    router.push(`/?q=${encodeURIComponent(normalized)}`);
+  };
+
   return (
     <header className="sticky top-0 z-50 w-full border-b border-border/80 bg-background/95 backdrop-blur-sm">
-      <div className="flex h-14 items-center justify-between px-4">
+      <div className="flex h-14 items-center gap-2 px-4">
         {/* Logo */}
         <Link href="/" className="flex items-center gap-2 shrink-0" aria-label="Realms.market home">
           <span
@@ -100,8 +115,23 @@ export function Header() {
           ))}
         </nav>
 
+        <div className="hidden md:block lg:min-w-72">
+          <Input
+            aria-label="Search"
+            placeholder="Search..."
+            value={searchInput}
+            onChange={(event) => setSearchInput(event.target.value)}
+            onKeyDown={(event) => {
+              if (event.key === "Enter") {
+                handleSearchSubmit();
+              }
+            }}
+            className="w-56 lg:w-72"
+          />
+        </div>
+
         {/* Right side actions */}
-        <div className="flex items-center gap-1 sm:gap-2">
+        <div className="ml-auto flex items-center gap-1 sm:gap-2">
           {/* Social icons */}
           <div className="hidden sm:flex items-center gap-1 mr-1">
             {SOCIAL_LINKS.map(({ label, href, Icon }) => (

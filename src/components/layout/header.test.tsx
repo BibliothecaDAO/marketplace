@@ -12,12 +12,20 @@ const { mockUseAccount, mockUseConnect, mockUseDisconnect, mockConnect, mockDisc
     mockDisconnect: vi.fn(),
     mockUseBalance: vi.fn(),
   }));
+const { mockPush, mockSearchParams } = vi.hoisted(() => ({
+  mockPush: vi.fn(),
+  mockSearchParams: vi.fn(),
+}));
 
 vi.mock("@starknet-react/core", () => ({
   useAccount: mockUseAccount,
   useConnect: mockUseConnect,
   useDisconnect: mockUseDisconnect,
   useBalance: mockUseBalance,
+}));
+vi.mock("next/navigation", () => ({
+  useRouter: () => ({ push: mockPush }),
+  useSearchParams: () => mockSearchParams(),
 }));
 
 vi.mock("@/features/cart/components/cart-sidebar", () => ({
@@ -28,7 +36,10 @@ describe("Header", () => {
   beforeEach(() => {
     mockConnect.mockReset();
     mockDisconnect.mockReset();
+    mockPush.mockReset();
+    mockSearchParams.mockReset();
     mockUseBalance.mockReturnValue({ data: undefined, isLoading: false });
+    mockSearchParams.mockReturnValue(new URLSearchParams());
 
     mockUseAccount.mockReturnValue({
       status: "disconnected",
@@ -59,6 +70,36 @@ describe("Header", () => {
     render(<Header />);
 
     expect(screen.getByText("Realms.market")).toBeVisible();
+  });
+
+  it("renders_search_input", () => {
+    render(<Header />);
+
+    expect(screen.getByPlaceholderText("Search...")).toBeVisible();
+  });
+
+  it("search_input_has_placeholder", () => {
+    render(<Header />);
+
+    expect(screen.getByPlaceholderText("Search...")).toBeVisible();
+  });
+
+  it("search_navigates_on_enter", async () => {
+    const user = userEvent.setup();
+
+    render(<Header />);
+
+    await user.type(screen.getByPlaceholderText("Search..."), "dragons{enter}");
+
+    expect(mockPush).toHaveBeenCalledWith("/?q=dragons");
+  });
+
+  it("search_reads_initial_value_from_params", () => {
+    mockSearchParams.mockReturnValue(new URLSearchParams("q=realms"));
+
+    render(<Header />);
+
+    expect(screen.getByPlaceholderText("Search...")).toHaveValue("realms");
   });
 
   it("header_is_a_nav_landmark", () => {

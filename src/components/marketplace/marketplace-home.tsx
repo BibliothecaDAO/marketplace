@@ -1,110 +1,96 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
-import { getMarketplaceRuntimeConfig } from "@/lib/marketplace/config";
-import { CollectionRow } from "@/components/marketplace/collection-row";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { normalizeHomeSearchQuery } from "@/lib/marketplace/home-search";
-
-const SEARCH_DEBOUNCE_MS = 200;
+import { useMemo } from "react";
+import { useSearchParams } from "next/navigation";
+import { CollectionCardsSection } from "@/features/home/collection-cards-section";
+import { HeroBanner } from "@/features/home/hero-banner";
+import { TrendingTokensSection } from "@/features/home/trending-tokens-section";
+import { useHomePageData } from "@/features/home/use-home-page-data";
+import { matchesHomeSearch, normalizeHomeSearchQuery } from "@/lib/marketplace/home-search";
+import { displayTokenId, tokenName } from "@/lib/marketplace/token-display";
 
 export function MarketplaceHome() {
-  const { collections } = getMarketplaceRuntimeConfig();
-  const [searchInput, setSearchInput] = useState("");
-  const [searchQuery, setSearchQuery] = useState("");
-  const [rowMatches, setRowMatches] = useState<Record<string, boolean>>({});
+  const searchParams = useSearchParams();
+  const query = normalizeHomeSearchQuery(searchParams.get("q") ?? "");
+  const {
+    featuredCollection,
+    trendingTokens,
+    collectionCards,
+    isLoading,
+  } = useHomePageData();
 
-  useEffect(() => {
-    const timeoutId = window.setTimeout(() => {
-      setSearchQuery(searchInput);
-    }, SEARCH_DEBOUNCE_MS);
+  const filteredTrendingTokens = useMemo(
+    () =>
+      trendingTokens.filter((entry) =>
+        matchesHomeSearch(query, [
+          tokenName(entry.token),
+          displayTokenId(entry.token),
+          entry.href,
+        ]),
+      ),
+    [query, trendingTokens],
+  );
 
-    return () => window.clearTimeout(timeoutId);
-  }, [searchInput]);
+  const filteredCollectionCards = useMemo(
+    () =>
+      collectionCards.filter((collection) =>
+        matchesHomeSearch(query, [collection.name, collection.address]),
+      ),
+    [collectionCards, query],
+  );
 
-  const handleSearchMatchChange = useCallback((address: string, isMatch: boolean) => {
-    setRowMatches((prev) => {
-      if (prev[address] === isMatch) {
-        return prev;
-      }
+  if (!isLoading && collectionCards.length === 0) {
+    return (
+      <main data-testid="marketplace-home" className="flex-1 px-4 pt-6 sm:px-6 lg:px-8">
+        <p className="text-sm text-muted-foreground font-mono">
+          <span className="mr-1 text-primary">$</span>
+          No collections configured
+        </p>
+      </main>
+    );
+  }
 
-      return {
-        ...prev,
-        [address]: isMatch,
-      };
-    });
-  }, []);
-
-  const resetSearch = useCallback(() => {
-    setSearchInput("");
-    setSearchQuery("");
-    setRowMatches({});
-  }, []);
-
-  const isSearchActive = normalizeHomeSearchQuery(searchQuery).length > 0;
-  const allRowsReported =
-    collections.length > 0 &&
-    collections.every((collection) => rowMatches[collection.address] !== undefined);
-  const hasAnyMatch = collections.some((collection) => rowMatches[collection.address]);
-  const showSearchEmptyState = isSearchActive && allRowsReported && !hasAnyMatch;
+  if (
+    !isLoading
+    && query
+    && filteredTrendingTokens.length === 0
+    && filteredCollectionCards.length === 0
+  ) {
+    return (
+      <main
+        data-testid="marketplace-home"
+        className="flex-1 space-y-4 px-4 pt-6 sm:px-6 lg:px-8"
+      >
+        <p className="text-sm text-muted-foreground font-mono">
+          <span className="mr-1 text-primary">$</span>
+          No matches for &quot;{query}&quot;
+        </p>
+      </main>
+    );
+  }
 
   return (
     <main
       data-testid="marketplace-home"
-      className="w-full space-y-8 pt-6"
+      className="flex-1 space-y-8 px-4 pt-6 sm:px-6 lg:px-8"
     >
-      {collections.length === 0 ? (
-        <p className="text-sm text-muted-foreground font-mono">
-          <span className="text-primary mr-1">$</span>
-          No collections configured
-        </p>
-      ) : <>
-        <div className="flex flex-col gap-2 px-4 sm:px-6 lg:px-8">
-          <label
-            className="text-xs font-medium tracking-widest uppercase text-muted-foreground"
-            htmlFor="home-search"
-          >
-            Search Marketplace
-          </label>
-          <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
-            <Input
-              id="home-search"
-              placeholder="Search collections or token IDs/names"
-              value={searchInput}
-              onChange={(event) => setSearchInput(event.target.value)}
-            />
-            <Button
-              disabled={normalizeHomeSearchQuery(searchInput).length === 0}
-              onClick={resetSearch}
-              type="button"
-              variant="outline"
-            >
-              Reset search
-            </Button>
-          </div>
-        </div>
-
-        {showSearchEmptyState ? (
-          <div className="px-4 sm:px-6 lg:px-8">
-            <p className="text-sm text-muted-foreground font-mono">
-              <span className="text-primary mr-1">$</span>
-              No matches for &quot;{searchQuery.trim()}&quot;
-            </p>
-          </div>
-        ) : null}
-
-        {collections.map((collection) => (
-          <CollectionRow
-            key={collection.address}
-            address={collection.address}
-            name={collection.name}
-            projectId={collection.projectId}
-            searchQuery={searchQuery}
-            onSearchMatchChange={handleSearchMatchChange}
-          />
-        ))}
-      </>}
+      <HeroBanner
+        name={featuredCollection?.name ?? "Featured Collection"}
+        address={featuredCollection?.address ?? ""}
+        imageUrl={featuredCollection?.imageUrl}
+        floorPrice={featuredCollection?.floorPrice}
+        totalSupply={featuredCollection?.totalSupply}
+        listingCount={featuredCollection?.listingCount}
+        isLoading={isLoading}
+      />
+      <TrendingTokensSection
+        tokens={filteredTrendingTokens}
+        isLoading={isLoading}
+      />
+      <CollectionCardsSection
+        collections={filteredCollectionCards}
+        isLoading={isLoading}
+      />
     </main>
   );
 }
