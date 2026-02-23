@@ -329,34 +329,35 @@ export function CollectionRouteView({
           />
         </div>
 
-        <Tabs defaultValue="tokens" className="w-full">
-          <TabsList>
-            <TabsTrigger value="tokens">Tokens</TabsTrigger>
-            <TabsTrigger value="market-activity">Market Activity</TabsTrigger>
-          </TabsList>
-          <TabsContent value="tokens">
-            <CollectionTokenGrid
-              key={sweepScopeKey}
-              activeFilters={resolvedActiveFilters}
-              address={address}
-
-              projectId={projectId}
-              sortMode={sortMode}
-              sweepPreviewTokenIds={sweepPreviewTokenIds}
-            />
-          </TabsContent>
-          <TabsContent value="market-activity">
-            <CollectionMarketPanel address={address} projectId={projectId} />
-          </TabsContent>
-        </Tabs>
+        <div className="w-full space-y-4" data-testid="collection-content-container">
+          <Tabs defaultValue="tokens" className="w-full">
+            <TabsList>
+              <TabsTrigger value="tokens">Tokens</TabsTrigger>
+              <TabsTrigger value="market-activity">Market Activity</TabsTrigger>
+            </TabsList>
+            <TabsContent value="tokens">
+              <CollectionTokenGrid
+                key={sweepScopeKey}
+                activeFilters={resolvedActiveFilters}
+                address={address}
+                projectId={projectId}
+                sortMode={sortMode}
+                sweepPreviewTokenIds={sweepPreviewTokenIds}
+              />
+            </TabsContent>
+            <TabsContent value="market-activity">
+              <CollectionMarketPanel address={address} projectId={projectId} />
+            </TabsContent>
+          </Tabs>
+          <SweepBar
+            candidates={sweepCandidates}
+            count={sweepCount}
+            maxCount={sweepMaxCount}
+            onCountChange={handleSweepCountChange}
+            onSweep={handleSweep}
+          />
+        </div>
       </div>
-      <SweepBar
-        candidates={sweepCandidates}
-        count={sweepCount}
-        maxCount={sweepMaxCount}
-        onCountChange={handleSweepCountChange}
-        onSweep={handleSweep}
-      />
     </section>
   );
 }

@@ -1,4 +1,4 @@
-import { render, screen } from "@testing-library/react";
+import { render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { CollectionRouteView } from "@/features/collections/collection-route-view";
@@ -367,5 +367,14 @@ describe("collection route view", () => {
     ]);
     expect(mockCartSetOpen).toHaveBeenCalledWith(true);
     expect(screen.getByTestId("sweep-count")).toHaveTextContent("0");
+  });
+
+  it("renders_sweep_bar_within_collection_content_container", () => {
+    mockUseCollectionQuery.mockReturnValue(successQuery(null));
+
+    render(<CollectionRouteView address="0xabc" collections={collections} />);
+
+    const contentContainer = screen.getByTestId("collection-content-container");
+    expect(within(contentContainer).getByTestId("sweep-bar")).toBeVisible();
   });
 });
