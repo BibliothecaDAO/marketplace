@@ -355,9 +355,17 @@ export function CollectionTokenGrid({
               cheapestListing?.price ??
               listingPriceMap.get(tokenKey) ??
               tokenPrice(token);
+            const cardItem = cheapestListing
+              ? cartItemFromTokenListing(
+                token,
+                address,
+                cheapestListing,
+                projectId,
+              )
+              : null;
 
             return (
-              <div key={tokenId(token)} className="space-y-2">
+              <div key={tokenId(token)}>
                 <div
                   className={cn(
                     "rounded-lg transition-all duration-150",
@@ -365,38 +373,31 @@ export function CollectionTokenGrid({
                   )}
                 >
                   <MarketplaceTokenCard
+                    buyNowLabel={isAdded ? "Added" : "Buy Now"}
                     cardContentAriaLabel={`token-${tokenKey}`}
                     cardContentRole="article"
                     currency={cheapestListing?.currency ?? null}
                     href={`/collections/${address}/${tokenId(token)}`}
                     linkAriaLabel={`token-${tokenKey}`}
+                    onBuyNow={
+                      cardItem && !isSweepPreview
+                        ? () => {
+                          addListingToCart(cardItem);
+                        }
+                        : undefined
+                    }
+                    onSelect={
+                      cardItem && !isSweepPreview
+                        ? () => {
+                          addListingToCart(cardItem, { openCart: false });
+                        }
+                        : undefined
+                    }
                     price={price}
+                    showActions
                     token={token}
                   />
                 </div>
-                <Button
-                  className="w-full"
-                  disabled={!cheapestListing || isSweepPreview}
-                  onClick={() => {
-                    if (!cheapestListing) {
-                      return;
-                    }
-
-                    addListingToCart(
-                      cartItemFromTokenListing(
-                        token,
-                        address,
-                        cheapestListing,
-                        projectId,
-                      ),
-                    );
-                  }}
-                  size="sm"
-                  type="button"
-                  variant={isAdded ? "default" : isSweepPreview ? "secondary" : "outline"}
-                >
-                  {isAdded ? "Added" : isSweepPreview ? "Pending sweep" : "Add to cart"}
-                </Button>
               </div>
             );
           })}

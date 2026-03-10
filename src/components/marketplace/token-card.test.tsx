@@ -1,5 +1,6 @@
 import { render, screen, within } from "@testing-library/react";
-import { describe, expect, it } from "vitest";
+import userEvent from "@testing-library/user-event";
+import { describe, expect, it, vi } from "vitest";
 import { MarketplaceTokenCard } from "@/components/marketplace/token-card";
 import type { NormalizedToken } from "@cartridge/arcade/marketplace";
 
@@ -107,5 +108,56 @@ describe("MarketplaceTokenCard", () => {
 
     const table = screen.getByTestId("token-attributes-table");
     expect(within(table).getByText("No attributes")).toBeVisible();
+  });
+
+  it("renders_buy_now_and_view_buttons_at_card_bottom", () => {
+    render(
+      <MarketplaceTokenCard
+        href="/collections/0xabc/12"
+        showActions
+        onBuyNow={() => undefined}
+        token={token("12", { name: "Token #12" })}
+      />,
+    );
+
+    expect(screen.getByRole("button", { name: /buy now/i })).toBeVisible();
+    expect(screen.getByRole("link", { name: /view/i })).toHaveAttribute(
+      "href",
+      "/collections/0xabc/12",
+    );
+  });
+
+  it("calls_on_buy_now_when_clicked", async () => {
+    const user = userEvent.setup();
+    const onBuyNow = vi.fn();
+
+    render(
+      <MarketplaceTokenCard
+        href="/collections/0xabc/13"
+        showActions
+        onBuyNow={onBuyNow}
+        token={token("13", { name: "Token #13" })}
+      />,
+    );
+
+    await user.click(screen.getByRole("button", { name: /buy now/i }));
+
+    expect(onBuyNow).toHaveBeenCalledTimes(1);
+  });
+
+  it("does_not_render_buy_now_when_no_listing_action_is_provided", () => {
+    render(
+      <MarketplaceTokenCard
+        href="/collections/0xabc/14"
+        showActions
+        token={token("14", { name: "Token #14" })}
+      />,
+    );
+
+    expect(screen.queryByRole("button", { name: /buy now/i })).toBeNull();
+    expect(screen.getByRole("link", { name: /view/i })).toHaveAttribute(
+      "href",
+      "/collections/0xabc/14",
+    );
   });
 });
