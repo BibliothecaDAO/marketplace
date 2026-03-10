@@ -1,6 +1,7 @@
 "use client";
 
-import { FormEvent, useState } from "react";
+import { FormEvent, useState, useTransition } from "react";
+import { usePathname, useRouter } from "next/navigation";
 import { useAccount } from "@starknet-react/core";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -15,6 +16,9 @@ function isValidAddress(value: string) {
 }
 
 export function PortfolioView({ initialAddress = "" }: PortfolioViewProps) {
+  const router = useRouter();
+  const pathname = usePathname();
+  const [isPending, startTransition] = useTransition();
   const { isConnected, address: connectedAddress } = useAccount();
   const defaultAddress =
     initialAddress || (isConnected && connectedAddress ? connectedAddress : "");
@@ -32,6 +36,9 @@ export function PortfolioView({ initialAddress = "" }: PortfolioViewProps) {
 
     setErrorMessage("");
     setActiveAddress(normalized);
+    startTransition(() => {
+      router.push(`${pathname}?address=${encodeURIComponent(normalized)}`);
+    });
   }
 
   return (
@@ -60,7 +67,7 @@ export function PortfolioView({ initialAddress = "" }: PortfolioViewProps) {
             value={addressInput}
           />
         </div>
-        <Button className="sm:w-auto" type="submit">
+        <Button className="sm:w-auto" disabled={isPending} type="submit">
           Load holdings
         </Button>
       </form>

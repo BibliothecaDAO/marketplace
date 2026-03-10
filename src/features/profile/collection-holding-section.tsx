@@ -4,6 +4,7 @@ import { useMemo } from "react";
 import { Card, CardContent } from "@/components/ui/card";
 import { MarketplaceTokenCard } from "@/components/marketplace/token-card";
 import { Skeleton } from "@/components/ui/skeleton";
+import { getMarketplaceRuntimeConfig } from "@/lib/marketplace/config";
 import { useCollectionQuery, useCollectionTokensQuery } from "@/lib/marketplace/hooks";
 import { expandTokenIdVariants } from "@/lib/marketplace/token-id";
 import { tokenId } from "@/lib/marketplace/token-display";
@@ -31,10 +32,18 @@ export function CollectionHoldingSection({
     () => expandTokenIdVariants(tokenIds),
     [tokenIds],
   );
+  const projectId = useMemo(
+    () =>
+      getMarketplaceRuntimeConfig().collections.find(
+        (collection) => collection.address === collectionAddress,
+      )?.projectId,
+    [collectionAddress],
+  );
 
-  const collectionQuery = useCollectionQuery({ address: collectionAddress });
+  const collectionQuery = useCollectionQuery({ address: collectionAddress, projectId });
   const tokensQuery = useCollectionTokensQuery({
     address: collectionAddress,
+    project: projectId,
     tokenIds: expandedTokenIds,
     limit: expandedTokenIds.length,
     fetchImages: true,

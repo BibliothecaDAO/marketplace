@@ -1,12 +1,12 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const {
-  mockCreateMarketplaceClient,
+  mockCreateEdgeMarketplaceClient,
   mockGetCollection,
   mockGetToken,
   mockRuntimeConfig,
 } = vi.hoisted(() => ({
-  mockCreateMarketplaceClient: vi.fn(),
+  mockCreateEdgeMarketplaceClient: vi.fn(),
   mockGetCollection: vi.fn(),
   mockGetToken: vi.fn(),
   mockRuntimeConfig: {
@@ -21,8 +21,8 @@ const {
   },
 }));
 
-vi.mock("@cartridge/arcade/marketplace", () => ({
-  createMarketplaceClient: mockCreateMarketplaceClient,
+vi.mock("@cartridge/arcade/marketplace/edge", () => ({
+  createEdgeMarketplaceClient: mockCreateEdgeMarketplaceClient,
 }));
 
 vi.mock("@/lib/marketplace/config", () => ({
@@ -34,8 +34,8 @@ describe("marketplace seo data", () => {
     vi.resetModules();
     mockGetCollection.mockReset();
     mockGetToken.mockReset();
-    mockCreateMarketplaceClient.mockReset();
-    mockCreateMarketplaceClient.mockReturnValue({
+    mockCreateEdgeMarketplaceClient.mockReset();
+    mockCreateEdgeMarketplaceClient.mockReturnValue({
       getCollection: mockGetCollection,
       getToken: mockGetToken,
     });
@@ -136,7 +136,7 @@ describe("marketplace seo data", () => {
   });
 
   it("returns_collection_fallback_when_client_init_fails", async () => {
-    mockCreateMarketplaceClient.mockImplementation(() => {
+    mockCreateEdgeMarketplaceClient.mockImplementation(() => {
       throw new Error("init failed");
     });
 
@@ -193,7 +193,7 @@ describe("marketplace seo data", () => {
   });
 
   it("returns_token_fallback_when_client_init_fails", async () => {
-    mockCreateMarketplaceClient.mockImplementation(() => {
+    mockCreateEdgeMarketplaceClient.mockImplementation(() => {
       throw new Error("init failed");
     });
 
@@ -209,5 +209,33 @@ describe("marketplace seo data", () => {
       collectionImage: null,
     });
     expect(mockGetToken).not.toHaveBeenCalled();
+  });
+
+  it("reuses_cached_collection_and_token_fetches_across_calls", async () => {
+    mockGetCollection.mockResolvedValue({
+      address: "0xabc",
+      metadata: {
+        name: "Genesis",
+        image: "https://cdn.example.com/genesis.png",
+      },
+    });
+    mockGetToken.mockResolvedValue({
+      token: {
+        token_id: "1",
+        metadata: {
+          name: "Token #1",
+          image: "https://cdn.example.com/1.png",
+        },
+        image: null,
+      },
+    });
+
+    const { getTokenSeoData } = await import("@/lib/marketplace/seo-data");
+
+    await getTokenSeoData("0xabc", "1");
+    await getTokenSeoData("0xabc", "1");
+
+    expect(mockGetCollection).toHaveBeenCalledTimes(1);
+    expect(mockGetToken).toHaveBeenCalledTimes(1);
   });
 });

@@ -11,9 +11,20 @@ vi.mock("@/features/profile/wallet-profile-view", () => ({
 const { mockUseAccount } = vi.hoisted(() => ({
   mockUseAccount: vi.fn(),
 }));
+const { mockPush, mockUsePathname } = vi.hoisted(() => ({
+  mockPush: vi.fn(),
+  mockUsePathname: vi.fn(),
+}));
 
 vi.mock("@starknet-react/core", () => ({
   useAccount: mockUseAccount,
+}));
+
+vi.mock("next/navigation", () => ({
+  useRouter: () => ({
+    push: mockPush,
+  }),
+  usePathname: mockUsePathname,
 }));
 
 import { PortfolioView } from "@/features/portfolio/portfolio-view";
@@ -21,6 +32,9 @@ import { PortfolioView } from "@/features/portfolio/portfolio-view";
 describe("PortfolioView", () => {
   beforeEach(() => {
     mockUseAccount.mockReturnValue({ isConnected: false, address: undefined });
+    mockPush.mockReset();
+    mockUsePathname.mockReset();
+    mockUsePathname.mockReturnValue("/portfolio");
   });
 
   it("renders_address_input_and_submit_action", () => {
@@ -66,6 +80,7 @@ describe("PortfolioView", () => {
     expect(screen.getByTestId("wallet-profile-view")).toHaveTextContent(
       "0xabc123",
     );
+    expect(mockPush).toHaveBeenCalledWith("/portfolio?address=0xabc123");
   });
 
   it("pre_populates_and_auto_fetches_when_wallet_connected", () => {

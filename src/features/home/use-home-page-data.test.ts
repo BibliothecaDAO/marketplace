@@ -236,18 +236,16 @@ describe("useHomePageData", () => {
     expect(result.current.isLoading).toBe(false);
   });
 
-  it("selects_random_featured_collection", () => {
-    vi.spyOn(Math, "random").mockReturnValue(0.99);
-
+  it("selects_first_featured_collection", () => {
     const { result } = renderHook(() => useHomePageData());
 
     expect(result.current.featuredCollection).toEqual(
       expect.objectContaining({
-        address: "0xdef",
+        address: "0xabc",
       }),
     );
     expect(mockUseCollectionQuery).toHaveBeenCalledWith(
-      expect.objectContaining({ address: "0xdef" }),
+      expect.objectContaining({ address: "0xabc" }),
     );
   });
 

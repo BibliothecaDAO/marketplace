@@ -1,7 +1,11 @@
 import { Suspense } from "react";
 import type { Metadata } from "next";
+import { HydrationBoundary } from "@tanstack/react-query";
 import { TokenDetailView } from "@/features/token/token-detail-view";
 import { buildMarketplacePageMetadata } from "@/lib/seo/metadata";
+import { buildTokenPageHydrationState } from "@/lib/marketplace/server-prefetch";
+
+export const runtime = "edge";
 
 type TokenPageProps = {
   params: Promise<{ address: string; tokenId: string }>;
@@ -9,13 +13,19 @@ type TokenPageProps = {
 
 export default async function TokenPage({ params }: TokenPageProps) {
   const { address, tokenId } = await params;
+  const { state } = await buildTokenPageHydrationState({
+    address,
+    tokenId,
+  });
 
   return (
-    <main className="w-full px-4 py-6 sm:px-6 lg:px-8">
-      <Suspense>
-        <TokenDetailView address={address} tokenId={tokenId} />
-      </Suspense>
-    </main>
+    <HydrationBoundary state={state}>
+      <main className="w-full px-4 py-6 sm:px-6 lg:px-8">
+        <Suspense>
+          <TokenDetailView address={address} tokenId={tokenId} />
+        </Suspense>
+      </main>
+    </HydrationBoundary>
   );
 }
 

@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useMemo } from "react";
 import { getMarketplaceRuntimeConfig } from "@/lib/marketplace/config";
 import {
   useCollectionListingsQuery,
@@ -98,15 +98,7 @@ function sortablePrice(value: string | null | undefined): bigint | null {
 
 export function useHomePageData() {
   const { collections } = getMarketplaceRuntimeConfig();
-  const [featuredIndex] = useState(() => {
-    if (collections.length === 0) {
-      return 0;
-    }
-
-    return Math.floor(Math.random() * collections.length);
-  });
-
-  const featuredSeed = collections[featuredIndex] ?? null;
+  const featuredSeed = collections[0] ?? null;
   const featuredAddress = featuredSeed?.address ?? "";
   const featuredProjectId = featuredSeed?.projectId;
 

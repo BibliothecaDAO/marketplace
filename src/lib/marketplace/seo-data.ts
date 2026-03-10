@@ -1,4 +1,3 @@
-import { cache } from "react";
 import { unstable_cache } from "next/cache";
 import { getMarketplaceRuntimeConfig } from "@/lib/marketplace/config";
 import { tokenImage, tokenName } from "@/lib/marketplace/token-display";
@@ -28,10 +27,6 @@ type MarketplaceClientLike = {
     projectId?: string;
     fetchImages?: boolean;
   }): Promise<TokenDetailsLike>;
-};
-
-type MarketplaceModule = {
-  createMarketplaceClient(config: unknown): Promise<MarketplaceClientLike>;
 };
 
 type CollectionSeoData = {
@@ -143,27 +138,20 @@ function collectionMetadata(rawCollection: unknown) {
   };
 }
 
-const loadMarketplaceModule = cache(async (): Promise<MarketplaceModule | null> => {
-  try {
-    return (await import("@cartridge/arcade/marketplace")) as unknown as MarketplaceModule;
-  } catch {
-    return null;
-  }
-});
+let marketplaceClientPromise: Promise<MarketplaceClientLike | null> | null = null;
 
-const getMarketplaceClient = cache(async (): Promise<MarketplaceClientLike | null> => {
-  const marketplaceModule = await loadMarketplaceModule();
-  if (!marketplaceModule) {
-    return null;
+async function getMarketplaceClient(): Promise<MarketplaceClientLike | null> {
+  if (!marketplaceClientPromise) {
+    marketplaceClientPromise = import("@cartridge/arcade/marketplace/edge")
+      .then(async (marketplaceModule) => {
+        const { sdkConfig } = getMarketplaceRuntimeConfig();
+        return marketplaceModule.createEdgeMarketplaceClient(sdkConfig);
+      })
+      .catch(() => null);
   }
 
-  try {
-    const { sdkConfig } = getMarketplaceRuntimeConfig();
-    return await marketplaceModule.createMarketplaceClient(sdkConfig);
-  } catch {
-    return null;
-  }
-});
+  return marketplaceClientPromise;
+}
 
 async function _fetchCollectionUncached(address: string) {
   const context = resolveCollectionContext(address);
@@ -201,8 +189,18 @@ const fetchCollectionCached = unstable_cache(
   { revalidate: COLLECTION_CACHE_REVALIDATE_SECONDS },
 );
 
-// Per-request dedup on top of the cross-request edge cache.
-const fetchCollection = cache((address: string) => fetchCollectionCached(address));
+const collectionPromiseCache = new Map<string, ReturnType<typeof fetchCollectionCached>>();
+
+function fetchCollection(address: string) {
+  const cached = collectionPromiseCache.get(address);
+  if (cached) {
+    return cached;
+  }
+
+  const next = fetchCollectionCached(address);
+  collectionPromiseCache.set(address, next);
+  return next;
+}
 
 async function _fetchTokenWithFallbackUncached(options: {
   collection: string;
@@ -257,11 +255,27 @@ const fetchTokenWithFallbackCached = unstable_cache(
   { revalidate: TOKEN_CACHE_REVALIDATE_SECONDS },
 );
 
-// Per-request dedup on top of the cross-request edge cache.
-const fetchTokenWithFallback = cache(
-  (options: { collection: string; tokenId: string; projectId?: string }) =>
-    fetchTokenWithFallbackCached(options.collection, options.tokenId, options.projectId),
-);
+const tokenPromiseCache = new Map<string, ReturnType<typeof fetchTokenWithFallbackCached>>();
+
+function fetchTokenWithFallback(options: {
+  collection: string;
+  tokenId: string;
+  projectId?: string;
+}) {
+  const key = `${options.collection}:${options.tokenId}:${options.projectId ?? ""}`;
+  const cached = tokenPromiseCache.get(key);
+  if (cached) {
+    return cached;
+  }
+
+  const next = fetchTokenWithFallbackCached(
+    options.collection,
+    options.tokenId,
+    options.projectId,
+  );
+  tokenPromiseCache.set(key, next);
+  return next;
+}
 
 function normalizedTokenImage(token: TokenLike) {
   return normalizeImageUrl(tokenImage(token as never));
@@ -294,24 +308,15 @@ export async function getTokenSeoData(
   tokenId: string,
 ): Promise<TokenSeoData> {
   const context = resolveCollectionContext(address);
-  const client = await getMarketplaceClient();
-
-  // Fire both API calls in parallel — they are independent once the client exists.
-  const [rawCollection, tokenDetail] = await Promise.all([
-    client
-      ? client
-          .getCollection({
-            address,
-            projectId: context.projectId,
-            fetchImages: true,
-          })
-          .catch(() => null)
-      : Promise.resolve(null),
-    _fetchTokenWithFallbackUncached({
-      collection: address,
-      tokenId,
-      projectId: context.projectId,
-    }),
+  const rawCollectionPromise = fetchCollection(address);
+  const tokenDetailPromise = fetchTokenWithFallback({
+    collection: address,
+    tokenId,
+    projectId: context.projectId,
+  });
+  const [{ collection: rawCollection }, tokenDetail] = await Promise.all([
+    rawCollectionPromise,
+    tokenDetailPromise,
   ]);
 
   const collectionInfo = collectionMetadata(rawCollection);

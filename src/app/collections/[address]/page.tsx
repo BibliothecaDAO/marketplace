@@ -1,11 +1,16 @@
 import { Suspense } from "react";
 import type { Metadata } from "next";
+import { HydrationBoundary } from "@tanstack/react-query";
 import { CollectionRouteContainer } from "@/features/collections/collection-route-container";
 import { buildMarketplacePageMetadata } from "@/lib/seo/metadata";
+import { buildCollectionPageHydrationState } from "@/lib/marketplace/server-prefetch";
+import { collectionDiscoveryStateFromSearchParams } from "@/features/collections/collection-query-params";
+
+export const runtime = "edge";
 
 type CollectionPageProps = {
   params: Promise<{ address: string }>;
-  searchParams: Promise<{ cursor?: string }>;
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
 };
 
 export default async function CollectionPage({
@@ -13,13 +18,31 @@ export default async function CollectionPage({
   searchParams,
 }: CollectionPageProps) {
   const { address } = await params;
-  const { cursor } = await searchParams;
+  const rawSearchParams = await searchParams;
+  const resolvedSearchParams = new URLSearchParams();
+  for (const [key, value] of Object.entries(rawSearchParams)) {
+    if (Array.isArray(value)) {
+      value.forEach((entry) => resolvedSearchParams.append(key, entry));
+      continue;
+    }
+    if (value) {
+      resolvedSearchParams.set(key, value);
+    }
+  }
+  const { activeFilters } = collectionDiscoveryStateFromSearchParams(resolvedSearchParams);
+  const { state } = await buildCollectionPageHydrationState({
+    address,
+    cursor: resolvedSearchParams.get("cursor"),
+    activeFilters,
+  });
 
   return (
     <main className="flex min-h-screen w-full items-start px-4 py-6 sm:px-6 lg:px-8">
-      <Suspense>
-        <CollectionRouteContainer address={address} cursor={cursor ?? null} />
-      </Suspense>
+      <HydrationBoundary state={state}>
+        <Suspense>
+          <CollectionRouteContainer address={address} cursor={resolvedSearchParams.get("cursor")} />
+        </Suspense>
+      </HydrationBoundary>
     </main>
   );
 }
