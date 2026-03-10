@@ -271,6 +271,20 @@ describe("collection route view", () => {
     expect(screen.getByTestId("trait-sidebar-container")).toBeVisible();
   });
 
+  it("trait_sidebar_scrolls_independently_from_token_grid", () => {
+    mockUseCollectionQuery.mockReturnValue(successQuery(null));
+
+    render(<CollectionRouteView address="0xabc" collections={collections} />);
+
+    expect(screen.getByTestId("trait-sidebar-container")).toHaveClass(
+      "sticky",
+      "top-20",
+      "self-start",
+      "max-h-[calc(100vh-6rem)]",
+      "overflow-y-auto",
+    );
+  });
+
   it("cursor_debug_badge_not_shown", () => {
     mockUseCollectionQuery.mockReturnValue(successQuery(null));
     render(<CollectionRouteView address="0xabc" collections={collections} cursor="some-cursor" />);
