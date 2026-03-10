@@ -18,6 +18,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { MarketplaceTokenCard } from "@/components/marketplace/token-card";
+import { ResourceTraitIcons } from "@/components/marketplace/resource-trait-icons";
 import { Skeleton } from "@/components/ui/skeleton";
 import { TokenSymbol } from "@/components/ui/token-symbol";
 import {
@@ -28,10 +29,12 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { getCollectionFilterConfig } from "@/lib/marketplace/collection-filter-config";
 import type { ActiveFilters } from "@/lib/marketplace/traits";
 import { numericTraitValueByName } from "@/lib/marketplace/traits";
 import { COLLECTION_LISTING_SAMPLE_LIMIT } from "@/lib/marketplace/query-limits";
 import { expandTokenIdQueryVariants } from "@/lib/marketplace/token-id";
+import { realmResourceCount, realmResources } from "@/lib/marketplace/token-attributes";
 import { cn } from "@/lib/utils";
 import {
   cartItemFromTokenListing,
@@ -112,9 +115,26 @@ function sortTokens(
     "level-desc": "Level",
     "health-asc": "Health",
     "health-desc": "Health",
+    "resource-count-asc": "Resource count",
+    "resource-count-desc": "Resource count",
   };
   const ordered = [...tokens];
   ordered.sort((left, right) => {
+    if (sortMode === "resource-count-asc" || sortMode === "resource-count-desc") {
+      const leftValue = realmResourceCount(left.metadata);
+      const rightValue = realmResourceCount(right.metadata);
+      if (leftValue === rightValue) {
+        return tokenId(left).localeCompare(tokenId(right));
+      }
+
+      const isAscending = sortMode === "resource-count-asc";
+      if (leftValue < rightValue) {
+        return isAscending ? -1 : 1;
+      }
+
+      return isAscending ? 1 : -1;
+    }
+
     const traitName = traitNameBySortMode[sortMode];
     if (traitName) {
       const leftValue = numericTraitValueByName(left.metadata, traitName);
@@ -212,6 +232,11 @@ export function CollectionTokenGrid({
   sweepPreviewTokenIds,
 }: CollectionTokenGridProps) {
   const { addListingToCart, isRecentlyAdded } = useAddToCartFeedback();
+  const collectionFilterConfig = useMemo(
+    () => getCollectionFilterConfig(address),
+    [address],
+  );
+  const showInlineResources = collectionFilterConfig.showInlineResources === true;
   const [gridMode, setGridMode] = useState<GridLayoutMode>("compact");
   const tokenIdsKey = useMemo(() => tokenIds?.join(",") ?? "", [tokenIds]);
   const activeFiltersKey = useMemo(
@@ -418,6 +443,11 @@ export function CollectionTokenGrid({
                     cardContentRole="article"
                     currency={cheapestListing?.currency ?? null}
                     href={`/collections/${address}/${tokenId(token)}`}
+                    inlineTraits={
+                      showInlineResources ? (
+                        <ResourceTraitIcons resources={realmResources(token.metadata)} />
+                      ) : undefined
+                    }
                     linkAriaLabel={`token-${tokenKey}`}
                     onBuyNow={
                       cardItem && !isSweepPreview
@@ -478,6 +508,12 @@ export function CollectionTokenGrid({
                             {tokenName(token)}
                           </Link>
                           <p className="text-xs text-muted-foreground">#{tokenKey}</p>
+                          {showInlineResources ? (
+                            <ResourceTraitIcons
+                              resources={realmResources(token.metadata)}
+                              showLabels
+                            />
+                          ) : null}
                         </div>
                       </TableCell>
                       <TableCell>

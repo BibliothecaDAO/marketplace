@@ -465,6 +465,46 @@ describe("collection route view", () => {
     expect(onSortModeChange).toHaveBeenLastCalledWith("power-asc");
   });
 
+  it("realms_collection_shows_resource_sort_button", async () => {
+    mockUseCollectionQuery.mockReturnValue(successQuery(null));
+    const onSortModeChange = vi.fn();
+    const user = userEvent.setup();
+    const realmsCollections: SeedCollection[] = [
+      { address: "0xrealm5", name: "Realms", projectId: "project-realms" },
+    ];
+
+    const { rerender } = render(
+      <CollectionRouteView
+        address="0xrealm5"
+        collections={realmsCollections}
+        sortMode="price-asc"
+        onSortModeChange={onSortModeChange}
+      />,
+    );
+
+    expect(screen.getByRole("button", { name: "Recent" })).toBeVisible();
+    expect(screen.getByRole("button", { name: "Price ↑" })).toBeVisible();
+    expect(screen.getByRole("button", { name: "Resources" })).toBeVisible();
+    expect(screen.queryByRole("button", { name: "Power" })).toBeNull();
+
+    await user.click(screen.getByRole("button", { name: "Resources" }));
+
+    expect(onSortModeChange).toHaveBeenCalledWith("resource-count-desc");
+
+    rerender(
+      <CollectionRouteView
+        address="0xrealm5"
+        collections={realmsCollections}
+        sortMode="resource-count-desc"
+        onSortModeChange={onSortModeChange}
+      />,
+    );
+
+    await user.click(screen.getByRole("button", { name: "Resources ↓" }));
+
+    expect(onSortModeChange).toHaveBeenLastCalledWith("resource-count-asc");
+  });
+
   it("collection_route_sweep_adds_cheapest_candidates_and_resets_count", async () => {
     mockUseCollectionQuery.mockReturnValue(successQuery(null));
     mockUseCollectionListingsQuery.mockReturnValue(successQuery([

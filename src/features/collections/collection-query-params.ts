@@ -13,7 +13,9 @@ export type CollectionSortMode =
   | "level-asc"
   | "level-desc"
   | "health-asc"
-  | "health-desc";
+  | "health-desc"
+  | "resource-count-asc"
+  | "resource-count-desc";
 
 const DEFAULT_SORT_MODE: CollectionSortMode = "price-asc";
 const SORT_MODES = new Set<CollectionSortMode>([
@@ -26,6 +28,8 @@ const SORT_MODES = new Set<CollectionSortMode>([
   "level-desc",
   "health-asc",
   "health-desc",
+  "resource-count-asc",
+  "resource-count-desc",
 ]);
 
 export function sortModeFromSearchParams(params: URLSearchParams): CollectionSortMode {

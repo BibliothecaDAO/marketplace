@@ -2,6 +2,7 @@ import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { CollectionTokenGrid } from "@/features/collections/collection-token-grid";
+import { _resetConfigCache } from "@/lib/marketplace/config";
 import type { ActiveFilters } from "@/lib/marketplace/traits";
 
 const { mockUseCollectionTokensQuery, mockUseCollectionListingsQuery } = vi.hoisted(() => ({
@@ -46,6 +47,9 @@ function successListingsResult(listings: Array<Record<string, unknown>>) {
 
 describe("collection token grid", () => {
   beforeEach(() => {
+    process.env.NEXT_PUBLIC_MARKETPLACE_COLLECTIONS =
+      "0x123|Realms|project-realms,0xbea57|Beasts|project-beasts";
+    _resetConfigCache();
     mockUseCollectionTokensQuery.mockReset();
     mockUseCollectionListingsQuery.mockReset();
     mockCartAddItem.mockReset();
@@ -1095,6 +1099,141 @@ describe("collection token grid", () => {
     expect(
       screen.getAllByRole("article").map((card) => card.getAttribute("aria-label")),
     ).toEqual(["token-2", "token-1", "token-3"]);
+  });
+
+  it("renders_inline_resource_icons_on_realms_cards_only", async () => {
+    mockUseCollectionTokensQuery.mockReturnValue({
+      data: {
+        page: {
+          tokens: [
+            token("1", {
+              metadata: {
+                name: "Realm #1",
+                attributes: [
+                  { trait_type: "Resource", value: "Coal" },
+                  { trait_type: "Resource", value: "Stone" },
+                ],
+              },
+            }),
+          ],
+          nextCursor: null,
+        },
+        error: null,
+      },
+      isLoading: false,
+      isSuccess: true,
+      isError: false,
+      error: null,
+      isFetching: false,
+      refetch: vi.fn(),
+    });
+
+    const { rerender } = render(
+      <CollectionTokenGrid address="0x123" projectId="project-realms" />,
+    );
+
+    expect(await screen.findByRole("img", { name: "Coal" })).toBeVisible();
+    expect(screen.getByRole("img", { name: "Stone" })).toBeVisible();
+
+    rerender(
+      <CollectionTokenGrid address="0xbea57" projectId="project-beasts" />,
+    );
+
+    expect(screen.queryByTestId("resource-trait-icons")).toBeNull();
+  });
+
+  it("shows_resource_traits_inline_in_list_view_for_realms", async () => {
+    mockUseCollectionTokensQuery.mockReturnValue({
+      data: {
+        page: {
+          tokens: [
+            token("1", {
+              metadata: {
+                name: "Realm #1",
+                attributes: [
+                  { trait_type: "Resource", value: "Coal" },
+                  { trait_type: "Resource", value: "Wood" },
+                ],
+              },
+            }),
+          ],
+          nextCursor: null,
+        },
+        error: null,
+      },
+      isLoading: false,
+      isSuccess: true,
+      isError: false,
+      error: null,
+      isFetching: false,
+      refetch: vi.fn(),
+    });
+
+    const user = userEvent.setup();
+    render(<CollectionTokenGrid address="0x123" projectId="project-realms" />);
+
+    await user.click(screen.getByRole("button", { name: "List" }));
+
+    const traitIcons = await screen.findByTestId("resource-trait-icons");
+    expect(traitIcons).toHaveTextContent("Coal");
+    expect(traitIcons).toHaveTextContent("Wood");
+  });
+
+  it("sorts_realms_by_resource_count", async () => {
+    mockUseCollectionTokensQuery.mockReturnValue({
+      data: {
+        page: {
+          tokens: [
+            token("3", {
+              metadata: {
+                name: "Realm #3",
+                attributes: [{ trait_type: "Resource", value: "Stone" }],
+              },
+            }),
+            token("1", {
+              metadata: {
+                name: "Realm #1",
+                attributes: [
+                  { trait_type: "Resource", value: "Coal" },
+                  { trait_type: "Resource", value: "Stone" },
+                  { trait_type: "Resource", value: "Wood" },
+                ],
+              },
+            }),
+            token("2", {
+              metadata: {
+                name: "Realm #2",
+                attributes: [
+                  { trait_type: "Resource", value: "Coal" },
+                  { trait_type: "Resource", value: "Stone" },
+                ],
+              },
+            }),
+          ],
+          nextCursor: null,
+        },
+        error: null,
+      },
+      isLoading: false,
+      isSuccess: true,
+      isError: false,
+      error: null,
+      isFetching: false,
+      refetch: vi.fn(),
+    });
+
+    render(
+      <CollectionTokenGrid
+        address="0x123"
+        projectId="project-realms"
+        sortMode="resource-count-desc"
+      />,
+    );
+
+    await screen.findByRole("article", { name: "token-1" });
+    expect(
+      screen.getAllByRole("article").map((card) => card.getAttribute("aria-label")),
+    ).toEqual(["token-1", "token-2", "token-3"]);
   });
 
   it("highlights_sweep_preview_tokens_by_order_id", async () => {

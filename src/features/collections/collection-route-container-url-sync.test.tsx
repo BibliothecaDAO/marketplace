@@ -36,7 +36,9 @@ vi.mock("@/features/collections/collection-route-view", () => ({
       | "level-asc"
       | "level-desc"
       | "health-asc"
-      | "health-desc";
+      | "health-desc"
+      | "resource-count-asc"
+      | "resource-count-desc";
     onActiveFiltersChange?: (filters: ActiveFilters) => void;
     onSortModeChange?: (
       sortMode:
@@ -49,6 +51,8 @@ vi.mock("@/features/collections/collection-route-view", () => ({
         | "level-desc"
         | "health-asc"
         | "health-desc"
+        | "resource-count-asc"
+        | "resource-count-desc"
     ) => void;
   }) => {
     mockCollectionRouteView(props);
