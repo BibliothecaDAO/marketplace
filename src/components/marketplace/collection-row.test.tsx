@@ -584,7 +584,7 @@ describe("collection row", () => {
     );
 
     const tokenLink = screen.getByRole("link", { name: /alpha/i });
-    const card = tokenLink.querySelector("[data-slot='card']");
+    const card = tokenLink.closest("[data-slot='card']") ?? tokenLink.querySelector("[data-slot='card']");
     expect(card).toHaveClass("py-0", "overflow-hidden");
   });
 

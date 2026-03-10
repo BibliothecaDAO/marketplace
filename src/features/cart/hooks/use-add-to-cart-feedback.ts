@@ -4,6 +4,9 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { type CartItem, useCartStore } from "@/features/cart/store/cart-store";
 
 const ADDED_FEEDBACK_DURATION_MS = 1200;
+type AddToCartOptions = {
+  openCart?: boolean;
+};
 
 export function useAddToCartFeedback() {
   const addItem = useCartStore((state) => state.addItem);
@@ -44,10 +47,13 @@ export function useAddToCartFeedback() {
   );
 
   const addListingToCart = useCallback(
-    (item: CartItem) => {
+    (item: CartItem, options?: AddToCartOptions) => {
+      const openCart = options?.openCart ?? true;
       const result = addItem(item);
       if (result.ok) {
-        setOpen(true);
+        if (openCart) {
+          setOpen(true);
+        }
         markAdded(item.orderId);
       } else {
         setOpen(true);

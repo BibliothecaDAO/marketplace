@@ -363,8 +363,8 @@ describe("collection token grid", () => {
     expect(await screen.findByText("#1120")).toBeVisible();
     expect(screen.getByText("77")).toBeVisible();
 
-    const tokenLink = screen.getByRole("link", { name: "token-1120" });
-    const card = tokenLink.querySelector("[data-slot='card']");
+    const tokenCardBody = screen.getByRole("article", { name: "token-1120" });
+    const card = tokenCardBody.closest("[data-slot='card']");
     expect(card).toHaveClass("py-0", "overflow-hidden");
   });
 
@@ -422,7 +422,7 @@ describe("collection token grid", () => {
     const user = userEvent.setup();
     render(<CollectionTokenGrid address="0xabc" projectId="project-a" />);
 
-    await user.click(screen.getByRole("button", { name: /add to cart/i }));
+    await user.click(screen.getByRole("button", { name: /buy now/i }));
 
     expect(mockCartAddItem).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -467,7 +467,7 @@ describe("collection token grid", () => {
     render(<CollectionTokenGrid address="0xabc" projectId="project-a" />);
 
     expect(await screen.findByText("120")).toBeVisible();
-    await user.click(screen.getByRole("button", { name: /add to cart/i }));
+    await user.click(screen.getByRole("button", { name: /buy now/i }));
 
     expect(mockCartAddItem).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -525,7 +525,7 @@ describe("collection token grid", () => {
     const user = userEvent.setup();
     render(<CollectionTokenGrid address="0xabc" projectId="project-a" />);
 
-    await user.click(screen.getByRole("button", { name: /add to cart/i }));
+    await user.click(screen.getByRole("button", { name: /buy now/i }));
 
     expect(mockCartAddItem).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -568,10 +568,53 @@ describe("collection token grid", () => {
     const user = userEvent.setup();
     render(<CollectionTokenGrid address="0xabc" projectId="project-a" />);
 
-    await user.click(screen.getByRole("button", { name: /add to cart/i }));
+    await user.click(screen.getByRole("button", { name: /buy now/i }));
 
     expect(mockCartSetOpen).toHaveBeenCalledWith(true);
     expect(screen.queryByRole("button", { name: /added/i })).toBeNull();
+  });
+
+  it("clicking_card_body_adds_listing_without_opening_cart", async () => {
+    mockUseCollectionTokensQuery.mockReturnValue({
+      data: {
+        page: {
+          tokens: [
+            token("1", {
+              image: "https://cdn.example/1.png",
+              metadata: { name: "Token #1" },
+            }),
+          ],
+          nextCursor: null,
+        },
+        error: null,
+      },
+      isLoading: false,
+      isSuccess: true,
+      isError: false,
+      error: null,
+      isFetching: false,
+      refetch: vi.fn(),
+    });
+    mockUseCollectionListingsQuery.mockReturnValue(
+      successListingsResult([
+        { id: 22, tokenId: 1, price: 120, currency: "0xfee", quantity: 1 },
+      ]),
+    );
+
+    const user = userEvent.setup();
+    render(<CollectionTokenGrid address="0xabc" projectId="project-a" />);
+
+    await user.click(await screen.findByRole("article", { name: "token-1" }));
+
+    expect(mockCartAddItem).toHaveBeenCalledWith(
+      expect.objectContaining({
+        orderId: "22",
+        collection: "0xabc",
+        tokenId: "1",
+        price: "120",
+      }),
+    );
+    expect(mockCartSetOpen).not.toHaveBeenCalled();
   });
 
   it("renders_grid_density_buttons_with_compact_default", () => {
@@ -981,9 +1024,8 @@ describe("collection token grid", () => {
 
     const previewArticle = await screen.findByRole("article", { name: "token-1" });
     const nonPreviewArticle = screen.getByRole("article", { name: "token-2" });
-    // The ring is on the inner wrapper div (parent of the Link/Card), not the outer .space-y-2
-    const previewRingWrapper = previewArticle.closest("a")!.parentElement!;
-    const nonPreviewRingWrapper = nonPreviewArticle.closest("a")!.parentElement!;
+    const previewRingWrapper = previewArticle.closest("[data-slot='card']")!.parentElement!;
+    const nonPreviewRingWrapper = nonPreviewArticle.closest("[data-slot='card']")!.parentElement!;
 
     expect(previewRingWrapper).toHaveClass("ring-2", "ring-primary", "ring-offset-2", "ring-offset-background");
     expect(nonPreviewRingWrapper).not.toHaveClass("ring-2");
