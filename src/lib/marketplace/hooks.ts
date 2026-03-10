@@ -68,7 +68,7 @@ export function useCollectionQuery(options: CollectionSummaryOptions) {
 
 export function useCollectionTokensQuery(
   options: FetchCollectionTokensOptions,
-  queryOptions?: { enabled?: boolean },
+  queryOptions?: { enabled?: boolean; staleTime?: number },
 ) {
   const enabled = (queryOptions?.enabled ?? true) && !!options.address;
   return useQuery({
@@ -88,6 +88,7 @@ export function useCollectionTokensQuery(
       return fetchCollectionTokens(options);
     },
     enabled,
+    staleTime: queryOptions?.staleTime,
   });
 }
 

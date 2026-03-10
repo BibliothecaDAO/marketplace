@@ -129,6 +129,22 @@ describe("useHomePageData", () => {
     );
   });
 
+  it("fetches_tokens_only_for_the_featured_collection_on_initial_load", () => {
+    vi.spyOn(Math, "random").mockReturnValue(0.01);
+
+    renderHook(() => useHomePageData());
+
+    expect(mockUseCollectionTokensQuery).toHaveBeenCalledTimes(1);
+    expect(mockUseCollectionTokensQuery).toHaveBeenCalledWith(
+      expect.objectContaining({
+        address: "0xabc",
+        project: "genesis",
+        limit: 12,
+        fetchImages: true,
+      }),
+    );
+  });
+
   it("preserves_raw_token_id_in_trending_href_for_hex_tokens", () => {
     mockUseCollectionTokensQuery.mockReturnValue(
       successQuery({
