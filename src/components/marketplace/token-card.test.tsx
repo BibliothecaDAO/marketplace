@@ -28,6 +28,7 @@ describe("MarketplaceTokenCard", () => {
     expect(screen.getByText("Token #7")).toBeVisible();
     expect(screen.getByText("#7")).toBeVisible();
     expect(screen.getByText("1")).toBeVisible();
+    expect(screen.getByAltText("Token #7").parentElement).toHaveClass("aspect-[4/5]");
   });
 
   it("includes_hover_and_focus_attribute_table_overlay", () => {

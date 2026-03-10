@@ -113,7 +113,7 @@ export const MarketplaceTokenCard = React.memo(function MarketplaceTokenCard({
   const attributes = useMemo(() => tokenAttributes(token), [token]);
   const interactiveContent = (
     <>
-      <div className="flex aspect-square items-center justify-center bg-muted">
+      <div className="flex aspect-[4/5] items-center justify-center bg-muted">
         {image ? (
           // eslint-disable-next-line @next/next/no-img-element
           <img
