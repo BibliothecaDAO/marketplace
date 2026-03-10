@@ -29,6 +29,7 @@ export type CollectionFilterConfig = {
   hiddenTraits: string[];
   overrides: Record<string, FilterOverride>;
   sortOptions?: CollectionSortOption[];
+  showInlineResources?: boolean;
 };
 
 export type CollectionSortOption = {
@@ -73,6 +74,33 @@ const COLLECTION_NAME_CONFIGS: Record<string, CollectionFilterConfig> = {
         defaultDirection: "desc",
       },
     ],
+  },
+  realms: {
+    hiddenTraits: [],
+    overrides: {
+      Resource: { type: "pills", sort: "alpha", hideSearch: true },
+    },
+    sortOptions: [
+      {
+        label: "Recent",
+        values: { asc: "recent", desc: "recent" },
+        defaultDirection: "asc",
+      },
+      {
+        label: "Price",
+        values: { asc: "price-asc", desc: "price-desc" },
+        defaultDirection: "asc",
+      },
+      {
+        label: "Resources",
+        values: {
+          asc: "resource-count-asc",
+          desc: "resource-count-desc",
+        },
+        defaultDirection: "desc",
+      },
+    ],
+    showInlineResources: true,
   },
 };
 
