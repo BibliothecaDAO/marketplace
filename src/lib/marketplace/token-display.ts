@@ -163,6 +163,14 @@ export function tokenName(token: NormalizedToken) {
 }
 
 export function tokenImage(token: NormalizedToken) {
+  const chestType = chestSource(token);
+  if (chestType === "Blitz") {
+    return "/placeholders/blitz-chest.svg";
+  }
+  if (chestType === "S0") {
+    return "/placeholders/s0-chest.svg";
+  }
+
   if (token.image) {
     return token.image;
   }
@@ -171,14 +179,6 @@ export function tokenImage(token: NormalizedToken) {
   const source = metadata?.image ?? metadata?.image_url;
   if (typeof source === "string" && source.length > 0) {
     return source;
-  }
-
-  const chestType = chestSource(token);
-  if (chestType === "Blitz") {
-    return "/placeholders/blitz-chest.svg";
-  }
-  if (chestType === "S0") {
-    return "/placeholders/s0-chest.svg";
   }
 
   return null;

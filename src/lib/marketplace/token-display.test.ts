@@ -263,6 +263,19 @@ describe("tokenImage", () => {
     expect(tokenImage(blitzChest)).toBe("/placeholders/blitz-chest.svg");
     expect(tokenImage(s0Chest)).toBe("/placeholders/s0-chest.svg");
   });
+
+  it("prefers_shared_chest_placeholders_over_remote_images", () => {
+    const blitzChest = tok({
+      image: "https://cdn.example/huge-chest.png",
+      token_id: "1",
+      metadata: {
+        image: "https://cdn.example/huge-chest-meta.png",
+        attributes: [{ trait_type: "Source", value: "Blitz" }],
+      },
+    });
+
+    expect(tokenImage(blitzChest)).toBe("/placeholders/blitz-chest.svg");
+  });
 });
 
 // ---------------------------------------------------------------------------
