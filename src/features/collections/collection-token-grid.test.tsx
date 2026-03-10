@@ -1,4 +1,4 @@
-import { render, screen } from "@testing-library/react";
+import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { CollectionTokenGrid } from "@/features/collections/collection-token-grid";
@@ -8,6 +8,9 @@ const { mockUseCollectionTokensQuery, mockUseCollectionListingsQuery } = vi.hois
   mockUseCollectionTokensQuery: vi.fn(),
   mockUseCollectionListingsQuery: vi.fn(),
 }));
+const { mockGetMarketplaceRuntimeConfig } = vi.hoisted(() => ({
+  mockGetMarketplaceRuntimeConfig: vi.fn(),
+}));
 const { mockCartAddItem, mockCartSetOpen } = vi.hoisted(() => ({
   mockCartAddItem: vi.fn(),
   mockCartSetOpen: vi.fn(),
@@ -16,6 +19,10 @@ const { mockCartAddItem, mockCartSetOpen } = vi.hoisted(() => ({
 vi.mock("@/lib/marketplace/hooks", () => ({
   useCollectionTokensQuery: mockUseCollectionTokensQuery,
   useCollectionListingsQuery: mockUseCollectionListingsQuery,
+}));
+
+vi.mock("@/lib/marketplace/config", () => ({
+  getMarketplaceRuntimeConfig: mockGetMarketplaceRuntimeConfig,
 }));
 
 vi.mock("@/features/cart/store/cart-store", () => ({
@@ -52,6 +59,9 @@ describe("collection token grid", () => {
     mockCartSetOpen.mockReset();
     mockCartAddItem.mockReturnValue({ ok: true });
     mockUseCollectionListingsQuery.mockReturnValue(successListingsResult([]));
+    mockGetMarketplaceRuntimeConfig.mockReturnValue({
+      collections: [],
+    });
   });
 
   it("token_grid_renders_first_page_with_skeleton_then_data", async () => {
@@ -934,5 +944,58 @@ describe("collection token grid", () => {
 
     expect(previewRingWrapper).toHaveClass("ring-2", "ring-primary", "ring-offset-2", "ring-offset-background");
     expect(nonPreviewRingWrapper).not.toHaveClass("ring-2");
+  });
+
+  it("adventurers_grid_filters_out_dead_tokens", async () => {
+    mockGetMarketplaceRuntimeConfig.mockReturnValue({
+      collections: [
+        { address: "0xadv", name: "Adventurers", projectId: "project-a" },
+      ],
+    });
+    mockUseCollectionTokensQuery.mockReturnValue({
+      data: {
+        page: {
+          tokens: [
+            token("1", {
+              metadata: {
+                name: "Token #1",
+                attributes: [{ trait_type: "Health", value: "0" }],
+              },
+            }),
+            token("2", {
+              metadata: {
+                name: "Token #2",
+                attributes: [{ trait_type: "Health", value: "3" }],
+              },
+            }),
+          ],
+          nextCursor: null,
+        },
+        error: null,
+      },
+      isLoading: false,
+      isSuccess: true,
+      isError: false,
+      error: null,
+      isFetching: false,
+      refetch: vi.fn(),
+    });
+    const onTokensChange = vi.fn();
+
+    render(
+      <CollectionTokenGrid
+        address="0xadv"
+        projectId="project-a"
+        onTokensChange={onTokensChange}
+      />,
+    );
+
+    expect(await screen.findByText("Token #2")).toBeVisible();
+    await waitFor(() => {
+      expect(screen.queryByText("Token #1")).toBeNull();
+      expect(onTokensChange).toHaveBeenLastCalledWith([
+        expect.objectContaining({ token_id: "2" }),
+      ]);
+    });
   });
 });
