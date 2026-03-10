@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 320" role="img" aria-label="Blitz Chest">
+  <rect width="320" height="320" fill="#120f08"/>
+  <rect x="40" y="88" width="240" height="168" rx="20" fill="#5d3a13"/>
+  <rect x="40" y="72" width="240" height="44" rx="18" fill="#d98b1f"/>
+  <rect x="148" y="88" width="24" height="168" fill="#2d1a05"/>
+  <rect x="128" y="146" width="64" height="54" rx="10" fill="#f4c363"/>
+  <circle cx="160" cy="173" r="12" fill="#5d3a13"/>
+  <text x="160" y="292" font-family="monospace" font-size="28" fill="#f4c363" text-anchor="middle">BLITZ</text>
+</svg>

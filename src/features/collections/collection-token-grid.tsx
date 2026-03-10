@@ -42,6 +42,7 @@ import {
 } from "@/features/cart/listing-utils";
 import { useAddToCartFeedback } from "@/features/cart/hooks/use-add-to-cart-feedback";
 import { type CollectionSortMode } from "@/features/collections/collection-query-params";
+import { getMarketplaceRuntimeConfig } from "@/lib/marketplace/config";
 
 type CollectionTokenGridProps = {
   address: string;
@@ -75,6 +76,88 @@ function dedupeTokens(tokens: NormalizedToken[]) {
 
 function tokenSignature(tokens: NormalizedToken[]) {
   return tokens.map((item) => tokenId(item)).join(",");
+}
+
+function normalizeAddress(address: string) {
+  try {
+    return `0x${BigInt(address).toString(16)}`;
+  } catch {
+    return address.toLowerCase();
+  }
+}
+
+function numericAttribute(token: NormalizedToken, traitName: string) {
+  const metadata = token.metadata as { attributes?: unknown } | null;
+  if (!Array.isArray(metadata?.attributes)) {
+    return null;
+  }
+
+  for (const rawAttribute of metadata.attributes) {
+    if (!rawAttribute || typeof rawAttribute !== "object") {
+      continue;
+    }
+
+    const attribute = rawAttribute as Record<string, unknown>;
+    const resolvedTraitName = String(
+      attribute.trait_type ?? attribute.traitName ?? attribute.name ?? "",
+    ).trim();
+    if (resolvedTraitName !== traitName) {
+      continue;
+    }
+
+    const numericValue = Number(attribute.value ?? attribute.traitValue);
+    return Number.isFinite(numericValue) ? numericValue : null;
+  }
+
+  return null;
+}
+
+function stringAttribute(token: NormalizedToken, traitNames: string[]) {
+  const metadata = token.metadata as { attributes?: unknown } | null;
+  if (!Array.isArray(metadata?.attributes)) {
+    return null;
+  }
+
+  const accepted = new Set(traitNames);
+  for (const rawAttribute of metadata.attributes) {
+    if (!rawAttribute || typeof rawAttribute !== "object") {
+      continue;
+    }
+
+    const attribute = rawAttribute as Record<string, unknown>;
+    const resolvedTraitName = String(
+      attribute.trait_type ?? attribute.traitName ?? attribute.name ?? "",
+    ).trim();
+    if (!accepted.has(resolvedTraitName)) {
+      continue;
+    }
+
+    const value = String(attribute.value ?? attribute.traitValue ?? "").trim();
+    if (value) {
+      return value;
+    }
+  }
+
+  return null;
+}
+
+function isAliveAdventurer(token: NormalizedToken) {
+  const health = numericAttribute(token, "Health");
+  if (health !== null && health <= 0) {
+    return false;
+  }
+
+  const expiredValue = stringAttribute(token, ["Expired", "Status", "Alive", "Dead"]);
+  if (!expiredValue) {
+    return true;
+  }
+
+  const normalized = expiredValue.toLowerCase();
+  if (normalized === "expired" || normalized === "dead" || normalized === "false" || normalized === "0") {
+    return false;
+  }
+
+  return true;
 }
 
 function sortablePrice(
@@ -297,6 +380,15 @@ export function CollectionTokenGrid({
 
   const listingPrices = cheapestListingByTokenId(listingQuery.data);
   const listingPriceMap = listingPriceByTokenId(listingQuery.data);
+  const isAdventurersCollection = useMemo(
+    () =>
+      getMarketplaceRuntimeConfig().collections.some(
+        (collection) =>
+          normalizeAddress(collection.address) === normalizeAddress(address)
+          && collection.name.trim().toLowerCase() === "adventurers",
+      ),
+    [address],
+  );
 
   // Always resolve listed token IDs so listed inventory remains visible even
   // when the paginated token query does not include those tokens on page 1.
@@ -326,9 +418,16 @@ export function CollectionTokenGrid({
     if (!listedTokens?.length) return pagination.tokens;
     return dedupeTokens([...pagination.tokens, ...listedTokens]);
   }, [pagination.tokens, listedTokensQuery.data?.page?.tokens]);
+  const displayTokens = useMemo(
+    () =>
+      isAdventurersCollection
+        ? visibleTokens.filter(isAliveAdventurer)
+        : visibleTokens,
+    [isAdventurersCollection, visibleTokens],
+  );
   const visibleTokensSignature = useMemo(
-    () => tokenSignature(visibleTokens),
-    [visibleTokens],
+    () => tokenSignature(displayTokens),
+    [displayTokens],
   );
 
   useEffect(() => {
@@ -337,12 +436,12 @@ export function CollectionTokenGrid({
     }
 
     emittedVisibleTokensSignatureRef.current = visibleTokensSignature;
-    onTokensChangeRef.current?.(visibleTokens);
-  }, [visibleTokens, visibleTokensSignature]);
+    onTokensChangeRef.current?.(displayTokens);
+  }, [displayTokens, visibleTokensSignature]);
 
   const sortedTokens = useMemo(
-    () => sortTokens(visibleTokens, sortMode, listingPrices, listingPriceMap),
-    [listingPriceMap, listingPrices, sortMode, visibleTokens],
+    () => sortTokens(displayTokens, sortMode, listingPrices, listingPriceMap),
+    [displayTokens, listingPriceMap, listingPrices, sortMode],
   );
   const isListMode = gridMode === "list";
   const gridClasses = GRID_CLASSES_BY_DENSITY[isListMode ? "compact" : gridMode];
@@ -565,7 +664,7 @@ export function CollectionTokenGrid({
         </Card>
       ) : null}
 
-      {tokenQuery.isSuccess && visibleTokens.length === 0 ? (
+      {tokenQuery.isSuccess && displayTokens.length === 0 ? (
         <Card className="border-dashed">
           <CardContent className="pt-6 text-sm text-muted-foreground">
             No tokens match your filters. Try removing some filters.

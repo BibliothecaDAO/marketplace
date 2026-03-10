@@ -40,6 +40,46 @@ describe("collection filter config", () => {
         defaultDirection: "desc",
       },
     ]);
+    expect(result.overrides.Animated).toEqual({ type: "boolean" });
+    expect(result.overrides.Health).toEqual({ type: "range", min: 1, max: 1023 });
+    expect(result.marketActivity).toEqual({
+      details: [
+        { label: "Type", traitNames: ["Type", "Beast"] },
+        { label: "Level", traitNames: ["Level"] },
+      ],
+    });
+  });
+
+  it("resolves_adventurers_curation_from_collection_name", () => {
+    const result = getCollectionFilterConfig("0xadv", [
+      {
+        address: "0xadv",
+        name: "Adventurers",
+        projectId: "project-adv",
+      },
+    ]);
+
+    expect(result.hiddenTraits).toEqual([
+      "Token ID",
+      "Adventurer ID",
+      "XP",
+      "Entropy",
+    ]);
+    expect(result.overrides.Health).toEqual({ type: "range", min: 1, max: 255 });
+    expect(result.overrides.Level).toEqual({ type: "range", min: 1, max: 100 });
+  });
+
+  it("resolves_loot_chest_filters_from_collection_name", () => {
+    const result = getCollectionFilterConfig("0xchest", [
+      {
+        address: "0xchest",
+        name: "Loot Chests",
+        projectId: "project-chests",
+      },
+    ]);
+
+    expect(result.overrides.Source).toEqual({ type: "pills", sort: "alpha" });
+    expect(result.overrides.Tier).toEqual({ type: "pills", sort: "alpha" });
   });
 
   it("resolves_realms_resource_config_from_collection_name", () => {
@@ -77,5 +117,9 @@ describe("collection filter config", () => {
       },
     ]);
     expect(result.showInlineResources).toBe(true);
+    expect(result.marketActivity).toEqual({
+      details: [{ traitNames: ["Resource"], mode: "all" }],
+      renderResourcesAsIcons: true,
+    });
   });
 });

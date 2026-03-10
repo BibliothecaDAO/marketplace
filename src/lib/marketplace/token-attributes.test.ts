@@ -41,12 +41,11 @@ describe("token attribute helpers", () => {
         { trait_type: "Resource", value: "Wood" },
         { trait_type: "Resource", value: "Silver" },
         { trait_type: "Resource", value: "Amber" },
-        { trait_type: "Resource", value: "Coal" },
+        { trait_type: "Resource", value: "Dragonhide" },
       ],
     };
 
-    expect(realmResources(metadata)).toEqual(["Coal", "Silver", "Wood", "Amber"]);
+    expect(realmResources(metadata)).toEqual(["Dragonhide", "Silver", "Wood", "Amber"]);
     expect(realmResourceCount(metadata)).toBe(4);
   });
 });
-

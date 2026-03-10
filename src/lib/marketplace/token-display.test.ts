@@ -188,6 +188,18 @@ describe("tokenName", () => {
     const token = tok({ token_id: "8", metadata: { name: 123 } });
     expect(tokenName(token)).toBe("Token #8");
   });
+
+  it("prefixes_loot_chest_names_with_their_source", () => {
+    const token = tok({
+      token_id: "2688",
+      metadata: {
+        name: "Chest #2688",
+        attributes: [{ trait_type: "Source", value: "Blitz" }],
+      },
+    });
+
+    expect(tokenName(token)).toBe("Blitz Chest #2688");
+  });
 });
 
 // ---------------------------------------------------------------------------
@@ -232,6 +244,24 @@ describe("tokenImage", () => {
   it("returns null when metadata.image is an empty string", () => {
     const token = tok({ metadata: { image: "" } });
     expect(tokenImage(token)).toBeNull();
+  });
+
+  it("falls_back_to_chest_type_placeholder_images", () => {
+    const blitzChest = tok({
+      token_id: "1",
+      metadata: {
+        attributes: [{ trait_type: "Source", value: "Blitz" }],
+      },
+    });
+    const s0Chest = tok({
+      token_id: "2",
+      metadata: {
+        attributes: [{ trait_type: "Source", value: "S0" }],
+      },
+    });
+
+    expect(tokenImage(blitzChest)).toBe("/placeholders/blitz-chest.svg");
+    expect(tokenImage(s0Chest)).toBe("/placeholders/s0-chest.svg");
   });
 });
 

@@ -505,6 +505,23 @@ describe("collection route view", () => {
     expect(onSortModeChange).toHaveBeenLastCalledWith("resource-count-asc");
   });
 
+  it("renders_banner_fallback_when_collection_metadata_has_no_image", () => {
+    mockUseCollectionQuery.mockReturnValue(successQuery({
+      metadata: { name: "Beasts" },
+      address: "0xbeast",
+      totalSupply: BigInt(12),
+    }));
+
+    render(
+      <CollectionRouteView
+        address="0xbeast"
+        collections={[{ address: "0xbeast", name: "Beasts", projectId: "project-beasts" }]}
+      />,
+    );
+
+    expect(screen.getByAltText("Beasts banner")).toHaveAttribute("src", "/banners/beasts.svg");
+  });
+
   it("collection_route_sweep_adds_cheapest_candidates_and_resets_count", async () => {
     mockUseCollectionQuery.mockReturnValue(successQuery(null));
     mockUseCollectionListingsQuery.mockReturnValue(successQuery([

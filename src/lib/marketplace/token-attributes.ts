@@ -4,17 +4,46 @@ type TokenAttributeRow = {
 };
 
 const REALM_RESOURCE_ORDER = [
+  "Dragonhide",
+  "Mithral",
+  "Adamantine",
+  "Alchemical Silver",
+  "Twilight Quartz",
+  "True Ice",
+  "Paladin T2",
+  "Crossbowman T2",
+  "Knight T2",
+  "Ethereal Silica",
+  "Ignium",
+  "Deep Crystal",
+  "Ruby",
+  "Sapphire",
+  "Diamonds",
+  "Paladin",
+  "Crossbowman",
+  "Knight",
+  "Hartwood",
   "Coal",
-  "Copper",
   "Gold",
-  "Obsidian",
+  "Cold Iron",
+  "Ironwood",
   "Silver",
+  "Obsidian",
+  "Copper",
+  "Labor",
   "Stone",
   "Wood",
 ] as const;
 
+function normalizeResourceName(value: string) {
+  return value.replace(/[\s_-]+/g, "").toLowerCase();
+}
+
 const REALM_RESOURCE_ORDER_INDEX = new Map<string, number>(
-  REALM_RESOURCE_ORDER.map((resource, index) => [resource, index] as const),
+  REALM_RESOURCE_ORDER.map((resource, index) => [
+    normalizeResourceName(resource),
+    index,
+  ] as const),
 );
 
 function normalizeAttributeValue(value: unknown) {
@@ -94,8 +123,8 @@ export function traitValues(metadata: unknown, traitName: string) {
 
 export function realmResources(metadata: unknown) {
   return traitValues(metadata, "Resource").sort((left, right) => {
-    const leftIndex = REALM_RESOURCE_ORDER_INDEX.get(left);
-    const rightIndex = REALM_RESOURCE_ORDER_INDEX.get(right);
+    const leftIndex = REALM_RESOURCE_ORDER_INDEX.get(normalizeResourceName(left));
+    const rightIndex = REALM_RESOURCE_ORDER_INDEX.get(normalizeResourceName(right));
 
     if (leftIndex !== undefined && rightIndex !== undefined) {
       return leftIndex - rightIndex;

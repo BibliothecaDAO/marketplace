@@ -1,7 +1,15 @@
 import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import { CollectionSidebar } from "@/features/home/collection-sidebar";
+
+const { mockUseCollectionTokensQuery } = vi.hoisted(() => ({
+  mockUseCollectionTokensQuery: vi.fn(),
+}));
+
+vi.mock("@/lib/marketplace/hooks", () => ({
+  useCollectionTokensQuery: (...args: unknown[]) => mockUseCollectionTokensQuery(...args),
+}));
 
 const collections = [
   {
@@ -18,6 +26,19 @@ const collections = [
 ];
 
 describe("CollectionSidebar", () => {
+  beforeEach(() => {
+    mockUseCollectionTokensQuery.mockReset();
+    mockUseCollectionTokensQuery.mockReturnValue({
+      data: { page: { tokens: [], nextCursor: null } },
+      isLoading: false,
+      isSuccess: true,
+      isError: false,
+      error: null,
+      isFetching: false,
+      refetch: vi.fn(),
+    });
+  });
+
   it("renders_collection_list_with_names", () => {
     render(
       <CollectionSidebar
@@ -129,5 +150,57 @@ describe("CollectionSidebar", () => {
 
     expect(screen.getByRole("button", { name: "Genesis" })).toHaveClass("h-11", "w-11", "px-0");
     expect(screen.getByRole("button", { name: "Artifacts" })).toHaveClass("h-11", "w-11", "px-0");
+  });
+
+  it("falls_back_to_initials_when_no_image_is_available", () => {
+    render(
+      <CollectionSidebar
+        collections={[{ address: "0xaaa", name: "Genesis" }]}
+        onSelect={() => undefined}
+      />,
+    );
+
+    expect(screen.getByText("G")).toBeVisible();
+  });
+
+  it("requests_a_preview_image_when_collection_is_hovered", async () => {
+    const user = userEvent.setup();
+    mockUseCollectionTokensQuery.mockReturnValue({
+      data: {
+        page: {
+          tokens: [{ token_id: "1", metadata: { image: "https://cdn.example/preview.png" } }],
+          nextCursor: null,
+        },
+      },
+      isLoading: false,
+      isSuccess: true,
+      isError: false,
+      error: null,
+      isFetching: false,
+      refetch: vi.fn(),
+    });
+
+    render(
+      <CollectionSidebar
+        collections={[{ address: "0xaaa", name: "Genesis", projectId: "project-a" }]}
+        onSelect={() => undefined}
+      />,
+    );
+
+    await user.hover(screen.getByRole("button", { name: "Genesis" }));
+
+    expect(mockUseCollectionTokensQuery).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        address: "0xaaa",
+        project: "project-a",
+        limit: 1,
+        fetchImages: true,
+      }),
+      expect.objectContaining({ enabled: true }),
+    );
+    expect(await screen.findByAltText("Genesis thumbnail")).toHaveAttribute(
+      "src",
+      "https://cdn.example/preview.png",
+    );
   });
 });

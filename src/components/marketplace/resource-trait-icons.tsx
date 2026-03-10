@@ -2,14 +2,40 @@
 
 import { cn } from "@/lib/utils";
 
+function normalizeResourceName(value: string) {
+  return value.replace(/[\s_-]+/g, "").toLowerCase();
+}
+
 const RESOURCE_ICON_MAP: Record<string, string> = {
-  Coal: "/traits/coal.svg",
-  Copper: "/traits/copper.svg",
-  Gold: "/traits/gold.svg",
-  Obsidian: "/traits/obsidian.svg",
-  Silver: "/traits/silver.svg",
-  Stone: "/traits/stone.svg",
-  Wood: "/traits/wood.svg",
+  dragonhide: "/traits/dragonhide.svg",
+  mithral: "/traits/mithral.svg",
+  adamantine: "/traits/adamantine.svg",
+  alchemicalsilver: "/traits/silver.svg",
+  twilightquartz: "/traits/quartz.svg",
+  trueice: "/traits/true-ice.svg",
+  paladint2: "/traits/paladin.svg",
+  crossbowmant2: "/traits/crossbowman.svg",
+  knightt2: "/traits/knight.svg",
+  etherealsilica: "/traits/quartz.svg",
+  ignium: "/traits/ignium.svg",
+  deepcrystal: "/traits/quartz.svg",
+  ruby: "/traits/ruby.svg",
+  sapphire: "/traits/sapphire.svg",
+  diamonds: "/traits/diamonds.svg",
+  paladin: "/traits/paladin.svg",
+  crossbowman: "/traits/crossbowman.svg",
+  knight: "/traits/knight.svg",
+  hartwood: "/traits/wood.svg",
+  gold: "/traits/gold.svg",
+  coldiron: "/traits/cold-iron.svg",
+  ironwood: "/traits/wood.svg",
+  silver: "/traits/silver.svg",
+  obsidian: "/traits/obsidian.svg",
+  copper: "/traits/copper.svg",
+  labor: "/traits/labor.svg",
+  coal: "/traits/coal.svg",
+  stone: "/traits/stone.svg",
+  wood: "/traits/wood.svg",
 };
 
 type ResourceTraitIconsProps = {
@@ -33,7 +59,7 @@ export function ResourceTraitIcons({
       data-testid="resource-trait-icons"
     >
       {resources.map((resource) => {
-        const iconSrc = RESOURCE_ICON_MAP[resource];
+        const iconSrc = RESOURCE_ICON_MAP[normalizeResourceName(resource)];
 
         return (
           <span
@@ -62,4 +88,3 @@ export function ResourceTraitIcons({
     </div>
   );
 }
-

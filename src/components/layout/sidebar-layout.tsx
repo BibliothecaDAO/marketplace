@@ -8,6 +8,7 @@ import { CollectionSidebar } from "@/features/home/collection-sidebar";
 import { MobileSidebarSheet } from "@/features/home/mobile-sidebar-sheet";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
+import { getCollectionBannerImage } from "@/lib/marketplace/collection-banners";
 
 function activeCollectionAddress(pathname: string | null) {
   if (!pathname) {
@@ -37,6 +38,8 @@ export function SidebarLayout({ children }: { children: React.ReactNode }) {
       collections.map((collection) => ({
         address: collection.address,
         name: collection.name,
+        projectId: collection.projectId,
+        imageUrl: getCollectionBannerImage(collection.name),
       })),
     [collections],
   );

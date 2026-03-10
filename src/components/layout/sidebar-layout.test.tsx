@@ -25,6 +25,10 @@ vi.mock("next/navigation", () => ({
 vi.mock("@/lib/marketplace/config", () => ({
   getMarketplaceRuntimeConfig: mockGetConfig,
 }));
+vi.mock("@/lib/marketplace/collection-banners", () => ({
+  getCollectionBannerImage: (name: string) =>
+    name === "Beasts" ? "/banners/beasts.svg" : null,
+}));
 
 vi.mock("@/features/home/collection-sidebar", () => ({
   CollectionSidebar: (props: {
@@ -195,5 +199,35 @@ describe("SidebarLayout", () => {
     );
 
     expect(screen.getByTestId("sidebar-toggle-container")).toHaveClass("mt-auto", "border-t");
+  });
+
+  it("passes_project_ids_and_banner_images_to_sidebar", () => {
+    mockGetConfig.mockReturnValue({
+      chainLabel: "SN_MAIN",
+      sdkConfig: { chainId: "0x534e5f4d41494e" },
+      collections: [
+        { address: "0xbeast", name: "Beasts", projectId: "project-beasts" },
+      ],
+      warnings: [],
+    });
+
+    render(
+      <SidebarLayout>
+        <div>Page Content</div>
+      </SidebarLayout>,
+    );
+
+    expect(mockCollectionSidebarRender).toHaveBeenCalledWith(
+      expect.objectContaining({
+        collections: [
+          {
+            address: "0xbeast",
+            name: "Beasts",
+            projectId: "project-beasts",
+            imageUrl: "/banners/beasts.svg",
+          },
+        ],
+      }),
+    );
   });
 });

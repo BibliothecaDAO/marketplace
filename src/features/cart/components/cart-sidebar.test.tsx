@@ -158,6 +158,15 @@ describe("cart sidebar", () => {
     expect(trigger.textContent).not.toContain("Cart");
   });
 
+  it("cart_trigger_button_has_hover_highlight_classes", () => {
+    render(<CartSidebar />);
+
+    expect(screen.getByRole("button", { name: /cart \(0\)/i })).toHaveClass(
+      "hover:bg-accent",
+      "hover:text-accent-foreground",
+    );
+  });
+
   it("cart_trigger_uses_outline_hover_styling", () => {
     useCartStore.setState({
       items: [makeItem("7001", "1", "100")],
