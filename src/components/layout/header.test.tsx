@@ -139,14 +139,14 @@ describe("Header", () => {
     const twitterLinks = screen.getAllByRole("link", { name: /twitter/i });
     expect(twitterLinks.length).toBeGreaterThan(0);
     expect(twitterLinks[0]).toHaveAttribute("href", "https://x.com/lootrealms");
+    expect(within(twitterLinks[0]).getByTestId("x-icon")).toBeVisible();
 
     const discordLinks = screen.getAllByRole("link", { name: /discord/i });
     expect(discordLinks.length).toBeGreaterThan(0);
     expect(discordLinks[0]).toHaveAttribute("href", "https://discord.gg/realmsworld");
+    expect(within(discordLinks[0]).getByTestId("discord-icon")).toBeVisible();
 
-    const githubLinks = screen.getAllByRole("link", { name: /github/i });
-    expect(githubLinks.length).toBeGreaterThan(0);
-    expect(githubLinks[0]).toHaveAttribute("href", "https://github.com/bibliothecaDAO");
+    expect(screen.queryByRole("link", { name: /github/i })).toBeNull();
   });
 
   it("shows_login_button_when_disconnected", () => {
@@ -201,6 +201,23 @@ describe("Header", () => {
     expect(
       within(mobileMenuDialog).getByRole("button", { name: /connect wallet/i }),
     ).toBeVisible();
+  });
+
+  it("mobile_menu_contains_updated_social_links_without_github", async () => {
+    const user = userEvent.setup();
+    render(<Header />);
+
+    await user.click(screen.getByRole("button", { name: /open menu/i }));
+
+    const mobileMenuDialog = await screen.findByRole("dialog");
+    const twitterLink = within(mobileMenuDialog).getByRole("link", { name: /twitter/i });
+    const discordLink = within(mobileMenuDialog).getByRole("link", { name: /discord/i });
+
+    expect(twitterLink).toHaveAttribute("href", "https://x.com/lootrealms");
+    expect(within(twitterLink).getByTestId("x-icon")).toBeVisible();
+    expect(discordLink).toHaveAttribute("href", "https://discord.gg/realmsworld");
+    expect(within(discordLink).getByTestId("discord-icon")).toBeVisible();
+    expect(within(mobileMenuDialog).queryByRole("link", { name: /github/i })).toBeNull();
   });
 
   it("login_opens_wallet_modal_with_all_connectors", async () => {
