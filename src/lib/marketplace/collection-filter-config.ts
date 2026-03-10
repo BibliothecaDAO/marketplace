@@ -40,6 +40,13 @@ const COLLECTION_NAME_CONFIGS: Record<string, CollectionFilterConfig> = {
     hiddenTraits: ["Token ID", "Adventurer ID"],
     overrides: {},
   },
+  "loot chests": {
+    hiddenTraits: [],
+    overrides: {
+      Source: { type: "pills", sort: "alpha" },
+      Tier: { type: "pills", sort: "alpha" },
+    },
+  },
 };
 
 function normalizeAddress(address: string) {

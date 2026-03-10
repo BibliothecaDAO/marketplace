@@ -24,4 +24,17 @@ describe("collection filter config", () => {
       overrides: {},
     });
   });
+
+  it("resolves_loot_chests_filter_config_from_runtime_collections", () => {
+    process.env.NEXT_PUBLIC_MARKETPLACE_COLLECTIONS = "0xchest|Loot Chests";
+    _resetConfigCache();
+
+    expect(getCollectionFilterConfig("0xchest")).toEqual({
+      hiddenTraits: [],
+      overrides: {
+        Source: { type: "pills", sort: "alpha" },
+        Tier: { type: "pills", sort: "alpha" },
+      },
+    });
+  });
 });

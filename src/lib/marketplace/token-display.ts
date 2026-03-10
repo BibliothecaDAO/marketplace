@@ -11,6 +11,41 @@ function asRecord(value: unknown) {
     : null;
 }
 
+function traitValue(token: NormalizedToken, traitName: string) {
+  const attributes = normalizeMetadata(token)?.attributes;
+  if (!Array.isArray(attributes)) {
+    return null;
+  }
+
+  for (const rawAttribute of attributes) {
+    const attribute = asRecord(rawAttribute);
+    if (!attribute) {
+      continue;
+    }
+
+    const resolvedTraitName = attribute.trait_type ?? attribute.traitName ?? attribute.name;
+    if (typeof resolvedTraitName !== "string" || resolvedTraitName.trim() !== traitName) {
+      continue;
+    }
+
+    const value = attribute.value ?? attribute.traitValue;
+    if (typeof value === "string" && value.trim().length > 0) {
+      return value.trim();
+    }
+  }
+
+  return null;
+}
+
+function chestSource(token: NormalizedToken) {
+  const source = traitValue(token, "Source");
+  if (source === "Blitz" || source === "S0") {
+    return source;
+  }
+
+  return null;
+}
+
 function normalizeStatus(value: unknown): string | null {
   if (typeof value === "string" && value.trim().length > 0) {
     return value.trim().toLowerCase();
@@ -116,9 +151,15 @@ export function displayTokenId(token: NormalizedToken) {
 
 export function tokenName(token: NormalizedToken) {
   const name = normalizeMetadata(token)?.name;
+  const source = chestSource(token);
+  if (source && typeof name === "string" && /chest/i.test(name)) {
+    return name.startsWith(`${source} `) ? name : `${source} ${name}`;
+  }
   return typeof name === "string" && name.trim()
     ? name
-    : `Token #${displayTokenId(token)}`;
+    : source
+      ? `${source} Chest #${displayTokenId(token)}`
+      : `Token #${displayTokenId(token)}`;
 }
 
 export function tokenImage(token: NormalizedToken) {
@@ -128,7 +169,19 @@ export function tokenImage(token: NormalizedToken) {
 
   const metadata = normalizeMetadata(token);
   const source = metadata?.image ?? metadata?.image_url;
-  return typeof source === "string" && source.length > 0 ? source : null;
+  if (typeof source === "string" && source.length > 0) {
+    return source;
+  }
+
+  const chestType = chestSource(token);
+  if (chestType === "Blitz") {
+    return "/placeholders/blitz-chest.svg";
+  }
+  if (chestType === "S0") {
+    return "/placeholders/s0-chest.svg";
+  }
+
+  return null;
 }
 
 export function formatAddress(address: string) {
