@@ -1,5 +1,6 @@
 import { render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
+import type { ReactNode } from "react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { CollectionRouteView } from "@/features/collections/collection-route-view";
 import type { SeedCollection } from "@/lib/marketplace/config";
@@ -54,6 +55,7 @@ vi.mock("@/features/collections/collection-token-grid", () => ({
     mockTokenGridRender(props);
     return (
       <div data-testid="collection-token-grid">
+        <div data-testid="collection-sort-controls">{props.sortControls as ReactNode}</div>
         Token Grid: {props.address as string} | Sort: {String(props.sortMode ?? "recent")}
         <div data-testid="token-grid-sweep-preview">
           {Array.from((props.sweepPreviewTokenIds as Set<string> | undefined) ?? []).join(",")}
@@ -375,12 +377,27 @@ describe("collection route view", () => {
     expect(screen.queryByText(/contract type/i)).toBeNull();
   });
 
-  it("sort_select_combobox_updates_mode_and_passes_to_grid", async () => {
+  it("default_collections_show_recent_and_price_sort_buttons", () => {
+    mockUseCollectionQuery.mockReturnValue(successQuery(null));
+
+    render(
+      <CollectionRouteView
+        address="0xabc"
+        collections={collections}
+      />,
+    );
+
+    expect(screen.queryByRole("combobox", { name: /sort/i })).toBeNull();
+    expect(screen.getByRole("button", { name: "Recent" })).toBeVisible();
+    expect(screen.getByRole("button", { name: "Price" })).toBeVisible();
+  });
+
+  it("price_sort_button_toggles_between_ascending_and_descending", async () => {
     mockUseCollectionQuery.mockReturnValue(successQuery(null));
     const onSortModeChange = vi.fn();
     const user = userEvent.setup();
 
-    render(
+    const { rerender } = render(
       <CollectionRouteView
         address="0xabc"
         collections={collections}
@@ -389,15 +406,63 @@ describe("collection route view", () => {
       />,
     );
 
-    // Sort must be a Select combobox, not individual buttons
-    expect(screen.queryByRole("button", { name: /price low to high/i })).toBeNull();
-    expect(screen.queryByRole("button", { name: /price high to low/i })).toBeNull();
-
-    await user.click(screen.getByRole("combobox", { name: /sort/i }));
-    await user.click(await screen.findByRole("option", { name: /price low to high/i }));
+    await user.click(screen.getByRole("button", { name: "Price" }));
 
     expect(onSortModeChange).toHaveBeenCalledWith("price-asc");
-    expect(screen.getByText(/sort: recent/i)).toBeVisible();
+
+    rerender(
+      <CollectionRouteView
+        address="0xabc"
+        collections={collections}
+        sortMode="price-asc"
+        onSortModeChange={onSortModeChange}
+      />,
+    );
+
+    await user.click(screen.getByRole("button", { name: "Price ↑" }));
+
+    expect(onSortModeChange).toHaveBeenLastCalledWith("price-desc");
+  });
+
+  it("beasts_collection_shows_custom_sort_buttons_and_toggles_desc_first", async () => {
+    mockUseCollectionQuery.mockReturnValue(successQuery(null));
+    const onSortModeChange = vi.fn();
+    const user = userEvent.setup();
+    const beastCollections: SeedCollection[] = [
+      { address: "0xbeast", name: "Beasts", projectId: "project-beasts" },
+    ];
+
+    const { rerender } = render(
+      <CollectionRouteView
+        address="0xbeast"
+        collections={beastCollections}
+        sortMode="price-asc"
+        onSortModeChange={onSortModeChange}
+      />,
+    );
+
+    expect(screen.queryByRole("button", { name: "Recent" })).toBeNull();
+    expect(screen.getByRole("button", { name: "Price ↑" })).toBeVisible();
+    expect(screen.getByRole("button", { name: "Power" })).toBeVisible();
+    expect(screen.getByRole("button", { name: "Level" })).toBeVisible();
+    expect(screen.getByRole("button", { name: "Health" })).toBeVisible();
+
+    await user.click(screen.getByRole("button", { name: "Power" }));
+
+    expect(onSortModeChange).toHaveBeenCalledWith("power-desc");
+
+    rerender(
+      <CollectionRouteView
+        address="0xbeast"
+        collections={beastCollections}
+        sortMode="power-desc"
+        onSortModeChange={onSortModeChange}
+      />,
+    );
+
+    await user.click(screen.getByRole("button", { name: "Power ↓" }));
+
+    expect(onSortModeChange).toHaveBeenLastCalledWith("power-asc");
   });
 
   it("collection_route_sweep_adds_cheapest_candidates_and_resets_count", async () => {

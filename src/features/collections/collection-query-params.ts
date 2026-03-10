@@ -4,13 +4,28 @@ import {
   type ActiveFilters,
 } from "@/lib/marketplace/traits";
 
-export type CollectionSortMode = "recent" | "price-asc" | "price-desc";
+export type CollectionSortMode =
+  | "recent"
+  | "price-asc"
+  | "price-desc"
+  | "power-asc"
+  | "power-desc"
+  | "level-asc"
+  | "level-desc"
+  | "health-asc"
+  | "health-desc";
 
 const DEFAULT_SORT_MODE: CollectionSortMode = "price-asc";
 const SORT_MODES = new Set<CollectionSortMode>([
   "recent",
   "price-asc",
   "price-desc",
+  "power-asc",
+  "power-desc",
+  "level-asc",
+  "level-desc",
+  "health-asc",
+  "health-desc",
 ]);
 
 export function sortModeFromSearchParams(params: URLSearchParams): CollectionSortMode {

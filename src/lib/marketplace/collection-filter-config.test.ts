@@ -8,4 +8,37 @@ describe("collection filter config", () => {
       overrides: {},
     });
   });
+
+  it("resolves_beasts_sort_options_from_collection_name", () => {
+    const result = getCollectionFilterConfig("0xbeast", [
+      {
+        address: "0xbeast",
+        name: "Beasts",
+        projectId: "project-beasts",
+      },
+    ]);
+
+    expect(result.sortOptions).toEqual([
+      {
+        label: "Price",
+        values: { asc: "price-asc", desc: "price-desc" },
+        defaultDirection: "asc",
+      },
+      {
+        label: "Power",
+        values: { asc: "power-asc", desc: "power-desc" },
+        defaultDirection: "desc",
+      },
+      {
+        label: "Level",
+        values: { asc: "level-asc", desc: "level-desc" },
+        defaultDirection: "desc",
+      },
+      {
+        label: "Health",
+        values: { asc: "health-asc", desc: "health-desc" },
+        defaultDirection: "desc",
+      },
+    ]);
+  });
 });

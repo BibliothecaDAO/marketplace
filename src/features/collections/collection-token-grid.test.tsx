@@ -991,6 +991,112 @@ describe("collection token grid", () => {
     ).toEqual(["token-1", "token-2", "token-3"]);
   });
 
+  it("sorts_beasts_by_power_descending_then_token_id", async () => {
+    mockUseCollectionTokensQuery.mockReturnValue({
+      data: {
+        page: {
+          tokens: [
+            token("2", {
+              metadata: {
+                name: "Token #2",
+                attributes: [{ trait_type: "Power", value: "90" }],
+              },
+            }),
+            token("1", {
+              metadata: {
+                name: "Token #1",
+                attributes: [{ trait_type: "Power", value: "90" }],
+              },
+            }),
+            token("3", {
+              metadata: {
+                name: "Token #3",
+                attributes: [{ trait_type: "Power", value: "70" }],
+              },
+            }),
+            token("4", {
+              metadata: {
+                name: "Token #4",
+                attributes: [{ trait_type: "Power", value: "unknown" }],
+              },
+            }),
+          ],
+          nextCursor: null,
+        },
+        error: null,
+      },
+      isLoading: false,
+      isSuccess: true,
+      isError: false,
+      error: null,
+      isFetching: false,
+      refetch: vi.fn(),
+    });
+
+    render(
+      <CollectionTokenGrid
+        address="0xbeast"
+        projectId="project-beasts"
+        sortMode="power-desc"
+      />,
+    );
+
+    await screen.findByRole("article", { name: "token-1" });
+    expect(
+      screen.getAllByRole("article").map((card) => card.getAttribute("aria-label")),
+    ).toEqual(["token-1", "token-2", "token-3", "token-4"]);
+  });
+
+  it("sorts_beasts_by_health_ascending_with_missing_values_last", async () => {
+    mockUseCollectionTokensQuery.mockReturnValue({
+      data: {
+        page: {
+          tokens: [
+            token("1", {
+              metadata: {
+                name: "Token #1",
+                attributes: [{ trait_type: "Health", value: "500" }],
+              },
+            }),
+            token("2", {
+              metadata: {
+                name: "Token #2",
+                attributes: [{ trait_type: "Health", value: "200" }],
+              },
+            }),
+            token("3", {
+              metadata: {
+                name: "Token #3",
+                attributes: [],
+              },
+            }),
+          ],
+          nextCursor: null,
+        },
+        error: null,
+      },
+      isLoading: false,
+      isSuccess: true,
+      isError: false,
+      error: null,
+      isFetching: false,
+      refetch: vi.fn(),
+    });
+
+    render(
+      <CollectionTokenGrid
+        address="0xbeast"
+        projectId="project-beasts"
+        sortMode="health-asc"
+      />,
+    );
+
+    await screen.findByRole("article", { name: "token-2" });
+    expect(
+      screen.getAllByRole("article").map((card) => card.getAttribute("aria-label")),
+    ).toEqual(["token-2", "token-1", "token-3"]);
+  });
+
   it("highlights_sweep_preview_tokens_by_order_id", async () => {
     mockUseCollectionTokensQuery.mockReturnValue({
       data: {

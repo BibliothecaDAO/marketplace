@@ -247,7 +247,7 @@ export function activeFiltersFromSearchParams(
   return filters;
 }
 
-function traitValueByName(metadata: unknown, traitName: string) {
+export function traitValueByName(metadata: unknown, traitName: string) {
   if (!metadata || typeof metadata !== "object") {
     return undefined;
   }
@@ -276,6 +276,20 @@ function traitValueByName(metadata: unknown, traitName: string) {
   }
 
   return undefined;
+}
+
+export function numericTraitValueByName(metadata: unknown, traitName: string) {
+  const value = traitValueByName(metadata, traitName);
+  if (!value) {
+    return null;
+  }
+
+  const parsed = Number(value);
+  if (!Number.isFinite(parsed)) {
+    return null;
+  }
+
+  return parsed;
 }
 
 export function tokenMatchesActiveFilters(

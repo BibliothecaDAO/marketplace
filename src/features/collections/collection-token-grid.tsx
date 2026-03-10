@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useMemo, useReducer, useRef, useState } from "react";
+import { useEffect, useMemo, useReducer, useRef, useState, type ReactNode } from "react";
 import type { NormalizedToken } from "@cartridge/arcade/marketplace";
 import {
   useCollectionListingsQuery,
@@ -29,6 +29,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import type { ActiveFilters } from "@/lib/marketplace/traits";
+import { numericTraitValueByName } from "@/lib/marketplace/traits";
 import { COLLECTION_LISTING_SAMPLE_LIMIT } from "@/lib/marketplace/query-limits";
 import { expandTokenIdQueryVariants } from "@/lib/marketplace/token-id";
 import { cn } from "@/lib/utils";
@@ -47,6 +48,7 @@ type CollectionTokenGridProps = {
   activeFilters?: ActiveFilters;
   sortMode?: CollectionSortMode;
   onTokensChange?: (tokens: NormalizedToken[]) => void;
+  sortControls?: ReactNode;
   sweepPreviewTokenIds?: Set<string>;
 };
 
@@ -103,8 +105,42 @@ function sortTokens(
     return tokens;
   }
 
+  const traitNameBySortMode: Partial<Record<CollectionSortMode, string>> = {
+    "power-asc": "Power",
+    "power-desc": "Power",
+    "level-asc": "Level",
+    "level-desc": "Level",
+    "health-asc": "Health",
+    "health-desc": "Health",
+  };
   const ordered = [...tokens];
   ordered.sort((left, right) => {
+    const traitName = traitNameBySortMode[sortMode];
+    if (traitName) {
+      const leftValue = numericTraitValueByName(left.metadata, traitName);
+      const rightValue = numericTraitValueByName(right.metadata, traitName);
+
+      if (leftValue === null && rightValue === null) {
+        return tokenId(left).localeCompare(tokenId(right));
+      }
+      if (leftValue === null) {
+        return 1;
+      }
+      if (rightValue === null) {
+        return -1;
+      }
+      if (leftValue === rightValue) {
+        return tokenId(left).localeCompare(tokenId(right));
+      }
+
+      const isAscending = sortMode.endsWith("-asc");
+      if (leftValue < rightValue) {
+        return isAscending ? -1 : 1;
+      }
+
+      return isAscending ? 1 : -1;
+    }
+
     const leftPrice = sortablePrice(left, listingPrices, listingPriceMap);
     const rightPrice = sortablePrice(right, listingPrices, listingPriceMap);
 
@@ -172,6 +208,7 @@ export function CollectionTokenGrid({
   activeFilters,
   sortMode = "recent",
   onTokensChange,
+  sortControls,
   sweepPreviewTokenIds,
 }: CollectionTokenGridProps) {
   const { addListingToCart, isRecentlyAdded } = useAddToCartFeedback();
@@ -287,37 +324,40 @@ export function CollectionTokenGrid({
 
   return (
     <section className="space-y-4">
-      <div className="flex items-center justify-end gap-1">
-        <Button
-          aria-pressed={gridMode === "compact"}
-          onClick={() => setGridMode("compact")}
-          size="sm"
-          type="button"
-          variant={gridMode === "compact" ? "default" : "outline"}
-          className="h-7 px-2 text-xs"
-        >
-          Compact
-        </Button>
-        <Button
-          aria-pressed={gridMode === "dense"}
-          onClick={() => setGridMode("dense")}
-          size="sm"
-          type="button"
-          variant={gridMode === "dense" ? "default" : "outline"}
-          className="h-7 px-2 text-xs"
-        >
-          Dense
-        </Button>
-        <Button
-          aria-pressed={gridMode === "list"}
-          onClick={() => setGridMode("list")}
-          size="sm"
-          type="button"
-          variant={gridMode === "list" ? "default" : "outline"}
-          className="h-7 px-2 text-xs"
-        >
-          List
-        </Button>
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div>{sortControls}</div>
+        <div className="flex items-center justify-end gap-1">
+          <Button
+            aria-pressed={gridMode === "compact"}
+            onClick={() => setGridMode("compact")}
+            size="sm"
+            type="button"
+            variant={gridMode === "compact" ? "default" : "outline"}
+            className="h-7 px-2 text-xs"
+          >
+            Compact
+          </Button>
+          <Button
+            aria-pressed={gridMode === "dense"}
+            onClick={() => setGridMode("dense")}
+            size="sm"
+            type="button"
+            variant={gridMode === "dense" ? "default" : "outline"}
+            className="h-7 px-2 text-xs"
+          >
+            Dense
+          </Button>
+          <Button
+            aria-pressed={gridMode === "list"}
+            onClick={() => setGridMode("list")}
+            size="sm"
+            type="button"
+            variant={gridMode === "list" ? "default" : "outline"}
+            className="h-7 px-2 text-xs"
+          >
+            List
+          </Button>
+        </div>
       </div>
 
       {tokenQuery.isLoading && pagination.tokens.length === 0 ? (

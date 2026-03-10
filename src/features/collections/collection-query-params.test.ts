@@ -9,6 +9,7 @@ import {
 describe("collection query params", () => {
   it("parses_sort_mode_with_price_asc_as_default", () => {
     expect(sortModeFromSearchParams(new URLSearchParams("sort=price-asc"))).toBe("price-asc");
+    expect(sortModeFromSearchParams(new URLSearchParams("sort=power-desc"))).toBe("power-desc");
     expect(sortModeFromSearchParams(new URLSearchParams("sort=unknown"))).toBe("price-asc");
     expect(sortModeFromSearchParams(new URLSearchParams())).toBe("price-asc");
   });
