@@ -281,4 +281,62 @@ describe("useHomePageData", () => {
       "https://cdn.example/featured-token.png",
     );
   });
+
+  it("falls_back_to_static_banner_when_featured_collection_has_no_image", () => {
+    mockGetConfig.mockReturnValue({
+      chainLabel: "SN_MAIN",
+      sdkConfig: { chainId: "0x534e5f4d41494e" },
+      collections: [
+        { address: "0xbeast", name: "Beasts", projectId: "beasts" },
+      ],
+      warnings: [],
+    });
+    mockUseCollectionQuery.mockReturnValue(
+      successQuery({
+        metadata: {
+          name: "Beasts",
+        },
+        totalSupply: "120",
+      }),
+    );
+    mockUseCollectionTokensQuery.mockReturnValue(
+      successQuery({
+        page: {
+          tokens: [
+            {
+              token_id: "1",
+              metadata: { name: "Token #1" },
+            },
+          ],
+        },
+      }),
+    );
+    vi.spyOn(Math, "random").mockReturnValue(0.01);
+
+    const { result } = renderHook(() => useHomePageData());
+
+    expect(result.current.featuredCollection?.imageUrl).toBe("/banners/beasts.svg");
+  });
+
+  it("propagates_static_banner_images_to_sidebar_collections", () => {
+    mockGetConfig.mockReturnValue({
+      chainLabel: "SN_MAIN",
+      sdkConfig: { chainId: "0x534e5f4d41494e" },
+      collections: [
+        { address: "0xadv", name: "Adventurers", projectId: "adventurers" },
+        { address: "0xbeast", name: "Beasts", projectId: "beasts" },
+      ],
+      warnings: [],
+    });
+    mockUseCollectionQuery.mockReturnValue(successQuery(null));
+    mockUseCollectionTokensQuery.mockReturnValue(successQuery({ page: { tokens: [] } }));
+    vi.spyOn(Math, "random").mockReturnValue(0.99);
+
+    const { result } = renderHook(() => useHomePageData());
+
+    expect(result.current.sidebarCollections).toEqual([
+      expect.objectContaining({ address: "0xadv", imageUrl: "/banners/adventurers.svg" }),
+      expect.objectContaining({ address: "0xbeast", imageUrl: "/banners/beasts.svg" }),
+    ]);
+  });
 });
