@@ -2,6 +2,7 @@ import { render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 import { MarketplaceTokenCard } from "@/components/marketplace/token-card";
+import { ResourceTraitIcons } from "@/components/marketplace/resource-trait-icons";
 import type { NormalizedToken } from "@cartridge/arcade/marketplace";
 
 function token(
@@ -160,5 +161,20 @@ describe("MarketplaceTokenCard", () => {
       "href",
       "/collections/0xabc/14",
     );
+  });
+
+  it("renders_inline_resource_icons_when_provided", () => {
+    render(
+      <MarketplaceTokenCard
+        href="/collections/0xabc/15"
+        inlineTraits={<ResourceTraitIcons resources={["Coal", "Stone", "Wood"]} />}
+        token={token("15", { name: "Token #15" })}
+      />,
+    );
+
+    const traitIcons = screen.getByTestId("resource-trait-icons");
+    expect(within(traitIcons).getByRole("img", { name: "Coal" })).toBeVisible();
+    expect(within(traitIcons).getByRole("img", { name: "Stone" })).toBeVisible();
+    expect(within(traitIcons).getByRole("img", { name: "Wood" })).toBeVisible();
   });
 });

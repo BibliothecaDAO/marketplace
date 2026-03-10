@@ -26,6 +26,9 @@ import {
   tokenId,
   tokenImage,
 } from "@/lib/marketplace/token-display";
+import { getCollectionFilterConfig } from "@/lib/marketplace/collection-filter-config";
+import { ResourceTraitIcons } from "@/components/marketplace/resource-trait-icons";
+import { resolveMarketActivityDetails } from "@/lib/marketplace/market-activity-details";
 
 type CollectionMarketPanelProps = {
   address: string;
@@ -53,6 +56,7 @@ type ActivityRow = {
   status: string | null;
   occurredAt: string | null;
   href: string | null;
+  extraDetails: Array<{ label: string | null; value: string }>;
 };
 
 function asRecord(value: unknown) {
@@ -151,7 +155,22 @@ function displayStatus(status: string | null) {
   return status;
 }
 
-function toActivityRow(raw: unknown, kind: ActivityKind, address: string): ActivityRow | null {
+function firstToken(candidates: unknown[]) {
+  for (const candidate of candidates) {
+    if (asRecord(candidate)) {
+      return candidate;
+    }
+  }
+
+  return null;
+}
+
+function toActivityRow(
+  raw: unknown,
+  kind: ActivityKind,
+  address: string,
+  marketActivity: NonNullable<ReturnType<typeof getCollectionFilterConfig>["marketActivity"]> | undefined,
+): ActivityRow | null {
   const fields = asRecord(raw);
   if (!fields) {
     return null;
@@ -189,6 +208,11 @@ function toActivityRow(raw: unknown, kind: ActivityKind, address: string): Activ
       nestedListing?.token_id,
     ]) ??
     tokenId;
+  const token = firstToken([
+    fields.token,
+    nestedOrder?.token,
+    nestedListing?.token,
+  ]);
   const rawPrice = firstNumberish([
     fields.price,
     fields.listingPrice,
@@ -225,11 +249,7 @@ function toActivityRow(raw: unknown, kind: ActivityKind, address: string): Activ
     nestedOrder?.tokenImage,
     nestedListing?.image,
     nestedListing?.tokenImage,
-  ]) ?? firstTokenImage([
-    fields.token,
-    nestedOrder?.token,
-    nestedListing?.token,
-  ]);
+  ]) ?? firstTokenImage([token]);
   const occurredAt = formatActivityDate(
     fields.updatedAt ??
       fields.updated_at ??
@@ -243,6 +263,7 @@ function toActivityRow(raw: unknown, kind: ActivityKind, address: string): Activ
       nestedListing?.createdAt,
   );
   const href = routeTokenId ? `/collections/${address}/${routeTokenId}` : null;
+  const extraDetails = resolveMarketActivityDetails(token, marketActivity);
 
   return {
     kind,
@@ -255,10 +276,17 @@ function toActivityRow(raw: unknown, kind: ActivityKind, address: string): Activ
     status,
     occurredAt,
     href,
+    extraDetails,
   };
 }
 
-function ActivityRowItem({ row }: { row: ActivityRow }) {
+function ActivityRowItem({
+  row,
+  renderResourcesAsIcons,
+}: {
+  row: ActivityRow;
+  renderResourcesAsIcons?: boolean;
+}) {
   return (
     <div className="rounded-md border border-border/60 bg-card px-4 py-3">
       <div className="flex items-center justify-between gap-4">
@@ -277,6 +305,22 @@ function ActivityRowItem({ row }: { row: ActivityRow }) {
             <p className="text-sm font-medium">
               {row.tokenId ? `Token #${row.tokenId}` : row.kind}
             </p>
+            {row.extraDetails.length > 0 ? (
+              renderResourcesAsIcons ? (
+                <ResourceTraitIcons resources={row.extraDetails.map((detail) => detail.value)} />
+              ) : (
+                <div className="flex flex-wrap gap-1.5">
+                  {row.extraDetails.map((detail) => (
+                    <span
+                      key={`${detail.label ?? "value"}-${detail.value}`}
+                      className="inline-flex items-center rounded-full border border-border/60 bg-muted px-2 py-0.5 text-[11px] font-medium text-foreground/80"
+                    >
+                      {detail.label ? `${detail.label} ${detail.value}` : detail.value}
+                    </span>
+                  ))}
+                </div>
+              )
+            ) : null}
             <div className="flex flex-wrap gap-x-3 gap-y-1 text-xs text-muted-foreground">
               {row.price ? <span>Price {row.price}</span> : null}
               {row.owner ? <span>Owner {row.owner}</span> : null}
@@ -328,6 +372,7 @@ export function CollectionMarketPanel({
   address,
   projectId,
 }: CollectionMarketPanelProps) {
+  const collectionConfig = useMemo(() => getCollectionFilterConfig(address), [address]);
   const [orderStatus, setOrderStatus] = useState(ANY_VALUE);
   const [orderCategory, setOrderCategory] = useState(ANY_VALUE);
   const [listingTokenId, setListingTokenId] = useState("");
@@ -363,16 +408,16 @@ export function CollectionMarketPanel({
   const orderRows = useMemo(
     () =>
       (Array.isArray(orders.data) ? orders.data : [])
-        .map((order) => toActivityRow(order, "Order", address))
+        .map((order) => toActivityRow(order, "Order", address, collectionConfig.marketActivity))
         .filter((row): row is ActivityRow => row !== null),
-    [address, orders.data],
+    [address, collectionConfig.marketActivity, orders.data],
   );
   const listingRows = useMemo(
     () =>
       (Array.isArray(listings.data) ? listings.data : [])
-        .map((listing) => toActivityRow(listing, "Listing", address))
+        .map((listing) => toActivityRow(listing, "Listing", address, collectionConfig.marketActivity))
         .filter((row): row is ActivityRow => row !== null),
-    [address, listings.data],
+    [address, collectionConfig.marketActivity, listings.data],
   );
 
   return (
@@ -435,6 +480,7 @@ export function CollectionMarketPanel({
                     <ActivityRowItem
                       key={`${row.kind}-${row.id}-${row.tokenId ?? "none"}`}
                       row={row}
+                      renderResourcesAsIcons={collectionConfig.marketActivity?.renderResourcesAsIcons}
                     />
                   ))}
                 </div>
@@ -479,6 +525,7 @@ export function CollectionMarketPanel({
                     <ActivityRowItem
                       key={`${row.kind}-${row.id}-${row.tokenId ?? "none"}`}
                       row={row}
+                      renderResourcesAsIcons={collectionConfig.marketActivity?.renderResourcesAsIcons}
                     />
                   ))}
                 </div>

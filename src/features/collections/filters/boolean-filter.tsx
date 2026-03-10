@@ -10,6 +10,18 @@ type BooleanFilterProps = {
   onToggle: (value: string) => void;
 };
 
+function displayBooleanValue(value: string) {
+  const normalized = value.trim().toLowerCase();
+  if (normalized === "1" || normalized === "true" || normalized === "yes") {
+    return "Yes";
+  }
+  if (normalized === "0" || normalized === "false" || normalized === "no") {
+    return "No";
+  }
+
+  return value;
+}
+
 export function BooleanFilter({
   traitName,
   values,
@@ -32,7 +44,7 @@ export function BooleanFilter({
                 : "border-border text-muted-foreground hover:border-primary/50 hover:text-foreground",
             )}
           >
-            {item.property}
+            {displayBooleanValue(item.property)}
           </button>
         );
       })}

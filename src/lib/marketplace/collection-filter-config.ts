@@ -29,6 +29,15 @@ export type CollectionFilterConfig = {
   hiddenTraits: string[];
   overrides: Record<string, FilterOverride>;
   sortOptions?: CollectionSortOption[];
+  showInlineResources?: boolean;
+  marketActivity?: {
+    details: Array<{
+      label?: string;
+      traitNames: string[];
+      mode?: "first" | "all";
+    }>;
+    renderResourcesAsIcons?: boolean;
+  };
 };
 
 export type CollectionSortOption = {
@@ -48,9 +57,46 @@ const DEFAULT_COLLECTION_FILTER_CONFIG: CollectionFilterConfig = {
 const COLLECTION_FILTER_CONFIGS: Record<string, CollectionFilterConfig> = {};
 
 const COLLECTION_NAME_CONFIGS: Record<string, CollectionFilterConfig> = {
-  beasts: {
+  adventurers: {
+    // Keep the collection, but only show tradable inventory and a smaller set of
+    // browse filters instead of the full raw metadata dump.
+    hiddenTraits: ["Token ID", "Adventurer ID", "XP", "Entropy"],
+    overrides: {
+      Health: { type: "range", min: 1, max: 255 },
+      Level: { type: "range", min: 1, max: 100 },
+      Archetype: { type: "pills", sort: "alpha", showCount: false },
+      Profession: { type: "pills", sort: "alpha", showCount: false },
+      Origin: { type: "pills", sort: "alpha", showCount: false },
+    },
+  },
+  "loot chests": {
     hiddenTraits: [],
-    overrides: {},
+    overrides: {
+      Source: { type: "pills", sort: "alpha" },
+      Tier: { type: "pills", sort: "alpha" },
+    },
+  },
+  beasts: {
+    hiddenTraits: [
+      "Token ID",
+      "Beast ID",
+      "Last Death Timestamp",
+      "Last Killed By",
+      "Adventurers Killed",
+    ],
+    overrides: {
+      Animated: { type: "boolean" },
+      Shiny: { type: "boolean" },
+      Genesis: { type: "boolean" },
+      Beast: { type: "pills", sort: "alpha", showCount: false, hideSearch: true },
+      Suffix: { type: "pills", sort: "alpha", showCount: false },
+      Prefix: { type: "pills", sort: "alpha", showCount: false },
+      Tier: { type: "pills", sort: "alpha", showCount: false, hideSearch: true },
+      Type: { type: "pills", sort: "alpha", showCount: false, hideSearch: true },
+      Health: { type: "range", min: 1, max: 1023 },
+      Level: { type: "range", min: 1, max: 250 },
+      Rank: { type: "range", min: 1, max: 1023 },
+    },
     sortOptions: [
       {
         label: "Price",
@@ -73,6 +119,45 @@ const COLLECTION_NAME_CONFIGS: Record<string, CollectionFilterConfig> = {
         defaultDirection: "desc",
       },
     ],
+    marketActivity: {
+      details: [
+        { label: "Type", traitNames: ["Type", "Beast"] },
+        { label: "Level", traitNames: ["Level"] },
+      ],
+    },
+  },
+  realms: {
+    hiddenTraits: [],
+    overrides: {
+      Resource: { type: "pills", sort: "alpha", hideSearch: true },
+    },
+    sortOptions: [
+      {
+        label: "Recent",
+        values: { asc: "recent", desc: "recent" },
+        defaultDirection: "asc",
+      },
+      {
+        label: "Price",
+        values: { asc: "price-asc", desc: "price-desc" },
+        defaultDirection: "asc",
+      },
+      {
+        label: "Resources",
+        values: {
+          asc: "resource-count-asc",
+          desc: "resource-count-desc",
+        },
+        defaultDirection: "desc",
+      },
+    ],
+    showInlineResources: true,
+    marketActivity: {
+      details: [
+        { traitNames: ["Resource"], mode: "all" },
+      ],
+      renderResourcesAsIcons: true,
+    },
   },
 };
 

@@ -41,6 +41,7 @@ import {
   getCollectionFilterConfig,
   type CollectionSortOption,
 } from "@/lib/marketplace/collection-filter-config";
+import { getCollectionBannerImage } from "@/lib/marketplace/collection-banners";
 import {
   cartItemFromTokenListing,
   cheapestListingByTokenId,
@@ -86,6 +87,18 @@ function collectionName(metadata: unknown, fallbackAddress: string) {
   }
 
   return fallbackAddress;
+}
+
+function collectionHeaderImage(metadata: unknown) {
+  if (metadata && typeof metadata === "object") {
+    const record = metadata as Record<string, unknown>;
+    const image = record.banner_image ?? record.bannerImage ?? record.image ?? record.image_url;
+    if (typeof image === "string" && image.trim().length > 0) {
+      return image.trim();
+    }
+  }
+
+  return null;
 }
 
 function floorFromListings(
@@ -226,6 +239,9 @@ export function CollectionRouteView({
     ?? (collection.isSuccess && collection.data
       ? collectionName(collection.data.metadata, address)
       : null);
+  const headerImage = collection.isSuccess && collection.data
+    ? collectionHeaderImage(collection.data.metadata) ?? getCollectionBannerImage(displayName ?? seedName)
+    : getCollectionBannerImage(seedName);
   const collectionFilterConfig = useMemo(
     () => getCollectionFilterConfig(address, runtimeCollections),
     [address, runtimeCollections],
@@ -409,6 +425,16 @@ export function CollectionRouteView({
             {selectedCollection?.name ?? address}
           </h1>
         )}
+        {headerImage ? (
+          <div className="overflow-hidden rounded-xl border border-border/60 bg-muted" data-testid="collection-header-image">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              alt={`${displayName ?? selectedCollection?.name ?? address} banner`}
+              className="h-40 w-full object-cover"
+              src={headerImage}
+            />
+          </div>
+        ) : null}
 
         {/* Stats row */}
         <div className="flex flex-wrap items-center gap-x-5 gap-y-1 text-sm text-muted-foreground">

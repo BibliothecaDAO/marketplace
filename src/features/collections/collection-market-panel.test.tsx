@@ -14,6 +14,15 @@ vi.mock("@/lib/marketplace/hooks", () => ({
   useCollectionListingsQuery: mockUseCollectionListingsQuery,
 }));
 
+vi.mock("@/lib/marketplace/config", () => ({
+  getMarketplaceRuntimeConfig: () => ({
+    collections: [
+      { address: "0xrealm", name: "Realms" },
+      { address: "0xbeast", name: "Beasts" },
+    ],
+  }),
+}));
+
 function successQuery(data: unknown) {
   return {
     data,
@@ -215,5 +224,57 @@ describe("collection market panel", () => {
 
     const tokenLink = within(listingsPanel).getByRole("link", { name: /view token/i });
     expect(tokenLink).toHaveAttribute("href", `/collections/0xabc/${routeTokenId}`);
+  });
+
+  it("realms_rows_render_resource_icons", () => {
+    mockUseCollectionOrdersQuery.mockReturnValue(
+      successQuery([
+        {
+          id: 9,
+          tokenId: 77,
+          token: {
+            token_id: "77",
+            metadata: {
+              attributes: [
+                { trait_type: "Resource", value: "Coal" },
+                { trait_type: "Resource", value: "Stone" },
+              ],
+            },
+          },
+        },
+      ]),
+    );
+
+    render(<CollectionMarketPanel address="0xrealm" />);
+
+    const ordersPanel = screen.getByTestId("orders-panel");
+    expect(within(ordersPanel).getByRole("img", { name: "Coal" })).toBeVisible();
+    expect(within(ordersPanel).getByRole("img", { name: "Stone" })).toBeVisible();
+  });
+
+  it("beasts_rows_render_type_and_level_details", () => {
+    mockUseCollectionOrdersQuery.mockReturnValue(
+      successQuery([
+        {
+          id: 9,
+          tokenId: 77,
+          token: {
+            token_id: "77",
+            metadata: {
+              attributes: [
+                { trait_type: "Beast", value: "Phoenix" },
+                { trait_type: "Level", value: "12" },
+              ],
+            },
+          },
+        },
+      ]),
+    );
+
+    render(<CollectionMarketPanel address="0xbeast" />);
+
+    const ordersPanel = screen.getByTestId("orders-panel");
+    expect(within(ordersPanel).getByText("Type Phoenix")).toBeVisible();
+    expect(within(ordersPanel).getByText("Level 12")).toBeVisible();
   });
 });

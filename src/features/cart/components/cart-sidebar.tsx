@@ -1052,7 +1052,7 @@ export function CartSidebar() {
         size="sm"
         type="button"
         variant="outline"
-        className="relative px-2"
+        className="relative px-2 hover:bg-accent hover:text-accent-foreground"
       >
         <ShoppingCart className="h-4 w-4" />
         {items.length > 0 && (
