@@ -367,6 +367,7 @@ export function CollectionRouteView({
           data-testid="trait-sidebar-container"
         >
           <TraitFilterSidebar
+            collectionAddress={address}
             traitNames={traitNamesQuery.data ?? []}
             activeFilters={resolvedActiveFilters}
             onActiveFiltersChange={onActiveFiltersChange}
