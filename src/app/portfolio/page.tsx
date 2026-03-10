@@ -2,8 +2,6 @@ import { HydrationBoundary } from "@tanstack/react-query";
 import { PortfolioView } from "@/features/portfolio/portfolio-view";
 import { buildPortfolioPageHydrationState } from "@/lib/marketplace/server-prefetch";
 
-export const runtime = "edge";
-
 type PortfolioPageProps = {
   searchParams?: Promise<{ address?: string }>;
 };

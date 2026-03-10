@@ -2,8 +2,6 @@ import { HydrationBoundary } from "@tanstack/react-query";
 import { WalletProfileView } from "@/features/profile/wallet-profile-view";
 import { buildWalletProfileHydrationState } from "@/lib/marketplace/server-prefetch";
 
-export const runtime = "edge";
-
 type ProfilePageProps = {
   params: Promise<{ address: string }>;
 };
