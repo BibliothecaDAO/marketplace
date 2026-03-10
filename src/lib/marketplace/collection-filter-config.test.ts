@@ -37,4 +37,32 @@ describe("collection filter config", () => {
       },
     });
   });
+
+  it("resolves_beasts_custom_filter_config_from_runtime_collections", () => {
+    process.env.NEXT_PUBLIC_MARKETPLACE_COLLECTIONS = "0xbeast|Beasts";
+    _resetConfigCache();
+
+    expect(getCollectionFilterConfig("0xbeast")).toEqual({
+      hiddenTraits: [
+        "Token ID",
+        "Beast ID",
+        "Last Death Timestamp",
+        "Last Killed By",
+        "Adventurers Killed",
+      ],
+      overrides: {
+        Animated: { type: "boolean" },
+        Shiny: { type: "boolean" },
+        Genesis: { type: "boolean" },
+        Beast: { type: "pills", sort: "alpha", showCount: false, hideSearch: true },
+        Suffix: { type: "pills", sort: "alpha", showCount: false },
+        Prefix: { type: "pills", sort: "alpha", showCount: false },
+        Tier: { type: "pills", sort: "alpha", showCount: false, hideSearch: true },
+        Type: { type: "pills", sort: "alpha", showCount: false, hideSearch: true },
+        Health: { type: "range", min: 1, max: 1023 },
+        Level: { type: "range", min: 1, max: 250 },
+        Rank: { type: "range", min: 1, max: 1023 },
+      },
+    });
+  });
 });
