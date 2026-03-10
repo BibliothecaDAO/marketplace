@@ -15,6 +15,7 @@ import {
   tokenImage,
   tokenName,
 } from "@/lib/marketplace/token-display";
+import { getCollectionBannerImage } from "@/lib/marketplace/collection-banners";
 import { COLLECTION_LISTING_SAMPLE_LIMIT } from "@/lib/marketplace/query-limits";
 import { cheapestListingByTokenId } from "@/features/cart/listing-utils";
 import type {
@@ -168,7 +169,10 @@ export function useHomePageData() {
       address: featuredSeed.address,
       name: metadataName(metadata) ?? featuredSeed.name,
       projectId: featuredSeed.projectId,
-      imageUrl: metadataImage(metadata) ?? featuredTokenImage,
+      imageUrl:
+        metadataImage(metadata) ??
+        featuredTokenImage ??
+        getCollectionBannerImage(featuredSeed.name),
       floorPrice: resolvedFloor?.price ?? null,
       totalSupply: formatNumberish(collectionQuery.data?.totalSupply) ?? null,
       listingCount,
@@ -236,7 +240,7 @@ export function useHomePageData() {
       imageUrl:
         featuredCollection && featuredCollection.address === collection.address
           ? featuredCollection.imageUrl
-          : null,
+          : getCollectionBannerImage(collection.name),
       floorPrice:
         featuredCollection && featuredCollection.address === collection.address
           ? featuredCollection.floorPrice
@@ -252,7 +256,7 @@ export function useHomePageData() {
       imageUrl:
         featuredCollection && featuredCollection.address === collection.address
           ? featuredCollection.imageUrl
-          : null,
+          : getCollectionBannerImage(collection.name),
       floorPrice:
         featuredCollection && featuredCollection.address === collection.address
           ? featuredCollection.floorPrice
