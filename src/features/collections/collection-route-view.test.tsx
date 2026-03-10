@@ -42,7 +42,7 @@ const {
 
 const mockUseCollectionTokensQuery = vi.fn();
 
-vi.mock("@/lib/marketplace/hooks", () => ({
+vi.mock("@/lib/marketplace/collection-hooks", () => ({
   useCollectionQuery: mockUseCollectionQuery,
   useTraitNamesSummaryQuery: mockUseTraitNamesSummaryQuery,
   useTraitValuesQuery: mockUseTraitValuesQuery,

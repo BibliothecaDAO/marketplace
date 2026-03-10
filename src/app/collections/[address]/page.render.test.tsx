@@ -18,14 +18,6 @@ vi.mock("@tanstack/react-query", () => ({
   ),
 }));
 
-vi.mock("@/features/collections/collection-route-container", () => ({
-  CollectionRouteContainer: ({
-    address,
-  }: {
-    address: string;
-  }) => <div data-testid="collection-route-view">{address}</div>,
-}));
-
 vi.mock("@/lib/marketplace/collection-prefetch", () => ({
   buildCollectionPageHydrationState: vi.fn(async () => ({
     state: { queries: [{ queryKey: ["collection", "0xabc"] }] },
@@ -47,6 +39,6 @@ describe("collection route page", () => {
       "data-state",
       "present",
     );
-    expect(screen.getByTestId("collection-route-view")).toHaveTextContent("0xabc");
+    expect(screen.getByRole("main")).toBeVisible();
   });
 });

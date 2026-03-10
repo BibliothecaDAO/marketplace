@@ -14,7 +14,7 @@ const { mockCartAddItem, mockCartSetOpen } = vi.hoisted(() => ({
   mockCartSetOpen: vi.fn(),
 }));
 
-vi.mock("@/lib/marketplace/hooks", () => ({
+vi.mock("@/lib/marketplace/collection-hooks", () => ({
   useCollectionTokensQuery: mockUseCollectionTokensQuery,
   useCollectionListingsQuery: mockUseCollectionListingsQuery,
 }));

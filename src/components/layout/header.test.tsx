@@ -3,67 +3,27 @@ import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { Header } from "./header";
 
-const { mockUseAccount, mockUseConnect, mockUseDisconnect, mockConnect, mockDisconnect, mockUseBalance } =
-  vi.hoisted(() => ({
-    mockUseAccount: vi.fn(),
-    mockUseConnect: vi.fn(),
-    mockUseDisconnect: vi.fn(),
-    mockConnect: vi.fn(),
-    mockDisconnect: vi.fn(),
-    mockUseBalance: vi.fn(),
-  }));
 const { mockPush, mockSearchParams } = vi.hoisted(() => ({
   mockPush: vi.fn(),
   mockSearchParams: vi.fn(),
 }));
 
-vi.mock("@starknet-react/core", () => ({
-  useAccount: mockUseAccount,
-  useConnect: mockUseConnect,
-  useDisconnect: mockUseDisconnect,
-  useBalance: mockUseBalance,
-}));
 vi.mock("next/navigation", () => ({
   useRouter: () => ({ push: mockPush }),
   useSearchParams: () => mockSearchParams(),
 }));
 
-vi.mock("@/features/cart/components/cart-sidebar", () => ({
-  CartSidebar: () => <button type="button">Cart (0)</button>,
-}));
-
 describe("Header", () => {
   beforeEach(() => {
-    mockConnect.mockReset();
-    mockDisconnect.mockReset();
     mockPush.mockReset();
     mockSearchParams.mockReset();
-    mockUseBalance.mockReturnValue({ data: undefined, isLoading: false });
     mockSearchParams.mockReturnValue(new URLSearchParams());
-
-    mockUseAccount.mockReturnValue({
-      status: "disconnected",
-      isConnected: false,
-      isDisconnected: true,
-      address: undefined,
-    });
-    mockUseConnect.mockReturnValue({
-      connect: mockConnect,
-      connectors: [{ id: "controller", name: "Controller" }],
-      pendingConnector: undefined,
-      isPending: false,
-    });
-    mockUseDisconnect.mockReturnValue({
-      disconnect: mockDisconnect,
-      isPending: false,
-    });
   });
 
   it("renders_logo_placeholder", () => {
     render(<Header />);
 
-    const logo = screen.getByTestId("logo-placeholder");
-    expect(logo).toBeVisible();
+    expect(screen.getByTestId("logo-placeholder")).toBeVisible();
   });
 
   it("renders_app_name", () => {
@@ -78,17 +38,10 @@ describe("Header", () => {
     expect(screen.getByPlaceholderText("Search...")).toBeVisible();
   });
 
-  it("search_input_has_placeholder", () => {
-    render(<Header />);
-
-    expect(screen.getByPlaceholderText("Search...")).toBeVisible();
-  });
-
   it("search_navigates_on_enter", async () => {
     const user = userEvent.setup();
 
     render(<Header />);
-
     await user.type(screen.getByPlaceholderText("Search..."), "dragons{enter}");
 
     expect(mockPush).toHaveBeenCalledWith("/?q=dragons");
@@ -105,88 +58,65 @@ describe("Header", () => {
   it("header_is_a_nav_landmark", () => {
     render(<Header />);
 
-    const header = screen.getByRole("banner");
-    expect(header).toBeVisible();
+    expect(screen.getByRole("banner")).toBeVisible();
   });
 
   it("links_logo_to_home", () => {
     render(<Header />);
 
     const homeLink = screen.getByRole("link", { name: /realms\.market home/i });
-    expect(homeLink).toBeVisible();
     expect(homeLink).toHaveAttribute("href", "/");
   });
 
   it("renders_nav_links", () => {
     render(<Header />);
 
-    const stakingLinks = screen.getAllByRole("link", { name: /staking/i });
-    expect(stakingLinks.length).toBeGreaterThan(0);
-    expect(stakingLinks[0]).toHaveAttribute("href", "https://account.realms.world");
-
-    const ecosystemLinks = screen.getAllByRole("link", { name: /ecosystem/i });
-    expect(ecosystemLinks.length).toBeGreaterThan(0);
-    expect(ecosystemLinks[0]).toHaveAttribute("href", "https://realms.world");
-
-    const eternumLinks = screen.getAllByRole("link", { name: /eternum/i });
-    expect(eternumLinks.length).toBeGreaterThan(0);
-    expect(eternumLinks[0]).toHaveAttribute("href", "https://blitz.realms.world");
+    expect(screen.getAllByRole("link", { name: /staking/i })[0]).toHaveAttribute(
+      "href",
+      "https://account.realms.world",
+    );
+    expect(screen.getAllByRole("link", { name: /ecosystem/i })[0]).toHaveAttribute(
+      "href",
+      "https://realms.world",
+    );
+    expect(screen.getAllByRole("link", { name: /eternum/i })[0]).toHaveAttribute(
+      "href",
+      "https://blitz.realms.world",
+    );
   });
 
   it("renders_social_icon_links", () => {
     render(<Header />);
 
     const twitterLinks = screen.getAllByRole("link", { name: /twitter/i });
-    expect(twitterLinks.length).toBeGreaterThan(0);
+    const discordLinks = screen.getAllByRole("link", { name: /discord/i });
+
     expect(twitterLinks[0]).toHaveAttribute("href", "https://x.com/lootrealms");
     expect(within(twitterLinks[0]).getByTestId("x-icon")).toBeVisible();
-
-    const discordLinks = screen.getAllByRole("link", { name: /discord/i });
-    expect(discordLinks.length).toBeGreaterThan(0);
     expect(discordLinks[0]).toHaveAttribute("href", "https://discord.gg/realmsworld");
     expect(within(discordLinks[0]).getByTestId("discord-icon")).toBeVisible();
-
     expect(screen.queryByRole("link", { name: /github/i })).toBeNull();
-  });
-
-  it("shows_login_button_when_disconnected", () => {
-    render(<Header />);
-
-    expect(screen.getByRole("button", { name: /connect wallet/i })).toBeVisible();
-  });
-
-  it("shows_cart_trigger_button", () => {
-    render(<Header />);
-
-    expect(screen.getByRole("button", { name: /cart \(0\)/i })).toBeVisible();
   });
 
   it("shows_portfolio_link_for_address_lookup", () => {
     render(<Header />);
 
     const portfolioLinks = screen.getAllByRole("link", { name: /portfolio/i });
-    expect(portfolioLinks.length).toBeGreaterThan(0);
     expect(portfolioLinks[0]).toHaveAttribute("href", "/portfolio");
   });
 
-  it("desktop_portfolio_and_connect_controls_are_hidden_on_mobile_breakpoints", () => {
+  it("desktop_portfolio_control_is_hidden_on_mobile_breakpoints", () => {
     render(<Header />);
 
     const desktopPortfolioLink = screen
       .getAllByRole("link", { name: /portfolio/i })
       .find((link) => link.getAttribute("href") === "/portfolio");
-    expect(desktopPortfolioLink).toBeTruthy();
+
     expect(desktopPortfolioLink?.className).toContain("hidden");
     expect(desktopPortfolioLink?.className).toContain("sm:inline-flex");
-
-    const desktopConnectButton = screen
-      .getAllByRole("button", { name: /connect wallet/i })
-      .find((button) => button.className.includes("sm:inline-flex"));
-    expect(desktopConnectButton).toBeTruthy();
-    expect(desktopConnectButton?.className).toContain("hidden");
   });
 
-  it("mobile_menu_contains_portfolio_and_connect_actions", async () => {
+  it("mobile_menu_contains_portfolio_link", async () => {
     const user = userEvent.setup();
     render(<Header />);
 
@@ -197,10 +127,6 @@ describe("Header", () => {
       name: /portfolio/i,
     });
     expect(mobilePortfolioLink).toHaveAttribute("href", "/portfolio");
-
-    expect(
-      within(mobileMenuDialog).getByRole("button", { name: /connect wallet/i }),
-    ).toBeVisible();
   });
 
   it("mobile_menu_contains_updated_social_links_without_github", async () => {
@@ -218,175 +144,5 @@ describe("Header", () => {
     expect(discordLink).toHaveAttribute("href", "https://discord.gg/realmsworld");
     expect(within(discordLink).getByTestId("discord-icon")).toBeVisible();
     expect(within(mobileMenuDialog).queryByRole("link", { name: /github/i })).toBeNull();
-  });
-
-  it("login_opens_wallet_modal_with_all_connectors", async () => {
-    const walletConnector = { id: "braavos", name: "Braavos" };
-    const argentConnector = { id: "argentX", name: "Argent" };
-    const controllerConnector = { id: "controller", name: "Controller" };
-    mockUseConnect.mockReturnValue({
-      connect: mockConnect,
-      connectors: [walletConnector, argentConnector, controllerConnector],
-      pendingConnector: undefined,
-      isPending: false,
-    });
-    const user = userEvent.setup();
-
-    render(<Header />);
-    await user.click(screen.getByRole("button", { name: /connect wallet/i }));
-
-    expect(screen.getByRole("heading", { name: /select wallet/i })).toBeVisible();
-    expect(screen.getByRole("button", { name: /braavos/i })).toBeVisible();
-    expect(screen.getByRole("button", { name: /argent/i })).toBeVisible();
-    expect(screen.getByRole("button", { name: /controller/i })).toBeVisible();
-  });
-
-  it("wallet_modal_connects_selected_connector", async () => {
-    const braavosConnector = { id: "braavos", name: "Braavos" };
-    const controllerConnector = { id: "controller", name: "Controller" };
-    mockUseConnect.mockReturnValue({
-      connect: mockConnect,
-      connectors: [controllerConnector, braavosConnector],
-      pendingConnector: undefined,
-      isPending: false,
-    });
-    const user = userEvent.setup();
-
-    render(<Header />);
-    await user.click(screen.getByRole("button", { name: /connect wallet/i }));
-    await user.click(screen.getByRole("button", { name: /braavos/i }));
-
-    expect(mockConnect).toHaveBeenCalledWith({ connector: braavosConnector });
-  });
-
-  it("wallet_modal_shows_connector_icons_when_available", async () => {
-    const braavosConnector = {
-      id: "braavos",
-      name: "Braavos",
-      icon: "https://cdn.example/braavos.png",
-    };
-    const controllerConnector = { id: "controller", name: "Controller" };
-    mockUseConnect.mockReturnValue({
-      connect: mockConnect,
-      connectors: [braavosConnector, controllerConnector],
-      pendingConnector: undefined,
-      isPending: false,
-    });
-    const user = userEvent.setup();
-
-    render(<Header />);
-    await user.click(screen.getByRole("button", { name: /connect wallet/i }));
-
-    const braavosButton = screen.getByRole("button", { name: /braavos/i });
-    expect(within(braavosButton).getByAltText("Braavos icon")).toHaveAttribute(
-      "src",
-      "https://cdn.example/braavos.png",
-    );
-    expect(within(braavosButton).getByAltText("Braavos icon")).toHaveClass("h-5", "w-5");
-
-    const controllerButton = screen.getByRole("button", { name: /controller/i });
-    expect(within(controllerButton).queryByRole("img")).toBeNull();
-  });
-
-  it("shows_wallet_address_badge_when_connected", () => {
-    mockUseAccount.mockReturnValue({
-      status: "connected",
-      isConnected: true,
-      isDisconnected: false,
-      address: "0x1234567890abcdef",
-    });
-
-    render(<Header />);
-
-    expect(screen.getByTestId("wallet-address")).toHaveTextContent("0x1234...cdef");
-  });
-
-  it("no_top_level_disconnect_button_when_connected", () => {
-    mockUseAccount.mockReturnValue({
-      status: "connected",
-      isConnected: true,
-      isDisconnected: false,
-      address: "0x1234567890abcdef",
-    });
-
-    render(<Header />);
-
-    // Disconnect must NOT be a top-level visible button; it lives inside the dropdown
-    expect(screen.queryByRole("button", { name: /^disconnect$/i })).toBeNull();
-  });
-
-  it("wallet_dropdown_contains_profile_and_disconnect", async () => {
-    mockUseAccount.mockReturnValue({
-      status: "connected",
-      isConnected: true,
-      isDisconnected: false,
-      address: "0x1234567890abcdef",
-    });
-    const user = userEvent.setup();
-
-    render(<Header />);
-    await user.click(screen.getByTestId("wallet-address"));
-
-    expect(screen.getByRole("menuitem", { name: /profile/i })).toBeVisible();
-    expect(screen.getByRole("menuitem", { name: /disconnect/i })).toBeVisible();
-  });
-
-  it("disconnect_from_dropdown_calls_disconnect", async () => {
-    mockUseAccount.mockReturnValue({
-      status: "connected",
-      isConnected: true,
-      isDisconnected: false,
-      address: "0x1234567890abcdef",
-    });
-    const user = userEvent.setup();
-
-    render(<Header />);
-    await user.click(screen.getByTestId("wallet-address"));
-    await user.click(screen.getByRole("menuitem", { name: /disconnect/i }));
-
-    expect(mockDisconnect).toHaveBeenCalledTimes(1);
-  });
-
-  it("profile_menuitem_links_to_wallet_profile_page", async () => {
-    mockUseAccount.mockReturnValue({
-      status: "connected",
-      isConnected: true,
-      isDisconnected: false,
-      address: "0x1234567890abcdef",
-    });
-    const user = userEvent.setup();
-
-    render(<Header />);
-    await user.click(screen.getByTestId("wallet-address"));
-
-    const profileItem = screen.getByRole("menuitem", { name: /profile/i });
-    expect(profileItem.closest("a")).toHaveAttribute(
-      "href",
-      "/profile/0x1234567890abcdef",
-    );
-  });
-
-  it("wallet_dropdown_not_shown_when_disconnected", () => {
-    render(<Header />);
-
-    expect(screen.queryByTestId("wallet-address")).toBeNull();
-  });
-
-  it("handles_connect_errors_without_throwing", async () => {
-    const user = userEvent.setup();
-    const mockConsoleError = vi
-      .spyOn(console, "error")
-      .mockImplementation(() => undefined);
-    mockConnect.mockRejectedValueOnce(new Error("connect failed"));
-
-    render(<Header />);
-    await user.click(screen.getByRole("button", { name: /connect wallet/i }));
-    await user.click(screen.getByRole("button", { name: /controller/i }));
-
-    expect(mockConsoleError).toHaveBeenCalledWith(
-      "Failed to connect wallet",
-      expect.any(Error),
-    );
-    mockConsoleError.mockRestore();
   });
 });

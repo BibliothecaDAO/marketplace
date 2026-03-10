@@ -9,7 +9,7 @@ const { mockUseCollectionOrdersQuery, mockUseCollectionListingsQuery } =
     mockUseCollectionListingsQuery: vi.fn(),
   }));
 
-vi.mock("@/lib/marketplace/hooks", () => ({
+vi.mock("@/lib/marketplace/collection-hooks", () => ({
   useCollectionOrdersQuery: mockUseCollectionOrdersQuery,
   useCollectionListingsQuery: mockUseCollectionListingsQuery,
 }));

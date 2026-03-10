@@ -1,7 +1,7 @@
 import { Suspense } from "react";
 import type { Metadata } from "next";
 import { HydrationBoundary } from "@tanstack/react-query";
-import { CollectionRouteContainer } from "@/features/collections/collection-route-container";
+import { CollectionRouteSlot } from "@/features/collections/collection-route-slot";
 import { buildMarketplacePageMetadata } from "@/lib/seo/metadata";
 import { buildCollectionPageHydrationState } from "@/lib/marketplace/collection-prefetch";
 import { collectionDiscoveryStateFromSearchParams } from "@/features/collections/collection-query-params";
@@ -40,7 +40,7 @@ export default async function CollectionPage({
     <main className="flex min-h-screen w-full items-start px-4 py-6 sm:px-6 lg:px-8">
       <HydrationBoundary state={state}>
         <Suspense>
-          <CollectionRouteContainer address={address} cursor={resolvedSearchParams.get("cursor")} />
+          <CollectionRouteSlot address={address} cursor={resolvedSearchParams.get("cursor")} />
         </Suspense>
       </HydrationBoundary>
     </main>

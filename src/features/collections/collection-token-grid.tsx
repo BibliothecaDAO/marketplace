@@ -6,7 +6,7 @@ import type { NormalizedToken } from "@cartridge/arcade/marketplace";
 import {
   useCollectionListingsQuery,
   useCollectionTokensQuery,
-} from "@/lib/marketplace/hooks";
+} from "@/lib/marketplace/collection-hooks";
 import {
   formatPriceForDisplay,
   displayTokenId,

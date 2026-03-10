@@ -7,7 +7,7 @@ import type {
 } from "@cartridge/arcade/marketplace";
 import { getMarketplaceRuntimeConfig, type SeedCollection } from "@/lib/marketplace/config";
 import { expandTokenIdQueryVariants } from "@/lib/marketplace/token-id";
-import type { ActiveFilters } from "@/lib/marketplace/traits";
+import type { ActiveFilters, TraitSelection } from "@/lib/marketplace/traits";
 import { formatNumberish } from "@/lib/marketplace/token-display";
 
 const DEFAULT_GRID_LIMIT = 24;
@@ -108,6 +108,41 @@ function traitNamesSummaryQueryKey(options: {
   ] as const;
 }
 
+function stableTraitSelections(selections: TraitSelection[] | undefined) {
+  if (!selections || selections.length === 0) {
+    return "";
+  }
+
+  return JSON.stringify(
+    [...selections]
+      .map((selection) => ({
+        name: selection.name,
+        value: selection.value,
+      }))
+      .sort((left, right) =>
+        left.name === right.name
+          ? left.value.localeCompare(right.value)
+          : left.name.localeCompare(right.name),
+      ),
+  );
+}
+
+function traitValuesQueryKey(options: {
+  address: string;
+  traitName: string | null;
+  otherTraitFilters?: TraitSelection[];
+  projectId?: string;
+}) {
+  return [
+    "marketplace-read",
+    "trait-values",
+    options.address,
+    options.traitName,
+    stableTraitSelections(options.otherTraitFilters),
+    options.projectId,
+  ] as const;
+}
+
 function resolveDefaultProjectId() {
   const { sdkConfig } = getMarketplaceRuntimeConfig();
   return sdkConfig.defaultProject ?? DEFAULT_PROJECT_ID;
@@ -189,7 +224,9 @@ function parseJsonSafe(value: unknown) {
 
 function resolveTokenImage(metadata: Record<string, unknown> | null) {
   const image = metadata?.image ?? metadata?.image_url;
-  return typeof image === "string" && image.trim().length > 0 ? image : null;
+  return typeof image === "string" && image.trim().length > 0
+    ? image
+    : undefined;
 }
 
 function normalizeTokenRow(row: unknown) {
@@ -204,14 +241,17 @@ function normalizeTokenRow(row: unknown) {
   return {
     contract_address: String(record.contract_address ?? ""),
     token_id: tokenId,
+    total_supply: formatNumberish(record.total_supply) ?? "0",
     metadata,
     image: resolveTokenImage(metadata),
-    name: typeof record.name === "string" ? record.name : undefined,
-    symbol: typeof record.symbol === "string" ? record.symbol : undefined,
+    name: typeof record.name === "string" ? record.name : tokenId,
+    symbol: typeof record.symbol === "string" ? record.symbol : "",
     decimals:
-      typeof record.decimals === "number" || typeof record.decimals === "string"
+      typeof record.decimals === "number"
         ? record.decimals
-        : undefined,
+        : typeof record.decimals === "string"
+          ? Number(record.decimals) || 0
+          : 0,
   };
 }
 
@@ -433,6 +473,84 @@ ORDER BY trait_name`,
     .filter((row): row is { traitName: string; valueCount: number } => row !== null);
 }
 
+async function fetchTraitValues(options: {
+  address: string;
+  traitName: string | null;
+  otherTraitFilters?: TraitSelection[];
+  projectId?: string;
+}) {
+  if (!options.traitName) {
+    return [];
+  }
+
+  const projectId = resolveProjectId(options.projectId);
+  const collectionPrefix = `${normalizePaddedAddress(options.address) ?? options.address}:%`;
+  const conditions = [
+    `token_id LIKE '${escapeSqlValue(collectionPrefix)}'`,
+    `trait_name = '${escapeSqlValue(options.traitName)}'`,
+  ];
+
+  const groupedFilters = new Map<string, Set<string>>();
+  for (const selection of options.otherTraitFilters ?? []) {
+    if (!selection.name || !selection.value) {
+      continue;
+    }
+
+    if (!groupedFilters.has(selection.name)) {
+      groupedFilters.set(selection.name, new Set());
+    }
+    groupedFilters.get(selection.name)?.add(selection.value);
+  }
+
+  if (groupedFilters.size > 0) {
+    const filterClauses = Array.from(groupedFilters.entries()).map(
+      ([traitName, values]) =>
+        `(trait_name = '${escapeSqlValue(traitName)}' AND trait_value IN (${toSqlList(
+          [...values],
+        )}))`,
+    );
+    conditions.push(
+      `token_id IN (
+SELECT token_id
+FROM token_attributes
+WHERE token_id LIKE '${escapeSqlValue(collectionPrefix)}'
+  AND (${filterClauses.join(" OR ")})
+GROUP BY token_id
+HAVING COUNT(DISTINCT trait_name) = ${groupedFilters.size}
+)`,
+    );
+  }
+
+  const rows = await fetchToriiSql(
+    projectId,
+    `SELECT trait_value, COUNT(DISTINCT token_id) AS token_count
+FROM token_attributes
+WHERE ${conditions.join(" AND ")}
+GROUP BY trait_value
+ORDER BY token_count DESC, trait_value ASC`,
+  );
+
+  return rows
+    .map((row) => {
+      const record = asRecord(row);
+      if (!record) {
+        return null;
+      }
+
+      const traitValue =
+        typeof record.trait_value === "string" ? record.trait_value : null;
+      const tokenCount = Number(record.token_count ?? 0);
+      if (!traitValue || !Number.isFinite(tokenCount)) {
+        return null;
+      }
+
+      return { traitValue, count: tokenCount };
+    })
+    .filter(
+      (row): row is { traitValue: string; count: number } => row !== null,
+    );
+}
+
 export function resolveCollectionProjectId(
   address: string,
   collections?: SeedCollection[],
@@ -521,5 +639,17 @@ export function traitNamesSummaryQueryOptions(options: {
   return queryOptions({
     queryKey: traitNamesSummaryQueryKey(options),
     queryFn: () => fetchTraitNamesSummary(options),
+  });
+}
+
+export function traitValuesQueryOptions(options: {
+  address: string;
+  traitName: string | null;
+  otherTraitFilters?: TraitSelection[];
+  projectId?: string;
+}) {
+  return queryOptions({
+    queryKey: traitValuesQueryKey(options),
+    queryFn: () => fetchTraitValues(options),
   });
 }

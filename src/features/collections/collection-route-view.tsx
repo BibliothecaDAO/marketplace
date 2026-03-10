@@ -7,7 +7,7 @@ import {
   useCollectionQuery,
   useTraitNamesSummaryQuery,
   useTraitValuesQuery,
-} from "@/lib/marketplace/hooks";
+} from "@/lib/marketplace/collection-hooks";
 import {
   displayTokenId,
   formatPriceForDisplay,

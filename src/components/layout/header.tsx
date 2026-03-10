@@ -3,33 +3,8 @@
 import Link from "next/link";
 import { type SVGProps, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { useAccount, useConnect, useDisconnect } from "@starknet-react/core";
 import { Menu } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import dynamic from "next/dynamic";
-
-const CartSidebar = dynamic(
-  () =>
-    import("@/features/cart/components/cart-sidebar").then((m) => ({
-      default: m.CartSidebar,
-    })),
-  { ssr: false },
-);
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
-import { WalletBalances } from "@/components/layout/wallet-balances";
 import {
   Sheet,
   SheetContent,
@@ -38,24 +13,6 @@ import {
   SheetTrigger,
 } from "@/components/ui/sheet";
 import { Input } from "@/components/ui/input";
-
-function formatAddress(address: string) {
-  return `${address.slice(0, 6)}...${address.slice(-4)}`;
-}
-
-function connectorLabel(connector: { id: string; name?: string }) {
-  if (connector.name && connector.name.trim().length > 0) {
-    return connector.name;
-  }
-
-  return connector.id;
-}
-
-function connectorIconUrl(connector: { icon?: unknown }) {
-  return typeof connector.icon === "string" && connector.icon.trim().length > 0
-    ? connector.icon
-    : null;
-}
 
 const NAV_LINKS = [
   { label: "Staking", href: "https://account.realms.world" },
@@ -99,23 +56,8 @@ const SOCIAL_LINKS = [
 export function Header() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const { address, isConnected } = useAccount();
-  const { connect, connectors, isPending: isConnecting } = useConnect();
-  const { disconnect, isPending: isDisconnecting } = useDisconnect();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
-  const [walletModalOpen, setWalletModalOpen] = useState(false);
   const [searchInput, setSearchInput] = useState(() => searchParams.get("q") ?? "");
-
-  const isBusy = isConnecting || isDisconnecting;
-
-  const handleConnect = async (connector: (typeof connectors)[number]) => {
-    try {
-      await connect({ connector });
-      setWalletModalOpen(false);
-    } catch (error) {
-      console.error("Failed to connect wallet", error);
-    }
-  };
 
   const handleSearchSubmit = () => {
     const normalized = searchInput.trim().replace(/\s+/g, " ");
@@ -130,26 +72,26 @@ export function Header() {
   return (
     <header className="sticky top-0 z-50 w-full border-b border-border/80 bg-background/95 backdrop-blur-sm">
       <div className="flex h-14 items-center gap-2 px-4">
-        {/* Logo */}
-        <Link href="/" className="flex items-center gap-2 shrink-0" aria-label="Realms.market home">
+        <Link href="/" className="flex shrink-0 items-center gap-2" aria-label="Realms.market home">
           <span
             data-testid="logo-placeholder"
             className="flex h-7 w-7 items-center justify-center rounded-sm border border-primary/40 bg-primary/10 text-xs font-bold text-primary"
           >
             R
           </span>
-          <span className="text-sm font-medium tracking-widest uppercase text-foreground">Realms.market</span>
+          <span className="text-sm font-medium tracking-widest uppercase text-foreground">
+            Realms.market
+          </span>
         </Link>
 
-        {/* Desktop nav */}
-        <nav aria-label="Main navigation" className="hidden md:flex items-center gap-1">
+        <nav aria-label="Main navigation" className="hidden items-center gap-1 md:flex">
           {NAV_LINKS.map(({ label, href }) => (
             <a
               key={label}
               href={href}
               target="_blank"
               rel="noopener noreferrer"
-              className="px-3 py-1.5 text-sm text-muted-foreground hover:text-foreground transition-colors"
+              className="px-3 py-1.5 text-sm text-muted-foreground transition-colors hover:text-foreground"
             >
               {label}
             </a>
@@ -171,10 +113,8 @@ export function Header() {
           />
         </div>
 
-        {/* Right side actions */}
         <div className="ml-auto flex items-center gap-1 sm:gap-2">
-          {/* Social icons */}
-          <div className="hidden sm:flex items-center gap-1 mr-1">
+          <div className="mr-1 hidden items-center gap-1 sm:flex">
             {SOCIAL_LINKS.map(({ label, href, Icon }) => (
               <a
                 key={label}
@@ -182,104 +122,24 @@ export function Header() {
                 target="_blank"
                 rel="noopener noreferrer"
                 aria-label={label}
-                className="flex h-8 w-8 items-center justify-center rounded-sm text-muted-foreground hover:text-foreground transition-colors"
+                className="flex h-8 w-8 items-center justify-center rounded-sm text-muted-foreground transition-colors hover:text-foreground"
               >
                 <Icon className="h-4 w-4" />
               </a>
             ))}
           </div>
 
-          <CartSidebar />
           <Button size="sm" variant="ghost" asChild className="hidden sm:inline-flex">
             <Link href="/portfolio">Portfolio</Link>
           </Button>
 
-          {isConnected && address ? (
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <button
-                  data-testid="wallet-address"
-                  type="button"
-                  className="hidden sm:inline-flex rounded-sm bg-muted/50 px-2 py-0.5 text-xs text-primary font-mono hover:bg-muted transition-colors cursor-pointer"
-                >
-                  {formatAddress(address)}
-                </button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end" className="w-52">
-                <WalletBalances walletAddress={address} />
-                <DropdownMenuSeparator />
-                <DropdownMenuItem asChild>
-                  <Link href={`/profile/${address}`}>Profile</Link>
-                </DropdownMenuItem>
-                <DropdownMenuItem
-                  onClick={() => disconnect()}
-                  disabled={isBusy}
-                >
-                  Disconnect
-                </DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
-          ) : (
-            <Button
-              type="button"
-              size="sm"
-              className="hidden sm:inline-flex"
-              onClick={() => setWalletModalOpen(true)}
-              disabled={connectors.length === 0 || isBusy}
-            >
-              Connect Wallet
-            </Button>
-          )}
-
-          <Dialog open={walletModalOpen} onOpenChange={setWalletModalOpen}>
-            <DialogContent showCloseButton={!isBusy}>
-              <DialogHeader>
-                <DialogTitle>Select wallet</DialogTitle>
-                <DialogDescription>
-                  Choose a wallet connector to continue.
-                </DialogDescription>
-              </DialogHeader>
-              <div className="space-y-2">
-                {connectors.length === 0 ? (
-                  <p className="text-sm text-muted-foreground">
-                    No wallet connectors are available.
-                  </p>
-                ) : (
-                  connectors.map((connector) => (
-                    <Button
-                      key={connector.id}
-                      className="w-full justify-start gap-2"
-                      disabled={isBusy}
-                      onClick={() => {
-                        void handleConnect(connector);
-                      }}
-                      type="button"
-                      variant="outline"
-                    >
-                      {connectorIconUrl(connector) ? (
-                        // eslint-disable-next-line @next/next/no-img-element
-                        <img
-                          src={connectorIconUrl(connector)!}
-                          alt={`${connectorLabel(connector)} icon`}
-                          className="h-5 w-5"
-                        />
-                      ) : null}
-                      {connectorLabel(connector)}
-                    </Button>
-                  ))
-                )}
-              </div>
-            </DialogContent>
-          </Dialog>
-
-          {/* Mobile hamburger */}
           <Sheet open={mobileMenuOpen} onOpenChange={setMobileMenuOpen}>
             <SheetTrigger asChild>
               <Button
                 type="button"
                 size="sm"
                 variant="ghost"
-                className="md:hidden px-2"
+                className="px-2 md:hidden"
                 aria-label="Open menu"
               >
                 <Menu className="h-4 w-4" />
@@ -299,7 +159,7 @@ export function Header() {
                     target="_blank"
                     rel="noopener noreferrer"
                     onClick={() => setMobileMenuOpen(false)}
-                    className="px-2 py-2.5 text-sm text-muted-foreground hover:text-foreground transition-colors rounded-sm hover:bg-muted"
+                    className="rounded-sm px-2 py-2.5 text-sm text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
                   >
                     {label}
                   </a>
@@ -307,40 +167,10 @@ export function Header() {
                 <Link
                   href="/portfolio"
                   onClick={() => setMobileMenuOpen(false)}
-                  className="px-2 py-2.5 text-sm text-muted-foreground hover:text-foreground transition-colors rounded-sm hover:bg-muted"
+                  className="rounded-sm px-2 py-2.5 text-sm text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
                 >
                   Portfolio
                 </Link>
-                {!isConnected ? (
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setWalletModalOpen(true);
-                      setMobileMenuOpen(false);
-                    }}
-                    className="px-2 py-2.5 text-left text-sm text-muted-foreground hover:text-foreground transition-colors rounded-sm hover:bg-muted"
-                  >
-                    Connect Wallet
-                  </button>
-                ) : null}
-                {isConnected && address ? (
-                  <>
-                    <Link
-                      href={`/profile/${address}`}
-                      onClick={() => setMobileMenuOpen(false)}
-                      className="px-2 py-2.5 text-sm text-muted-foreground hover:text-foreground transition-colors rounded-sm hover:bg-muted"
-                    >
-                      Profile
-                    </Link>
-                    <button
-                      type="button"
-                      onClick={() => { disconnect(); setMobileMenuOpen(false); }}
-                      className="px-2 py-2.5 text-left text-sm text-muted-foreground hover:text-foreground transition-colors rounded-sm hover:bg-muted"
-                    >
-                      Disconnect
-                    </button>
-                  </>
-                ) : null}
               </nav>
               <div className="mt-6 flex items-center gap-2 px-2">
                 {SOCIAL_LINKS.map(({ label, href, Icon }) => (
@@ -350,7 +180,7 @@ export function Header() {
                     target="_blank"
                     rel="noopener noreferrer"
                     aria-label={label}
-                    className="flex h-8 w-8 items-center justify-center rounded-sm text-muted-foreground hover:text-foreground transition-colors"
+                    className="flex h-8 w-8 items-center justify-center rounded-sm text-muted-foreground transition-colors hover:text-foreground"
                   >
                     <Icon className="h-4 w-4" />
                   </a>

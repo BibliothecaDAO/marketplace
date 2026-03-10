@@ -9,7 +9,7 @@ const { mockUseCollectionQuery, mockPush } = vi.hoisted(() => ({
   mockPush: vi.fn(),
 }));
 
-vi.mock("@/lib/marketplace/hooks", () => ({
+vi.mock("@/lib/marketplace/collection-hooks", () => ({
   useCollectionQuery: mockUseCollectionQuery,
   useTraitNamesSummaryQuery: () => ({ data: [], isLoading: false }),
   useTraitValuesQuery: () => ({ data: null, isLoading: false }),

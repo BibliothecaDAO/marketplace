@@ -6,7 +6,7 @@ import type { CollectionOrdersOptions } from "@cartridge/arcade/marketplace";
 import {
   useCollectionListingsQuery,
   useCollectionOrdersQuery,
-} from "@/lib/marketplace/hooks";
+} from "@/lib/marketplace/collection-hooks";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
