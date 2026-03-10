@@ -51,6 +51,12 @@ function connectorLabel(connector: { id: string; name?: string }) {
   return connector.id;
 }
 
+function connectorIconUrl(connector: { icon?: unknown }) {
+  return typeof connector.icon === "string" && connector.icon.trim().length > 0
+    ? connector.icon
+    : null;
+}
+
 const NAV_LINKS = [
   { label: "Staking", href: "https://account.realms.world" },
   { label: "Ecosystem", href: "https://realms.world" },
@@ -242,7 +248,7 @@ export function Header() {
                   connectors.map((connector) => (
                     <Button
                       key={connector.id}
-                      className="w-full justify-start"
+                      className="w-full justify-start gap-2"
                       disabled={isBusy}
                       onClick={() => {
                         void handleConnect(connector);
@@ -250,6 +256,14 @@ export function Header() {
                       type="button"
                       variant="outline"
                     >
+                      {connectorIconUrl(connector) ? (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img
+                          src={connectorIconUrl(connector)!}
+                          alt={`${connectorLabel(connector)} icon`}
+                          className="h-5 w-5"
+                        />
+                      ) : null}
                       {connectorLabel(connector)}
                     </Button>
                   ))

@@ -259,6 +259,35 @@ describe("Header", () => {
     expect(mockConnect).toHaveBeenCalledWith({ connector: braavosConnector });
   });
 
+  it("wallet_modal_shows_connector_icons_when_available", async () => {
+    const braavosConnector = {
+      id: "braavos",
+      name: "Braavos",
+      icon: "https://cdn.example/braavos.png",
+    };
+    const controllerConnector = { id: "controller", name: "Controller" };
+    mockUseConnect.mockReturnValue({
+      connect: mockConnect,
+      connectors: [braavosConnector, controllerConnector],
+      pendingConnector: undefined,
+      isPending: false,
+    });
+    const user = userEvent.setup();
+
+    render(<Header />);
+    await user.click(screen.getByRole("button", { name: /connect wallet/i }));
+
+    const braavosButton = screen.getByRole("button", { name: /braavos/i });
+    expect(within(braavosButton).getByAltText("Braavos icon")).toHaveAttribute(
+      "src",
+      "https://cdn.example/braavos.png",
+    );
+    expect(within(braavosButton).getByAltText("Braavos icon")).toHaveClass("h-5", "w-5");
+
+    const controllerButton = screen.getByRole("button", { name: /controller/i });
+    expect(within(controllerButton).queryByRole("img")).toBeNull();
+  });
+
   it("shows_wallet_address_badge_when_connected", () => {
     mockUseAccount.mockReturnValue({
       status: "connected",
