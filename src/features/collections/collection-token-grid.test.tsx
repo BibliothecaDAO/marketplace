@@ -574,7 +574,7 @@ describe("collection token grid", () => {
     expect(screen.queryByRole("button", { name: /added/i })).toBeNull();
   });
 
-  it("renders_grid_density_buttons_with_standard_default", () => {
+  it("renders_grid_density_buttons_with_compact_default", () => {
     mockUseCollectionTokensQuery.mockReturnValue({
       data: {
         page: {
@@ -595,13 +595,13 @@ describe("collection token grid", () => {
 
     expect(screen.getByRole("button", { name: /compact/i })).toBeVisible();
     expect(screen.getByRole("button", { name: /dense/i })).toBeVisible();
-    expect(screen.getByRole("button", { name: /standard/i })).toBeVisible();
-    expect(screen.getByRole("button", { name: /comfort/i })).toBeVisible();
     expect(screen.getByRole("button", { name: /list/i })).toBeVisible();
+    expect(screen.queryByRole("button", { name: /standard/i })).toBeNull();
+    expect(screen.queryByRole("button", { name: /comfort/i })).toBeNull();
     expect(screen.getByTestId("collection-token-grid-cards")).toHaveClass(
-      "grid-cols-1",
-      "sm:grid-cols-2",
-      "lg:grid-cols-3",
+      "grid-cols-2",
+      "sm:grid-cols-3",
+      "lg:grid-cols-4",
     );
   });
 
@@ -631,9 +631,6 @@ describe("collection token grid", () => {
 
     await user.click(screen.getByRole("button", { name: /dense/i }));
     expect(grid).toHaveClass("grid-cols-2", "sm:grid-cols-3", "lg:grid-cols-6");
-
-    await user.click(screen.getByRole("button", { name: /comfort/i }));
-    expect(grid).toHaveClass("grid-cols-1", "sm:grid-cols-1", "lg:grid-cols-2");
   });
 
   it("list_view_renders_tokens_in_a_table_layout", async () => {

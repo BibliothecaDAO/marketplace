@@ -50,14 +50,12 @@ type CollectionTokenGridProps = {
   sweepPreviewTokenIds?: Set<string>;
 };
 
-type GridDensityMode = "compact" | "dense" | "standard" | "comfort";
+type GridDensityMode = "compact" | "dense";
 type GridLayoutMode = GridDensityMode | "list";
 
 const GRID_CLASSES_BY_DENSITY: Record<GridDensityMode, string> = {
   compact: "grid-cols-2 sm:grid-cols-3 lg:grid-cols-4",
   dense: "grid-cols-2 sm:grid-cols-3 lg:grid-cols-6",
-  standard: "grid-cols-1 sm:grid-cols-2 lg:grid-cols-3",
-  comfort: "grid-cols-1 sm:grid-cols-1 lg:grid-cols-2",
 };
 
 function dedupeTokens(tokens: NormalizedToken[]) {
@@ -177,7 +175,7 @@ export function CollectionTokenGrid({
   sweepPreviewTokenIds,
 }: CollectionTokenGridProps) {
   const { addListingToCart, isRecentlyAdded } = useAddToCartFeedback();
-  const [gridMode, setGridMode] = useState<GridLayoutMode>("standard");
+  const [gridMode, setGridMode] = useState<GridLayoutMode>("compact");
   const tokenIdsKey = useMemo(() => tokenIds?.join(",") ?? "", [tokenIds]);
   const activeFiltersKey = useMemo(
     () =>
@@ -285,7 +283,7 @@ export function CollectionTokenGrid({
     [listingPriceMap, listingPrices, sortMode, visibleTokens],
   );
   const isListMode = gridMode === "list";
-  const gridClasses = GRID_CLASSES_BY_DENSITY[isListMode ? "standard" : gridMode];
+  const gridClasses = GRID_CLASSES_BY_DENSITY[isListMode ? "compact" : gridMode];
 
   return (
     <section className="space-y-4">
@@ -309,26 +307,6 @@ export function CollectionTokenGrid({
           className="h-7 px-2 text-xs"
         >
           Dense
-        </Button>
-        <Button
-          aria-pressed={gridMode === "standard"}
-          onClick={() => setGridMode("standard")}
-          size="sm"
-          type="button"
-          variant={gridMode === "standard" ? "default" : "outline"}
-          className="h-7 px-2 text-xs"
-        >
-          Standard
-        </Button>
-        <Button
-          aria-pressed={gridMode === "comfort"}
-          onClick={() => setGridMode("comfort")}
-          size="sm"
-          type="button"
-          variant={gridMode === "comfort" ? "default" : "outline"}
-          className="h-7 px-2 text-xs"
-        >
-          Comfort
         </Button>
         <Button
           aria-pressed={gridMode === "list"}
