@@ -182,11 +182,6 @@ export function CollectionRouteView({
   });
 
   const cheapestListings = cheapestListingByTokenId(listingQuery.data);
-  const listingCount = Array.isArray(listingQuery.data) ? listingQuery.data.length : 0;
-  const listingCountLabel =
-    listingCount >= COLLECTION_LISTING_SAMPLE_LIMIT
-      ? `${COLLECTION_LISTING_SAMPLE_LIMIT}+`
-      : String(listingCount);
   const floor = floorFromListings(cheapestListings);
   const totalSupply = collection.data?.totalSupply;
   const seedName = selectedCollection?.name?.trim() || null;
@@ -196,6 +191,29 @@ export function CollectionRouteView({
       : null);
 
   const visibleTokens = visibleTokensByScope[sweepScopeKey] ?? EMPTY_VISIBLE_TOKENS;
+  const hasVisibleTokenSnapshot = Object.prototype.hasOwnProperty.call(
+    visibleTokensByScope,
+    sweepScopeKey,
+  );
+  const visibleListedTokenCount = useMemo(() => {
+    const visibleTokenIds = new Set(visibleTokens.map((token) => displayTokenId(token)));
+    let count = 0;
+
+    for (const listedTokenId of cheapestListings.keys()) {
+      if (visibleTokenIds.has(listedTokenId)) {
+        count += 1;
+      }
+    }
+
+    return count;
+  }, [cheapestListings, visibleTokens]);
+  const listingCount = hasVisibleTokenSnapshot
+    ? visibleListedTokenCount
+    : cheapestListings.size;
+  const listingCountLabel =
+    listingCount >= COLLECTION_LISTING_SAMPLE_LIMIT
+      ? `${COLLECTION_LISTING_SAMPLE_LIMIT}+`
+      : String(listingCount);
 
   const sweepCandidates = useMemo(() => {
     if (!visibleTokens.length) return [];

@@ -302,6 +302,27 @@ describe("collection route view", () => {
     );
   });
 
+  it("listed_count_matches_visible_listed_tokens", async () => {
+    mockUseCollectionQuery.mockReturnValue(successQuery(null));
+    mockUseCollectionListingsQuery.mockReturnValue(successQuery([
+      { id: 11, tokenId: 11, price: 300, currency: "0xfee", quantity: 1 },
+      { id: 12, tokenId: 12, price: 100, currency: "0xfee", quantity: 1 },
+    ]));
+    setMockVisibleTokens([token("12")]);
+    const user = userEvent.setup();
+
+    render(<CollectionRouteView address="0xabc" collections={collections} />);
+
+    await user.click(screen.getByRole("button", { name: /emit visible tokens/i }));
+
+    expect(
+      screen.getByText((_, node) => node?.textContent === "1 listed"),
+    ).toBeVisible();
+    expect(
+      screen.queryByText((_, node) => node?.textContent === "2 listed"),
+    ).toBeNull();
+  });
+
   it("does_not_issue_secondary_token_query_for_sweep_candidates", () => {
     mockUseCollectionQuery.mockReturnValue(successQuery(null));
 
