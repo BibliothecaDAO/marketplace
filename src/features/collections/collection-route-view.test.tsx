@@ -214,6 +214,55 @@ describe("collection route view", () => {
     expect(screen.getByRole("heading", { name: "Genesis" })).toBeVisible();
   });
 
+  it("renders_static_banner_when_collection_metadata_has_no_image", () => {
+    const bannerCollections: SeedCollection[] = [
+      { address: "0xabc", name: "Adventurers", projectId: "project-a" },
+    ];
+    mockUseCollectionQuery.mockReturnValue(
+      successQuery({
+        projectId: "project-a",
+        address: "0xabc",
+        contractType: "erc721",
+        metadata: { name: "Adventurers" },
+        totalSupply: BigInt(12),
+        raw: {},
+      }),
+    );
+
+    render(<CollectionRouteView address="0xabc" collections={bannerCollections} />);
+
+    expect(screen.getByAltText("Adventurers banner")).toHaveAttribute(
+      "src",
+      "/banners/adventurers.svg",
+    );
+  });
+
+  it("prefers_collection_metadata_image_over_static_banner", () => {
+    const bannerCollections: SeedCollection[] = [
+      { address: "0xabc", name: "Beasts", projectId: "project-a" },
+    ];
+    mockUseCollectionQuery.mockReturnValue(
+      successQuery({
+        projectId: "project-a",
+        address: "0xabc",
+        contractType: "erc721",
+        metadata: {
+          name: "Beasts",
+          image: "https://cdn.example.com/beasts-banner.png",
+        },
+        totalSupply: BigInt(12),
+        raw: {},
+      }),
+    );
+
+    render(<CollectionRouteView address="0xabc" collections={bannerCollections} />);
+
+    expect(screen.getByAltText("Beasts banner")).toHaveAttribute(
+      "src",
+      "https://cdn.example.com/beasts-banner.png",
+    );
+  });
+
   it("collection_switch_updates_url_and_resets_cursor", async () => {
     mockUseCollectionQuery.mockReturnValue(successQuery(null));
     const onNavigate = vi.fn();

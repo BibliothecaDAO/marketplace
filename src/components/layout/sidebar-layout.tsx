@@ -4,6 +4,7 @@ import { useMemo, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import { PanelLeftClose, PanelLeftOpen } from "lucide-react";
 import { getMarketplaceRuntimeConfig } from "@/lib/marketplace/config";
+import { getCollectionBannerImage } from "@/lib/marketplace/collection-banners";
 import { CollectionSidebar } from "@/features/home/collection-sidebar";
 import { MobileSidebarSheet } from "@/features/home/mobile-sidebar-sheet";
 import { Button } from "@/components/ui/button";
@@ -37,6 +38,8 @@ export function SidebarLayout({ children }: { children: React.ReactNode }) {
       collections.map((collection) => ({
         address: collection.address,
         name: collection.name,
+        projectId: collection.projectId,
+        imageUrl: getCollectionBannerImage(collection.name),
       })),
     [collections],
   );

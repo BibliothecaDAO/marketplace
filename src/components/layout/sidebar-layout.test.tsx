@@ -28,7 +28,12 @@ vi.mock("@/lib/marketplace/config", () => ({
 
 vi.mock("@/features/home/collection-sidebar", () => ({
   CollectionSidebar: (props: {
-    collections: Array<{ address: string; name: string }>;
+    collections: Array<{
+      address: string;
+      name: string;
+      projectId?: string;
+      imageUrl?: string | null;
+    }>;
     activeAddress?: string;
     collapsed?: boolean;
     onSelect: (address: string) => void;
@@ -75,8 +80,8 @@ describe("SidebarLayout", () => {
       chainLabel: "SN_MAIN",
       sdkConfig: { chainId: "0x534e5f4d41494e" },
       collections: [
-        { address: "0xabc", name: "Genesis" },
-        { address: "0xdef", name: "Artifacts" },
+        { address: "0xabc", name: "Adventurers", projectId: "adventurers-project" },
+        { address: "0xdef", name: "Beasts", projectId: "beasts-project" },
       ],
       warnings: [],
     });
@@ -140,8 +145,8 @@ describe("SidebarLayout", () => {
       </SidebarLayout>,
     );
 
-    expect(screen.getByRole("button", { name: "Genesis" })).toBeVisible();
-    expect(screen.getByRole("button", { name: "Artifacts" })).toBeVisible();
+    expect(screen.getByRole("button", { name: "Adventurers" })).toBeVisible();
+    expect(screen.getByRole("button", { name: "Beasts" })).toBeVisible();
   });
 
   it("navigates_to_collection_on_select", async () => {
@@ -153,7 +158,7 @@ describe("SidebarLayout", () => {
       </SidebarLayout>,
     );
 
-    await user.click(screen.getByRole("button", { name: "Genesis" }));
+    await user.click(screen.getByRole("button", { name: "Adventurers" }));
 
     expect(mockPush).toHaveBeenCalledWith("/collections/0xabc");
   });
@@ -195,5 +200,30 @@ describe("SidebarLayout", () => {
     );
 
     expect(screen.getByTestId("sidebar-toggle-container")).toHaveClass("mt-auto", "border-t");
+  });
+
+  it("passes_project_ids_and_banner_images_to_collection_sidebar", () => {
+    render(
+      <SidebarLayout>
+        <div>Page Content</div>
+      </SidebarLayout>,
+    );
+
+    expect(mockCollectionSidebarRender).toHaveBeenCalledWith(
+      expect.objectContaining({
+        collections: expect.arrayContaining([
+          expect.objectContaining({
+            address: "0xabc",
+            projectId: "adventurers-project",
+            imageUrl: "/banners/adventurers.svg",
+          }),
+          expect.objectContaining({
+            address: "0xdef",
+            projectId: "beasts-project",
+            imageUrl: "/banners/beasts.svg",
+          }),
+        ]),
+      }),
+    );
   });
 });

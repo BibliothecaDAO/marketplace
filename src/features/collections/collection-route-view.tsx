@@ -25,6 +25,10 @@ import {
   type SeedCollection,
   getMarketplaceRuntimeConfig,
 } from "@/lib/marketplace/config";
+import {
+  getCollectionBannerImage,
+  getCollectionMetadataImage,
+} from "@/lib/marketplace/collection-banners";
 import { type ActiveFilters, type TraitSelection } from "@/lib/marketplace/traits";
 import dynamic from "next/dynamic";
 
@@ -189,6 +193,9 @@ export function CollectionRouteView({
     ?? (collection.isSuccess && collection.data
       ? collectionName(collection.data.metadata, address)
       : null);
+  const headerName = displayName ?? selectedCollection?.name ?? address;
+  const headerImageUrl =
+    getCollectionMetadataImage(collection.data) ?? getCollectionBannerImage(headerName);
 
   const visibleTokens = visibleTokensByScope[sweepScopeKey] ?? EMPTY_VISIBLE_TOKENS;
   const hasVisibleTokenSnapshot = Object.prototype.hasOwnProperty.call(
@@ -291,6 +298,20 @@ export function CollectionRouteView({
     <section className="w-full space-y-6 pb-20">
       {/* Collection header */}
       <div className="space-y-3 border-b border-border/60 pb-4">
+        {headerImageUrl ? (
+          <div className="overflow-hidden rounded-xl border border-border/60 bg-muted/40">
+            <div className="relative h-40 w-full sm:h-48">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img
+                alt={`${headerName} banner`}
+                src={headerImageUrl}
+                className="h-full w-full object-cover"
+              />
+              <div className="absolute inset-0 bg-gradient-to-t from-background/85 via-background/30 to-transparent" />
+            </div>
+          </div>
+        ) : null}
+
         {runtimeCollections.length > 1 && (
           <Select value={address} onValueChange={handleChange}>
             <SelectTrigger aria-label="Collection" className="w-64">
