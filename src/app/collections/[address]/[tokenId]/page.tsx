@@ -1,9 +1,9 @@
 import { Suspense } from "react";
 import type { Metadata } from "next";
 import { HydrationBoundary } from "@tanstack/react-query";
-import { TokenDetailView } from "@/features/token/token-detail-view";
 import { buildMarketplacePageMetadata } from "@/lib/seo/metadata";
 import { buildTokenPageHydrationState } from "@/lib/marketplace/token-prefetch";
+import { TokenDetailSlot } from "@/features/token/token-detail-slot";
 
 export const runtime = "edge";
 
@@ -22,7 +22,7 @@ export default async function TokenPage({ params }: TokenPageProps) {
     <HydrationBoundary state={state}>
       <main className="w-full px-4 py-6 sm:px-6 lg:px-8">
         <Suspense>
-          <TokenDetailView address={address} tokenId={tokenId} />
+          <TokenDetailSlot address={address} tokenId={tokenId} />
         </Suspense>
       </main>
     </HydrationBoundary>

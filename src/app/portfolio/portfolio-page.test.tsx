@@ -13,6 +13,10 @@ vi.mock("@/features/portfolio/portfolio-view", () => ({
   },
 }));
 
+vi.mock("@/components/providers/marketplace-provider", () => ({
+  MarketplaceProvider: ({ children }: { children: React.ReactNode }) => <>{children}</>,
+}));
+
 vi.mock("@/lib/marketplace/server-prefetch", () => ({
   buildPortfolioPageHydrationState: vi.fn(async () => ({
     state: { queries: [{ queryKey: ["token-balances", "0xabc123"] }] },

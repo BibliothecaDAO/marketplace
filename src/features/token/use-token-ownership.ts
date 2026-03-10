@@ -2,7 +2,7 @@ import { useMemo } from "react";
 import {
   useTokenHolderQuery,
   useTokenOwnershipQuery,
-} from "@/lib/marketplace/hooks";
+} from "@/lib/marketplace/wallet-hooks";
 
 type UseTokenOwnershipParams = {
   collection: string;

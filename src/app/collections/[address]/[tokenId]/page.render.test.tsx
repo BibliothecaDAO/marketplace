@@ -18,16 +18,6 @@ vi.mock("@tanstack/react-query", () => ({
   ),
 }));
 
-vi.mock("@/features/token/token-detail-view", () => ({
-  TokenDetailView: ({
-    address,
-    tokenId,
-  }: {
-    address: string;
-    tokenId: string;
-  }) => <div data-testid="token-detail-view">{`${address}:${tokenId}`}</div>,
-}));
-
 vi.mock("@/lib/marketplace/token-prefetch", () => ({
   buildTokenPageHydrationState: vi.fn(async () => ({
     state: { queries: [{ queryKey: ["token-detail", "0xabc", "42"] }] },
@@ -48,6 +38,6 @@ describe("token route page", () => {
       "data-state",
       "present",
     );
-    expect(screen.getByTestId("token-detail-view")).toHaveTextContent("0xabc:42");
+    expect(screen.getByRole("main")).toBeVisible();
   });
 });

@@ -4,26 +4,18 @@ import { MarketplaceProvider } from "@/components/providers/marketplace-provider
 
 const {
   mockGetMarketplaceRuntimeConfig,
-  mockMakeQueryClient,
   mockBuildStarknetConfig,
   mockStarknetConfigProps,
-  mockQueryClientProviderClient,
   mockMarketplaceClientProviderConfig,
 } = vi.hoisted(() => ({
   mockGetMarketplaceRuntimeConfig: vi.fn(),
-  mockMakeQueryClient: vi.fn(),
   mockBuildStarknetConfig: vi.fn(),
   mockStarknetConfigProps: vi.fn(),
-  mockQueryClientProviderClient: vi.fn(),
   mockMarketplaceClientProviderConfig: vi.fn(),
 }));
 
 vi.mock("@/lib/marketplace/config", () => ({
   getMarketplaceRuntimeConfig: mockGetMarketplaceRuntimeConfig,
-}));
-
-vi.mock("@/lib/marketplace/query-client", () => ({
-  makeQueryClient: mockMakeQueryClient,
 }));
 
 vi.mock("@/lib/marketplace/starknet-config", () => ({
@@ -39,19 +31,6 @@ vi.mock("@starknet-react/core", () => ({
     [key: string]: unknown;
   }) => {
     mockStarknetConfigProps(props);
-    return <>{children}</>;
-  },
-}));
-
-vi.mock("@tanstack/react-query", () => ({
-  QueryClientProvider: ({
-    client,
-    children,
-  }: {
-    client: unknown;
-    children: React.ReactNode;
-  }) => {
-    mockQueryClientProviderClient(client);
     return <>{children}</>;
   },
 }));
@@ -72,15 +51,12 @@ vi.mock("@cartridge/arcade/marketplace/react", () => ({
 describe("marketplace provider", () => {
   beforeEach(() => {
     mockGetMarketplaceRuntimeConfig.mockReset();
-    mockMakeQueryClient.mockReset();
     mockBuildStarknetConfig.mockReset();
     mockStarknetConfigProps.mockReset();
-    mockQueryClientProviderClient.mockReset();
     mockMarketplaceClientProviderConfig.mockReset();
   });
 
-  it("wraps app with starknet, query, and marketplace providers", () => {
-    const mockQueryClient = { query: "client" };
+  it("wraps app with starknet and marketplace providers", () => {
     const sdkConfig = { chainId: "0x534e5f4d41494e", runtime: "edge" };
     const starknetConfig = {
       chains: [{ id: "mainnet" }, { id: "sepolia" }],
@@ -96,7 +72,6 @@ describe("marketplace provider", () => {
       warnings: [],
       collections: [],
     });
-    mockMakeQueryClient.mockReturnValue(mockQueryClient);
     mockBuildStarknetConfig.mockReturnValue(starknetConfig);
 
     render(
@@ -108,7 +83,6 @@ describe("marketplace provider", () => {
     expect(screen.getByText("child content")).toBeVisible();
     expect(mockBuildStarknetConfig).toHaveBeenCalledWith("SN_MAIN");
     expect(mockStarknetConfigProps).toHaveBeenCalledWith(starknetConfig);
-    expect(mockQueryClientProviderClient).toHaveBeenCalledWith(mockQueryClient);
     expect(mockMarketplaceClientProviderConfig).toHaveBeenCalledWith(sdkConfig);
   });
 });

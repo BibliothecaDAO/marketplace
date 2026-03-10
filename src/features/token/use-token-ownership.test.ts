@@ -8,6 +8,10 @@ const { mockUseTokenOwnershipQuery, mockUseTokenHolderQuery } = vi.hoisted(() =>
 }));
 
 vi.mock("@/lib/marketplace/hooks", () => ({
+  useWalletPortfolioQuery: vi.fn(),
+}));
+
+vi.mock("@/lib/marketplace/wallet-hooks", () => ({
   useTokenOwnershipQuery: mockUseTokenOwnershipQuery,
   useTokenHolderQuery: mockUseTokenHolderQuery,
 }));

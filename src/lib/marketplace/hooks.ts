@@ -7,12 +7,6 @@ import type {
   CollectionSummaryOptions,
   FetchCollectionTokensOptions,
 } from "@cartridge/arcade/marketplace";
-import {
-  useMarketplaceTokenBalances,
-} from "@cartridge/arcade/marketplace/react";
-import {
-  expandTokenIdVariants,
-} from "@/lib/marketplace/token-id";
 import type { TraitSelection } from "@/lib/marketplace/traits";
 import {
   collectionListingsQueryOptions,
@@ -70,25 +64,6 @@ export function useTokenDetailQuery(options: {
   });
 }
 
-export function useTokenOwnershipQuery(options: {
-  collection: string;
-  tokenId: string;
-  accountAddress?: string;
-}) {
-  const tokenIds = expandTokenIdVariants([options.tokenId]);
-  return useMarketplaceTokenBalances(
-    {
-      contractAddresses: [options.collection],
-      accountAddresses: options.accountAddress ? [options.accountAddress] : [],
-      tokenIds,
-      limit: 1,
-    },
-    {
-      enabled: !!options.accountAddress && !!options.collection && !!options.tokenId,
-    },
-  );
-}
-
 export function useTraitNamesSummaryQuery(options: {
   address: string;
   projectId?: string;
@@ -109,23 +84,6 @@ export function useTraitValuesQuery(options: {
     ...traitValuesQueryOptions(options),
     enabled: !!options.address && !!options.traitName,
   });
-}
-
-export function useTokenHolderQuery(options: {
-  collection: string;
-  tokenId: string;
-}) {
-  const tokenIds = expandTokenIdVariants([options.tokenId]);
-  return useMarketplaceTokenBalances(
-    {
-      contractAddresses: [options.collection],
-      tokenIds,
-      limit: 1,
-    },
-    {
-      enabled: !!options.collection && !!options.tokenId,
-    },
-  );
 }
 
 export function useWalletPortfolioQuery(walletAddress: string | undefined) {
