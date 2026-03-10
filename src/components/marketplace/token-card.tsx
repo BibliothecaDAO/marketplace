@@ -13,6 +13,7 @@ import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { TokenSymbol } from "@/components/ui/token-symbol";
+import { tokenAttributes } from "@/lib/marketplace/token-attributes";
 
 type MarketplaceTokenCardProps = {
   token: NormalizedToken;
@@ -30,66 +31,8 @@ type MarketplaceTokenCardProps = {
   onSelect?: () => void;
   buyNowLabel?: string;
   viewLabel?: string;
+  inlineTraits?: React.ReactNode;
 };
-
-type TokenAttributeRow = {
-  trait: string;
-  value: string;
-};
-
-function normalizeAttributeValue(value: unknown) {
-  if (typeof value === "string") {
-    const normalized = value.trim();
-    return normalized.length > 0 ? normalized : null;
-  }
-
-  if (typeof value === "number" || typeof value === "boolean") {
-    return String(value);
-  }
-
-  return null;
-}
-
-function tokenAttributes(token: NormalizedToken): TokenAttributeRow[] {
-  const metadata = token.metadata;
-  if (!metadata || typeof metadata !== "object") {
-    return [];
-  }
-
-  const attributes = (metadata as { attributes?: unknown }).attributes;
-  if (!Array.isArray(attributes)) {
-    return [];
-  }
-
-  const grouped = new Map<string, string[]>();
-
-  attributes.forEach((rawAttribute) => {
-    if (!rawAttribute || typeof rawAttribute !== "object") {
-      return;
-    }
-
-    const attribute = rawAttribute as Record<string, unknown>;
-    const trait = normalizeAttributeValue(
-      attribute.trait_type ?? attribute.traitName ?? attribute.name,
-    );
-    const value = normalizeAttributeValue(attribute.value ?? attribute.traitValue);
-
-    if (!trait || !value) {
-      return;
-    }
-
-    const values = grouped.get(trait) ?? [];
-    if (!values.includes(value)) {
-      values.push(value);
-    }
-    grouped.set(trait, values);
-  });
-
-  return Array.from(grouped.entries()).map(([trait, values]) => ({
-    trait,
-    value: values.join(", "),
-  }));
-}
 
 export const MarketplaceTokenCard = React.memo(function MarketplaceTokenCard({
   token,
@@ -107,10 +50,11 @@ export const MarketplaceTokenCard = React.memo(function MarketplaceTokenCard({
   onSelect,
   buyNowLabel = "Buy Now",
   viewLabel = "View",
+  inlineTraits,
 }: MarketplaceTokenCardProps) {
   const image = tokenImage(token);
   const displayPrice = formatPriceForDisplay(price);
-  const attributes = useMemo(() => tokenAttributes(token), [token]);
+  const attributes = useMemo(() => tokenAttributes(token.metadata), [token.metadata]);
   const interactiveContent = (
     <>
       <div className="flex aspect-square items-center justify-center bg-muted">
@@ -132,6 +76,7 @@ export const MarketplaceTokenCard = React.memo(function MarketplaceTokenCard({
       >
         <p className="text-sm font-medium">{tokenName(token)}</p>
         <p className="text-xs text-muted-foreground">#{displayTokenId(token)}</p>
+        {inlineTraits}
         {displayPrice ? (
           <p className="text-xs text-primary font-medium flex items-center gap-1">
             {displayPrice}

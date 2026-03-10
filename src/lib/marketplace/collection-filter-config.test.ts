@@ -41,4 +41,41 @@ describe("collection filter config", () => {
       },
     ]);
   });
+
+  it("resolves_realms_resource_config_from_collection_name", () => {
+    const result = getCollectionFilterConfig("0xrealm5", [
+      {
+        address: "0xrealm5",
+        name: "Realms",
+        projectId: "project-realms",
+      },
+    ]);
+
+    expect(result.overrides.Resource).toEqual({
+      type: "pills",
+      sort: "alpha",
+      hideSearch: true,
+    });
+    expect(result.sortOptions).toEqual([
+      {
+        label: "Recent",
+        values: { asc: "recent", desc: "recent" },
+        defaultDirection: "asc",
+      },
+      {
+        label: "Price",
+        values: { asc: "price-asc", desc: "price-desc" },
+        defaultDirection: "asc",
+      },
+      {
+        label: "Resources",
+        values: {
+          asc: "resource-count-asc",
+          desc: "resource-count-desc",
+        },
+        defaultDirection: "desc",
+      },
+    ]);
+    expect(result.showInlineResources).toBe(true);
+  });
 });
