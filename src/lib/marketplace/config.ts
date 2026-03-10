@@ -87,7 +87,11 @@ function parseCollections(value: string | undefined, warnings: string[]) {
         return [];
       }
 
-      return [{ address, name, projectId: projectId || undefined }];
+      return [{
+        address,
+        name: name === "Beasts V2.1" ? "Beasts" : name,
+        projectId: projectId || undefined,
+      }];
     });
 }
 
