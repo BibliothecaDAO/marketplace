@@ -27,9 +27,29 @@ vi.mock("next/navigation", () => ({
 vi.mock("@/features/collections/collection-route-view", () => ({
   CollectionRouteView: (props: {
     activeFilters: ActiveFilters;
-    sortMode: "recent" | "price-asc" | "price-desc";
+    sortMode:
+      | "recent"
+      | "price-asc"
+      | "price-desc"
+      | "power-asc"
+      | "power-desc"
+      | "level-asc"
+      | "level-desc"
+      | "health-asc"
+      | "health-desc";
     onActiveFiltersChange?: (filters: ActiveFilters) => void;
-    onSortModeChange?: (sortMode: "recent" | "price-asc" | "price-desc") => void;
+    onSortModeChange?: (
+      sortMode:
+        | "recent"
+        | "price-asc"
+        | "price-desc"
+        | "power-asc"
+        | "power-desc"
+        | "level-asc"
+        | "level-desc"
+        | "health-asc"
+        | "health-desc"
+    ) => void;
   }) => {
     mockCollectionRouteView(props);
 
@@ -46,10 +66,10 @@ vi.mock("@/features/collections/collection-route-view", () => ({
           apply-filters
         </button>
         <button
-          onClick={() => props.onSortModeChange?.("price-desc")}
+          onClick={() => props.onSortModeChange?.("power-desc")}
           type="button"
         >
-          sort-price-desc
+          sort-power-desc
         </button>
       </div>
     );
@@ -78,10 +98,10 @@ describe("collection route container url sync", () => {
 
     render(<CollectionRouteContainer address="0xabc" cursor={null} />);
 
-    await user.click(screen.getByRole("button", { name: /sort-price-desc/i }));
+    await user.click(screen.getByRole("button", { name: /sort-power-desc/i }));
 
     expect(mockPush).toHaveBeenCalledWith(
-      "/collections/0xabc?foo=bar&trait=Eyes%3ABig&sort=price-desc",
+      "/collections/0xabc?foo=bar&trait=Eyes%3ABig&sort=power-desc",
     );
   });
 });

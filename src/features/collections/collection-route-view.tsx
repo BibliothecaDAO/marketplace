@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useMemo, useState, type ReactNode } from "react";
 import type { NormalizedToken } from "@cartridge/arcade/marketplace";
 import {
   useCollectionListingsQuery,
@@ -38,6 +38,10 @@ const CollectionMarketPanel = dynamic(
 import { CollectionTokenGrid } from "@/features/collections/collection-token-grid";
 import { TraitFilterSidebar } from "@/features/collections/trait-filter-sidebar";
 import {
+  getCollectionFilterConfig,
+  type CollectionSortOption,
+} from "@/lib/marketplace/collection-filter-config";
+import {
   cartItemFromTokenListing,
   cheapestListingByTokenId,
 } from "@/features/cart/listing-utils";
@@ -60,10 +64,17 @@ type CollectionRouteViewProps = {
   onNavigate?: (href: string) => void;
 };
 
-const SORT_OPTIONS: Array<{ label: string; value: CollectionSortMode }> = [
-  { label: "Recent", value: "recent" },
-  { label: "Price Low to High", value: "price-asc" },
-  { label: "Price High to Low", value: "price-desc" },
+const DEFAULT_SORT_OPTIONS: CollectionSortOption[] = [
+  {
+    label: "Recent",
+    values: { asc: "recent", desc: "recent" },
+    defaultDirection: "asc",
+  },
+  {
+    label: "Price",
+    values: { asc: "price-asc", desc: "price-desc" },
+    defaultDirection: "asc",
+  },
 ];
 
 function collectionName(metadata: unknown, fallbackAddress: string) {
@@ -115,6 +126,32 @@ function compareBigIntStrings(left: string, right: string) {
   } catch {
     return left.localeCompare(right);
   }
+}
+
+function isSortOptionActive(
+  option: CollectionSortOption,
+  sortMode: CollectionSortMode,
+) {
+  return option.values.asc === sortMode || option.values.desc === sortMode;
+}
+
+function sortButtonLabel(
+  option: CollectionSortOption,
+  sortMode: CollectionSortMode,
+) {
+  if (option.values.asc === option.values.desc) {
+    return option.label;
+  }
+
+  if (sortMode === option.values.asc) {
+    return `${option.label} ↑`;
+  }
+
+  if (sortMode === option.values.desc) {
+    return `${option.label} ↓`;
+  }
+
+  return option.label;
 }
 
 export function CollectionRouteView({
@@ -189,6 +226,11 @@ export function CollectionRouteView({
     ?? (collection.isSuccess && collection.data
       ? collectionName(collection.data.metadata, address)
       : null);
+  const collectionFilterConfig = useMemo(
+    () => getCollectionFilterConfig(address, runtimeCollections),
+    [address, runtimeCollections],
+  );
+  const sortOptions = collectionFilterConfig.sortOptions ?? DEFAULT_SORT_OPTIONS;
 
   const visibleTokens = visibleTokensByScope[sweepScopeKey] ?? EMPTY_VISIBLE_TOKENS;
   const hasVisibleTokenSnapshot = Object.prototype.hasOwnProperty.call(
@@ -287,6 +329,57 @@ export function CollectionRouteView({
     setSweepCount(0);
   }, [sweepCandidates, clampedSweepCount, addCandidates, setCartOpen]);
 
+  const handleSortOptionClick = useCallback(
+    (option: CollectionSortOption) => {
+      if (!onSortModeChange) {
+        return;
+      }
+
+      const defaultDirection = option.defaultDirection ?? "asc";
+      const nextSortMode =
+        sortMode === option.values.asc
+          ? option.values.desc
+          : sortMode === option.values.desc
+            ? option.values.asc
+            : defaultDirection === "desc"
+              ? option.values.desc
+              : option.values.asc;
+
+      onSortModeChange(nextSortMode as CollectionSortMode);
+    },
+    [onSortModeChange, sortMode],
+  );
+
+  const sortControls = useMemo<ReactNode>(
+    () => (
+      <div
+        className="flex flex-wrap items-center gap-2"
+        data-testid="collection-sort-controls"
+      >
+        {sortOptions.map((option) => {
+          const isActive = isSortOptionActive(option, sortMode);
+
+          return (
+            <button
+              key={option.label}
+              type="button"
+              aria-pressed={isActive}
+              onClick={() => handleSortOptionClick(option)}
+              className={
+                isActive
+                  ? "inline-flex h-7 items-center rounded-md bg-primary px-3 text-xs font-medium text-primary-foreground"
+                  : "inline-flex h-7 items-center rounded-md border border-border bg-background px-3 text-xs font-medium text-muted-foreground transition-colors hover:border-primary/50 hover:text-foreground"
+              }
+            >
+              {sortButtonLabel(option, sortMode)}
+            </button>
+          );
+        })}
+      </div>
+    ),
+    [handleSortOptionClick, sortMode, sortOptions],
+  );
+
   return (
     <section className="w-full space-y-6 pb-20">
       {/* Collection header */}
@@ -340,19 +433,6 @@ export function CollectionRouteView({
           )}
         </div>
 
-        <Select value={sortMode} onValueChange={(value) => onSortModeChange?.(value as CollectionSortMode)}>
-          <SelectTrigger aria-label="Sort tokens" className="w-48">
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            {SORT_OPTIONS.map((option) => (
-              <SelectItem key={option.value} value={option.value}>
-                {option.label}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-
         {collection.isSuccess && !collection.data ? (
           <p className="text-sm text-muted-foreground font-mono">
             <span className="text-primary mr-1">$</span>
@@ -392,6 +472,7 @@ export function CollectionRouteView({
                 address={address}
                 onTokensChange={handleTokensChange}
                 projectId={projectId}
+                sortControls={sortControls}
                 sortMode={sortMode}
                 sweepPreviewTokenIds={sweepPreviewTokenIds}
               />

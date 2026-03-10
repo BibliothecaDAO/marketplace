@@ -8,7 +8,9 @@ import {
   fetchFilteredTraitValues,
   fetchTraitNamesSummary,
   filterTokensByActiveFilters,
+  numericTraitValueByName,
   tokenMatchesActiveFilters,
+  traitValueByName,
 } from "@/lib/marketplace/traits";
 
 describe("marketplace trait utilities", () => {
@@ -192,5 +194,30 @@ describe("marketplace trait utilities", () => {
     expect(byBatch.map((item) => item.token_id)).toEqual(
       bySingle.map((item) => item.token_id),
     );
+  });
+
+  it("reads_trait_values_from_mixed_metadata_shapes", () => {
+    const metadata = {
+      attributes: [
+        { traitName: "Power", traitValue: "99" },
+        { name: "Health", value: "88" },
+      ],
+    };
+
+    expect(traitValueByName(metadata, "Power")).toBe("99");
+    expect(traitValueByName(metadata, "Health")).toBe("88");
+  });
+
+  it("parses_numeric_trait_values_and_rejects_invalid_numbers", () => {
+    const metadata = {
+      attributes: [
+        { trait_type: "Level", value: "42" },
+        { trait_type: "Rank", value: "legendary" },
+      ],
+    };
+
+    expect(numericTraitValueByName(metadata, "Level")).toBe(42);
+    expect(numericTraitValueByName(metadata, "Rank")).toBeNull();
+    expect(numericTraitValueByName(metadata, "Health")).toBeNull();
   });
 });
