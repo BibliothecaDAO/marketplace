@@ -387,7 +387,7 @@ describe("trait filter sidebar", () => {
       <SidebarWrapper
         collectionAddress="0xbeast"
         traitNames={[traitName("Animated")]}
-        traitValues={[traitValue("Yes"), traitValue("No")]}
+        traitValues={[traitValue("1"), traitValue("0")]}
         initialOpenTraitName="Animated"
       />,
     );
@@ -395,6 +395,8 @@ describe("trait filter sidebar", () => {
     expect(screen.queryByRole("searchbox", { name: /search animated/i })).toBeNull();
     expect(screen.getByRole("button", { name: "Yes" })).toBeVisible();
     expect(screen.getByRole("button", { name: "No" })).toBeVisible();
+    expect(screen.queryByRole("button", { name: "1" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "0" })).toBeNull();
   });
 
   it("renders_range_filter_with_two_slider_thumbs", () => {
