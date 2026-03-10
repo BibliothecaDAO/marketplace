@@ -5,7 +5,7 @@ describe("marketplace seo data server-safe imports", () => {
     vi.resetModules();
   });
 
-  it("returns fallback collection metadata when sdk import fails", async () => {
+  it("returns fallback collection metadata when fetch fails", async () => {
     vi.doMock("@/lib/marketplace/config", () => ({
       getMarketplaceRuntimeConfig: () => ({
         chainLabel: "SN_SEPOLIA",
@@ -17,31 +17,18 @@ describe("marketplace seo data server-safe imports", () => {
       }),
     }));
 
-    vi.doMock("@cartridge/arcade/marketplace", () => {
-      throw new TypeError("(0 , g.createContext) is not a function");
-    });
-    vi.doMock("@cartridge/arcade/marketplace/edge", () => ({
-      createEdgeMarketplaceClient: vi.fn(async () => ({
-        getCollection: vi.fn().mockResolvedValue({
-          address: "0xabc",
-          metadata: {
-            name: "Genesis",
-            description: "From edge runtime",
-            image: "https://cdn.example.com/genesis.png",
-          },
-        }),
-        getToken: vi.fn(),
-      })),
+    vi.stubGlobal("fetch", vi.fn(async () => {
+      throw new Error("network down");
     }));
 
     const { getCollectionSeoData } = await import("@/lib/marketplace/seo-data");
     const result = await getCollectionSeoData("0xabc");
 
     expect(result).toEqual({
-      exists: true,
+      exists: false,
       name: "Genesis",
-      description: "From edge runtime",
-      image: "https://cdn.example.com/genesis.png",
+      description: null,
+      image: null,
     });
   });
 });

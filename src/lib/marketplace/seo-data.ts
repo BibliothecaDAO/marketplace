@@ -1,9 +1,11 @@
 import { unstable_cache } from "next/cache";
 import { getMarketplaceRuntimeConfig } from "@/lib/marketplace/config";
+import { alternateTokenId, canonicalizeTokenId } from "@/lib/marketplace/token-id";
 import { tokenImage, tokenName } from "@/lib/marketplace/token-display";
 
 const COLLECTION_CACHE_REVALIDATE_SECONDS = 300;
 const TOKEN_CACHE_REVALIDATE_SECONDS = 60;
+const DEFAULT_PROJECT_ID = "arcade-main";
 
 type TokenLike = {
   token_id?: unknown;
@@ -14,20 +16,6 @@ type TokenLike = {
 type TokenDetailsLike = {
   token?: TokenLike | null;
 } | null;
-
-type MarketplaceClientLike = {
-  getCollection(options: {
-    address: string;
-    projectId?: string;
-    fetchImages?: boolean;
-  }): Promise<unknown>;
-  getToken(options: {
-    collection: string;
-    tokenId: string;
-    projectId?: string;
-    fetchImages?: boolean;
-  }): Promise<TokenDetailsLike>;
-};
 
 type CollectionSeoData = {
   exists: boolean;
@@ -79,33 +67,35 @@ function normalizeImageUrl(value: unknown) {
   return null;
 }
 
-function alternateTokenId(rawTokenId: string) {
-  const tokenId = rawTokenId.trim();
-  if (!tokenId) {
+function normalizePaddedAddress(address: string) {
+  const trimmed = address.trim().toLowerCase();
+  if (!trimmed) {
     return null;
   }
 
-  if (/^0x[0-9a-fA-F]+$/.test(tokenId)) {
-    try {
-      return BigInt(tokenId).toString();
-    } catch {
-      return null;
-    }
+  try {
+    const hex = trimmed.startsWith("0x") ? trimmed.slice(2) : trimmed;
+    return `0x${BigInt(`0x${hex}`).toString(16).padStart(64, "0")}`;
+  } catch {
+    return null;
   }
-
-  if (/^\d+$/.test(tokenId)) {
-    try {
-      return `0x${BigInt(tokenId).toString(16)}`;
-    } catch {
-      return null;
-    }
-  }
-
-  return null;
 }
 
-function hasUsableToken(data: TokenDetailsLike): data is { token: TokenLike } {
-  return data !== null && data.token !== null && data.token !== undefined;
+function escapeSqlValue(value: string) {
+  return value.replace(/'/g, "''");
+}
+
+function extractRows(data: unknown) {
+  if (!data) return [];
+  if (Array.isArray(data)) return data;
+  if (typeof data === "object") {
+    const record = data as Record<string, unknown>;
+    if (Array.isArray(record.data)) return record.data;
+    if (Array.isArray(record.rows)) return record.rows;
+    if (Array.isArray(record.result)) return record.result;
+  }
+
+  return [];
 }
 
 function resolveCollectionContext(address: string) {
@@ -118,6 +108,11 @@ function resolveCollectionContext(address: string) {
     name: knownCollection?.name ?? address,
     projectId: knownCollection?.projectId,
   };
+}
+
+function resolveProjectId(projectId?: string) {
+  const { sdkConfig } = getMarketplaceRuntimeConfig();
+  return projectId ?? sdkConfig.defaultProject ?? DEFAULT_PROJECT_ID;
 }
 
 function collectionMetadata(rawCollection: unknown) {
@@ -138,42 +133,94 @@ function collectionMetadata(rawCollection: unknown) {
   };
 }
 
-let marketplaceClientPromise: Promise<MarketplaceClientLike | null> | null = null;
-
-async function getMarketplaceClient(): Promise<MarketplaceClientLike | null> {
-  if (!marketplaceClientPromise) {
-    marketplaceClientPromise = import("@cartridge/arcade/marketplace/edge")
-      .then(async (marketplaceModule) => {
-        const { sdkConfig } = getMarketplaceRuntimeConfig();
-        return marketplaceModule.createEdgeMarketplaceClient(sdkConfig);
-      })
-      .catch(() => null);
+function parseJsonSafe(value: unknown) {
+  if (typeof value !== "string") {
+    return asRecord(value);
   }
 
-  return marketplaceClientPromise;
+  try {
+    return asRecord(JSON.parse(value));
+  } catch {
+    return null;
+  }
+}
+
+async function fetchToriiSql(projectId: string, sql: string) {
+  const response = await fetch(`https://api.cartridge.gg/x/${projectId}/torii/sql`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: sql,
+  });
+
+  if (!response.ok) {
+    throw new Error(`Torii SQL request failed with ${response.status}`);
+  }
+
+  const data = await response.json();
+  return extractRows(data);
+}
+
+function tokenCandidates(rawTokenId: string) {
+  const candidates = new Set<string>();
+  const tokenId = rawTokenId.trim();
+  if (tokenId) {
+    candidates.add(tokenId);
+  }
+
+  const alternate = alternateTokenId(rawTokenId);
+  if (alternate) {
+    candidates.add(alternate);
+  }
+
+  const canonical = canonicalizeTokenId(rawTokenId);
+  if (canonical) {
+    candidates.add(`0x${canonical.value.toString(16).padStart(64, "0")}`);
+  }
+
+  return Array.from(candidates);
 }
 
 async function _fetchCollectionUncached(address: string) {
   const context = resolveCollectionContext(address);
-  const client = await getMarketplaceClient();
-
-  if (!client) {
-    return {
-      context,
-      collection: null,
-    };
-  }
+  const normalizedAddress = normalizePaddedAddress(address) ?? address;
 
   try {
-    const collection = await client.getCollection({
-      address,
-      projectId: context.projectId,
-      fetchImages: true,
-    });
+    const collectionRows = await fetchToriiSql(
+      resolveProjectId(context.projectId),
+      `SELECT contract_address, metadata, total_supply
+FROM token_contracts
+WHERE lower(contract_address) = lower('${escapeSqlValue(normalizedAddress)}')
+LIMIT 1`,
+    );
+    const collection = asRecord(collectionRows[0]);
+    if (!collection) {
+      return {
+        context,
+        collection: null,
+      };
+    }
+
+    let metadata = parseJsonSafe(collection.metadata);
+    if (!metadata) {
+      const tokenRows = await fetchToriiSql(
+        resolveProjectId(context.projectId),
+        `SELECT metadata
+FROM tokens
+WHERE lower(contract_address) = lower('${escapeSqlValue(normalizedAddress)}')
+LIMIT 1`,
+      );
+      metadata = parseJsonSafe(asRecord(tokenRows[0])?.metadata);
+    }
 
     return {
       context,
-      collection,
+      collection: {
+        address,
+        metadata,
+        totalSupply: collection.total_supply,
+      },
     };
   } catch {
     return {
@@ -207,45 +254,38 @@ async function _fetchTokenWithFallbackUncached(options: {
   tokenId: string;
   projectId?: string;
 }) {
-  const client = await getMarketplaceClient();
-  if (!client) {
-    return null;
-  }
-
-  let response: TokenDetailsLike = null;
+  const normalizedCollection = normalizePaddedAddress(options.collection) ?? options.collection;
+  const projectId = resolveProjectId(options.projectId);
 
   try {
-    response = await client.getToken({
-      collection: options.collection,
-      tokenId: options.tokenId,
-      projectId: options.projectId,
-      fetchImages: true,
-    });
-  } catch {
-    response = null;
-  }
+    for (const candidate of tokenCandidates(options.tokenId)) {
+      const tokenRows = await fetchToriiSql(
+        projectId,
+        `SELECT contract_address, token_id, metadata
+FROM tokens
+WHERE lower(contract_address) = lower('${escapeSqlValue(normalizedCollection)}')
+  AND token_id = '${escapeSqlValue(candidate)}'
+LIMIT 1`,
+      );
+      const tokenRecord = asRecord(tokenRows[0]);
+      if (!tokenRecord) {
+        continue;
+      }
 
-  if (hasUsableToken(response)) {
-    return response;
-  }
+      const token: TokenLike = {
+        token_id: tokenRecord.token_id,
+        metadata: parseJsonSafe(tokenRecord.metadata),
+        image: normalizeImageUrl(parseJsonSafe(tokenRecord.metadata)?.image) ??
+          normalizeImageUrl(parseJsonSafe(tokenRecord.metadata)?.image_url),
+      };
 
-  const fallbackTokenId = alternateTokenId(options.tokenId);
-  if (!fallbackTokenId || fallbackTokenId === options.tokenId) {
-    return null;
-  }
-
-  try {
-    const fallbackResponse = await client.getToken({
-      collection: options.collection,
-      tokenId: fallbackTokenId,
-      projectId: options.projectId,
-      fetchImages: true,
-    });
-
-    return hasUsableToken(fallbackResponse) ? fallbackResponse : null;
+      return { token } satisfies TokenDetailsLike;
+    }
   } catch {
     return null;
   }
+
+  return null;
 }
 
 const fetchTokenWithFallbackCached = unstable_cache(
@@ -340,7 +380,9 @@ export async function getTokenSeoData(
     exists: true,
     tokenName: resolvedTokenName,
     collectionName,
-    description: `View listings and activity for ${resolvedTokenName}.`,
+    description:
+      asNonEmptyString(asRecord(tokenDetail.token.metadata)?.description) ??
+      `View listings and activity for ${resolvedTokenName}.`,
     image: normalizedTokenImage(tokenDetail.token),
     collectionImage,
   };
