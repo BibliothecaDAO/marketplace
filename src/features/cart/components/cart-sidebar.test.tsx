@@ -158,6 +158,21 @@ describe("cart sidebar", () => {
     expect(trigger.textContent).not.toContain("Cart");
   });
 
+  it("cart_trigger_uses_outline_hover_styling", () => {
+    useCartStore.setState({
+      items: [makeItem("7001", "1", "100")],
+      inlineErrors: {},
+      isOpen: false,
+      lastActionError: null,
+    });
+
+    render(<CartSidebar />);
+
+    const trigger = screen.getByRole("button", { name: /cart \(1\)/i });
+    expect(trigger).toHaveAttribute("data-variant", "outline");
+    expect(trigger).toHaveClass("hover:bg-accent", "hover:text-accent-foreground");
+  });
+
   it("empty_cart_shows_browse_collections_link", async () => {
     useCartStore.setState({
       items: [],
