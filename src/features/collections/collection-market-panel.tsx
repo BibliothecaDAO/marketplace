@@ -23,6 +23,8 @@ import {
   formatAddress,
   formatNumberish,
   formatPriceForDisplay,
+  tokenId,
+  tokenImage,
 } from "@/lib/marketplace/token-display";
 
 type CollectionMarketPanelProps = {
@@ -44,6 +46,8 @@ type ActivityRow = {
   kind: ActivityKind;
   id: string;
   tokenId: string | null;
+  routeTokenId: string | null;
+  tokenImage: string | null;
   price: string | null;
   owner: string | null;
   status: string | null;
@@ -100,6 +104,53 @@ function formatActivityDate(value: unknown) {
   return null;
 }
 
+function firstTokenImage(candidates: unknown[]) {
+  for (const candidate of candidates) {
+    if (!candidate) {
+      continue;
+    }
+
+    const resolvedImage = tokenImage(candidate as never);
+    if (resolvedImage) {
+      return resolvedImage;
+    }
+  }
+
+  return null;
+}
+
+function firstRouteTokenId(candidates: unknown[]) {
+  for (const candidate of candidates) {
+    if (!candidate) {
+      continue;
+    }
+
+    const fields = asRecord(candidate);
+    if (!fields) {
+      continue;
+    }
+
+    const resolvedTokenId = fields.token_id ?? fields.tokenId;
+    if (
+      typeof resolvedTokenId === "string"
+      || typeof resolvedTokenId === "number"
+      || typeof resolvedTokenId === "bigint"
+    ) {
+      return tokenId(candidate as never);
+    }
+  }
+
+  return null;
+}
+
+function displayStatus(status: string | null) {
+  if (status === "Executed") {
+    return "Filled";
+  }
+
+  return status;
+}
+
 function toActivityRow(raw: unknown, kind: ActivityKind, address: string): ActivityRow | null {
   const fields = asRecord(raw);
   if (!fields) {
@@ -123,6 +174,21 @@ function toActivityRow(raw: unknown, kind: ActivityKind, address: string): Activ
     nestedListing?.tokenId,
     nestedListing?.token_id,
   ]);
+  const routeTokenId =
+    firstRouteTokenId([
+      fields.token,
+      nestedOrder?.token,
+      nestedListing?.token,
+    ]) ??
+    firstString([
+      fields.tokenId,
+      fields.token_id,
+      nestedOrder?.tokenId,
+      nestedOrder?.token_id,
+      nestedListing?.tokenId,
+      nestedListing?.token_id,
+    ]) ??
+    tokenId;
   const rawPrice = firstNumberish([
     fields.price,
     fields.listingPrice,
@@ -151,6 +217,19 @@ function toActivityRow(raw: unknown, kind: ActivityKind, address: string): Activ
     nestedOrder?.status,
     nestedListing?.status,
   ]);
+  const tokenImage = firstString([
+    fields.image,
+    fields.tokenImage,
+    fields.token_image,
+    nestedOrder?.image,
+    nestedOrder?.tokenImage,
+    nestedListing?.image,
+    nestedListing?.tokenImage,
+  ]) ?? firstTokenImage([
+    fields.token,
+    nestedOrder?.token,
+    nestedListing?.token,
+  ]);
   const occurredAt = formatActivityDate(
     fields.updatedAt ??
       fields.updated_at ??
@@ -163,12 +242,14 @@ function toActivityRow(raw: unknown, kind: ActivityKind, address: string): Activ
       nestedListing?.updatedAt ??
       nestedListing?.createdAt,
   );
-  const href = tokenId ? `/collections/${address}/${tokenId}` : null;
+  const href = routeTokenId ? `/collections/${address}/${routeTokenId}` : null;
 
   return {
     kind,
     id,
     tokenId,
+    routeTokenId,
+    tokenImage,
     price: formatPriceForDisplay(rawPrice),
     owner: owner ? formatAddress(owner) : null,
     status,
@@ -179,22 +260,33 @@ function toActivityRow(raw: unknown, kind: ActivityKind, address: string): Activ
 
 function ActivityRowItem({ row }: { row: ActivityRow }) {
   return (
-    <div className="rounded-md border border-border/60 bg-card px-3 py-2">
-      <div className="flex items-start justify-between gap-3">
-        <div className="space-y-1">
-          <p className="text-sm font-medium">{row.kind} #{row.id}</p>
-          {row.tokenId ? (
-            <p className="text-sm">Token #{row.tokenId}</p>
+    <div className="rounded-md border border-border/60 bg-card px-4 py-3">
+      <div className="flex items-center justify-between gap-4">
+        <div className="flex min-w-0 items-center gap-3">
+          {row.tokenImage ? (
+            <div className="flex h-16 w-16 shrink-0 items-center justify-center overflow-hidden rounded-md border border-border/60 bg-muted">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img
+                alt={row.tokenId ? `Token #${row.tokenId} preview` : `${row.kind} preview`}
+                className="h-full w-full object-cover"
+                src={row.tokenImage}
+              />
+            </div>
           ) : null}
-          <div className="flex flex-wrap gap-x-3 gap-y-1 text-xs text-muted-foreground">
-            {row.price ? <span>Price {row.price}</span> : null}
-            {row.owner ? <span>Owner {row.owner}</span> : null}
-            {row.status ? <span>Status {row.status}</span> : null}
-            {row.occurredAt ? <span>{row.occurredAt}</span> : null}
+          <div className="min-w-0 space-y-1">
+            <p className="text-sm font-medium">
+              {row.tokenId ? `Token #${row.tokenId}` : row.kind}
+            </p>
+            <div className="flex flex-wrap gap-x-3 gap-y-1 text-xs text-muted-foreground">
+              {row.price ? <span>Price {row.price}</span> : null}
+              {row.owner ? <span>Owner {row.owner}</span> : null}
+              {displayStatus(row.status) ? <span>Status {displayStatus(row.status)}</span> : null}
+              {row.occurredAt ? <span>{row.occurredAt}</span> : null}
+            </div>
           </div>
         </div>
         {row.href ? (
-          <Button asChild size="sm" type="button" variant="outline">
+          <Button asChild size="sm" type="button" variant="outline" className="shrink-0">
             <Link href={row.href}>View token</Link>
           </Button>
         ) : null}
@@ -306,16 +398,16 @@ export function CollectionMarketPanel({
                   </label>
                   <Select value={orderStatus} onValueChange={setOrderStatus}>
                     <SelectTrigger id="order-status" aria-label="Order status">
-                      <SelectValue placeholder="Any status" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value={ANY_VALUE}>Any</SelectItem>
-                      <SelectItem value="Placed">Placed</SelectItem>
-                      <SelectItem value="Canceled">Canceled</SelectItem>
-                      <SelectItem value="Executed">Executed</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
+                    <SelectValue placeholder="Any status" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value={ANY_VALUE}>Any</SelectItem>
+                    <SelectItem value="Placed">Placed</SelectItem>
+                    <SelectItem value="Canceled">Canceled</SelectItem>
+                    <SelectItem value="Executed">Filled</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
                 <div className="space-y-1">
                   <label className="text-xs text-muted-foreground" htmlFor="order-category">
                     Order category

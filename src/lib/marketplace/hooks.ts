@@ -18,6 +18,7 @@ import {
 } from "@cartridge/arcade/marketplace/react";
 import {
   alternateTokenId,
+  canonicalizeTokenId,
   expandTokenIdVariants,
 } from "@/lib/marketplace/token-id";
 import type { TraitSelection } from "@/lib/marketplace/traits";
@@ -108,7 +109,15 @@ export function useTokenDetailQuery(options: TokenDetailsOptions) {
   const tokenId = String(options.tokenId);
   const enabled = !!options.collection && !!tokenId;
   const altTokenId = alternateTokenId(tokenId);
+  const canonicalTokenId = canonicalizeTokenId(tokenId);
+  const paddedTokenId = canonicalTokenId
+    ? `0x${canonicalTokenId.value.toString(16).padStart(64, "0")}`
+    : null;
   const hasAlternateTokenId = !!altTokenId && altTokenId !== tokenId;
+  const hasPaddedTokenId =
+    !!paddedTokenId &&
+    paddedTokenId !== tokenId &&
+    paddedTokenId !== altTokenId;
   const scopedTokenIdCandidates = collectionScopedTokenIdCandidates(
     options.collection,
     tokenId,
@@ -138,6 +147,25 @@ export function useTokenDetailQuery(options: TokenDetailsOptions) {
     },
     {
       enabled: shouldEnableAlternateQuery,
+    },
+  );
+
+  const shouldEnablePaddedQuery =
+    enabled &&
+    hasPaddedTokenId &&
+    primaryQuery.status !== "pending" &&
+    (primaryQuery.status === "error" || !hasUsableToken(primaryQuery.data)) &&
+    (!hasAlternateTokenId ||
+      (alternateQuery.status !== "pending" &&
+        (alternateQuery.status === "error" || !hasUsableToken(alternateQuery.data))));
+
+  const paddedQuery = useMarketplaceToken(
+    {
+      ...options,
+      tokenId: hasPaddedTokenId ? paddedTokenId : tokenId,
+    },
+    {
+      enabled: shouldEnablePaddedQuery,
     },
   );
 
@@ -186,6 +214,12 @@ export function useTokenDetailQuery(options: TokenDetailsOptions) {
     }
   }
 
+  if (shouldEnablePaddedQuery) {
+    if (hasUsableToken(paddedQuery.data)) {
+      return paddedQuery;
+    }
+  }
+
   if (shouldEnableScopedPrimaryQuery) {
     if (hasUsableToken(scopedPrimaryQuery.data)) {
       return scopedPrimaryQuery;
@@ -198,6 +232,10 @@ export function useTokenDetailQuery(options: TokenDetailsOptions) {
 
   if (shouldEnableScopedPrimaryQuery) {
     return scopedPrimaryQuery;
+  }
+
+  if (shouldEnablePaddedQuery) {
+    return paddedQuery;
   }
 
   if (shouldEnableAlternateQuery) {

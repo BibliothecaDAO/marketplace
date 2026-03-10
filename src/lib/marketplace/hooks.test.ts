@@ -213,6 +213,38 @@ describe("marketplace hooks", () => {
     expect(result.current).toBe(scopedResult);
   });
 
+  it("useTokenDetailQuery_uses_padded_hex_token_id_when_basic_variants_fail", async () => {
+    const paddedTokenId = "0x000000000000000000000000000000000000000000000000000000000000025e";
+    const paddedResult = {
+      status: "success",
+      data: { token: { token_id: paddedTokenId, metadata: { name: "Token #606" } } },
+    };
+
+    mockUseMarketplaceToken.mockImplementation((options: { tokenId: string }) => {
+      if (options.tokenId === "606") {
+        return { status: "success", data: null };
+      }
+      if (options.tokenId === "0x25e") {
+        return { status: "success", data: null };
+      }
+      if (options.tokenId === paddedTokenId) {
+        return paddedResult;
+      }
+      return { status: "pending", data: null };
+    });
+
+    const { useTokenDetailQuery } = await import("@/lib/marketplace/hooks");
+    const { result } = renderHook(
+      () => useTokenDetailQuery({ collection: "0xabc", tokenId: "606", fetchImages: true }),
+    );
+
+    expect(mockUseMarketplaceToken).toHaveBeenCalledWith(
+      expect.objectContaining({ tokenId: paddedTokenId }),
+      expect.objectContaining({ enabled: true }),
+    );
+    expect(result.current).toBe(paddedResult);
+  });
+
   it("useTokenOwnershipQuery_passes_alt_token_ids", async () => {
     mockUseMarketplaceTokenBalances.mockReturnValue({ status: "success", data: { page: { balances: [] } } });
 

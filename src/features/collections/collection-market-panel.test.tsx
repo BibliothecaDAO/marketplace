@@ -127,7 +127,7 @@ describe("collection market panel", () => {
 
     const listingsPanel = screen.getByTestId("listings-panel");
     expect(within(listingsPanel).queryByText(/orders failed to load/i)).toBeNull();
-    expect(within(listingsPanel).getByText(/#10/)).toBeVisible();
+    expect(within(listingsPanel).getByText(/token #7/i)).toBeVisible();
   });
 
   it("debug_status_badges_not_shown", () => {
@@ -142,7 +142,8 @@ describe("collection market panel", () => {
     await user.click(screen.getByRole("combobox", { name: /order status/i }));
     expect(await screen.findByRole("option", { name: /placed/i })).toBeVisible();
     expect(screen.getByRole("option", { name: /canceled/i })).toBeVisible();
-    expect(screen.getByRole("option", { name: /executed/i })).toBeVisible();
+    expect(screen.getByRole("option", { name: /filled/i })).toBeVisible();
+    expect(screen.queryByRole("option", { name: /executed/i })).toBeNull();
   });
 
   it("orders_rows_include_actionable_market_context", () => {
@@ -155,6 +156,10 @@ describe("collection market panel", () => {
           owner: "0x1234567890abcdef",
           status: "Executed",
           updatedAt: "2024-11-16T10:30:00.000Z",
+          token: {
+            token_id: "77",
+            metadata: { image: "https://cdn.example/token-77.png" },
+          },
         },
       ]),
     );
@@ -162,14 +167,21 @@ describe("collection market panel", () => {
     render(<CollectionMarketPanel address="0xabc" />);
 
     const ordersPanel = screen.getByTestId("orders-panel");
+    expect(within(ordersPanel).queryByText(/order #9/i)).toBeNull();
     expect(within(ordersPanel).getByText(/token #77/i)).toBeVisible();
+    expect(within(ordersPanel).getByAltText("Token #77 preview")).toHaveAttribute(
+      "src",
+      "https://cdn.example/token-77.png",
+    );
     expect(within(ordersPanel).getByText(/150/)).toBeVisible();
-    expect(within(ordersPanel).getByText(/executed/i)).toBeVisible();
+    expect(within(ordersPanel).getByText(/filled/i)).toBeVisible();
+    expect(within(ordersPanel).queryByText(/executed/i)).toBeNull();
     expect(within(ordersPanel).getByText(/owner/i)).toBeVisible();
     expect(within(ordersPanel).getByText(/2024/i)).toBeVisible();
   });
 
   it("listings_rows_expose_token_detail_navigation", async () => {
+    const routeTokenId = "0x000000000000000000000000000000000000000000000000000000000000002a";
     mockUseCollectionListingsQuery.mockReturnValue(
       successQuery([
         {
@@ -179,6 +191,10 @@ describe("collection market panel", () => {
           owner: "0x1234567890abcdef",
           status: "Placed",
           createdAt: "2024-11-16T10:30:00.000Z",
+          token: {
+            token_id: routeTokenId,
+            metadata: { image: "https://cdn.example/token-42.png" },
+          },
         },
       ]),
     );
@@ -189,11 +205,15 @@ describe("collection market panel", () => {
 
     const listingsPanel = screen.getByTestId("listings-panel");
     expect(within(listingsPanel).getByText(/token #42/i)).toBeVisible();
+    expect(within(listingsPanel).getByAltText("Token #42 preview")).toHaveAttribute(
+      "src",
+      "https://cdn.example/token-42.png",
+    );
     expect(within(listingsPanel).getByText(/88/)).toBeVisible();
     expect(within(listingsPanel).getByText(/owner 0x1234/i)).toBeVisible();
     expect(within(listingsPanel).getByText(/2024/i)).toBeVisible();
 
     const tokenLink = within(listingsPanel).getByRole("link", { name: /view token/i });
-    expect(tokenLink).toHaveAttribute("href", "/collections/0xabc/42");
+    expect(tokenLink).toHaveAttribute("href", `/collections/0xabc/${routeTokenId}`);
   });
 });
