@@ -2,10 +2,17 @@
 
 import { useMemo, useState } from "react";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
+import { BooleanFilter } from "@/features/collections/filters/boolean-filter";
+import { RangeSliderFilter } from "@/features/collections/filters/range-slider-filter";
+import { TraitPillsFilter } from "@/features/collections/filters/trait-pills-filter";
+import {
+  getCollectionFilterConfig,
+  type PillsFilterOverride,
+} from "@/lib/marketplace/collection-filter-config";
 import { cn } from "@/lib/utils";
 import {
   type ActiveFilters,
+  type PrecomputedFilterProperty,
   type TraitNameSummary,
   type TraitValueRow,
   computePrecomputedFilters,
@@ -13,6 +20,7 @@ import {
 } from "@/lib/marketplace/traits";
 
 type TraitFilterSidebarProps = {
+  collectionAddress: string;
   traitNames: TraitNameSummary[];
   activeFilters: ActiveFilters;
   onActiveFiltersChange?: (filters: ActiveFilters) => void;
@@ -30,6 +38,7 @@ function cloneFilters(activeFilters: ActiveFilters): ActiveFilters {
 }
 
 export function TraitFilterSidebar({
+  collectionAddress,
   traitNames,
   activeFilters,
   onActiveFiltersChange,
@@ -40,10 +49,17 @@ export function TraitFilterSidebar({
   onOpenTraitNameChange,
 }: TraitFilterSidebarProps) {
   const [searchByTraitName, setSearchByTraitName] = useState<Record<string, string>>({});
+  const collectionFilterConfig = useMemo(
+    () => getCollectionFilterConfig(collectionAddress),
+    [collectionAddress],
+  );
 
   const sortedTraitNames = useMemo(
-    () => [...traitNames].sort((a, b) => a.traitName.localeCompare(b.traitName)),
-    [traitNames],
+    () =>
+      [...traitNames]
+        .filter((trait) => !collectionFilterConfig.hiddenTraits.includes(trait.traitName))
+        .sort((a, b) => a.traitName.localeCompare(b.traitName)),
+    [collectionFilterConfig.hiddenTraits, traitNames],
   );
 
   const openGroupValues = useMemo(() => {
@@ -79,6 +95,70 @@ export function TraitFilterSidebar({
 
   function toggleTraitGroup(traitName: string) {
     onOpenTraitNameChange(openTraitName === traitName ? null : traitName);
+  }
+
+  function setTraitValues(traitName: string, values: string[]) {
+    const next = cloneFilters(activeFilters);
+    if (values.length === 0) {
+      delete next[traitName];
+    } else {
+      next[traitName] = new Set(values);
+    }
+
+    onActiveFiltersChange?.(next);
+  }
+
+  function renderFilterControl(
+    traitName: string,
+    values: PrecomputedFilterProperty[],
+  ) {
+    const override = collectionFilterConfig.overrides[traitName];
+
+    if (override?.type === "boolean") {
+      return (
+        <BooleanFilter
+          traitName={traitName}
+          values={values}
+          activeValues={activeFilters[traitName]}
+          onToggle={(traitValue) => toggleFilter(traitName, traitValue)}
+        />
+      );
+    }
+
+    if (override?.type === "range") {
+      return (
+        <RangeSliderFilter
+          traitName={traitName}
+          values={values}
+          activeValues={activeFilters[traitName]}
+          min={override.min}
+          max={override.max}
+          onChange={(traitValues) => setTraitValues(traitName, traitValues)}
+        />
+      );
+    }
+
+    const pillsOverride: PillsFilterOverride | undefined =
+      override?.type === "pills" ? override : undefined;
+
+    return (
+      <TraitPillsFilter
+        traitName={traitName}
+        values={values}
+        activeValues={activeFilters[traitName]}
+        searchTerm={searchByTraitName[traitName] ?? ""}
+        onSearchTermChange={(value) => {
+          setSearchByTraitName((current) => ({
+            ...current,
+            [traitName]: value,
+          }));
+        }}
+        onToggle={(traitValue) => toggleFilter(traitName, traitValue)}
+        hideSearch={pillsOverride?.hideSearch}
+        showCount={pillsOverride?.showCount}
+        sort={pillsOverride?.sort}
+      />
+    );
   }
 
   return (
@@ -123,15 +203,6 @@ export function TraitFilterSidebar({
           const traitButtonId = `trait-toggle-${index}`;
           const isOpen = openTraitName === traitName;
           const activeInGroup = activeFilters[traitName]?.size ?? 0;
-          const searchTerm = searchByTraitName[traitName] ?? "";
-          const normalizedSearchTerm = searchTerm.trim().toLocaleLowerCase();
-          const filteredValues = isOpen
-            ? openGroupValues.filter((item) =>
-                normalizedSearchTerm.length === 0
-                  ? true
-                  : item.property.toLocaleLowerCase().includes(normalizedSearchTerm),
-              )
-            : [];
 
           return (
             <div key={traitName} className="space-y-1">
@@ -167,45 +238,11 @@ export function TraitFilterSidebar({
                   aria-labelledby={traitButtonId}
                   className="space-y-2 px-2 pb-2"
                 >
-                  <Input
-                    type="search"
-                    value={searchTerm}
-                    onChange={(event) => {
-                      setSearchByTraitName((current) => ({
-                        ...current,
-                        [traitName]: event.target.value,
-                      }));
-                    }}
-                    aria-label={`Search ${traitName}`}
-                    placeholder={`Search ${traitName}`}
-                    className="h-7 text-xs"
-                  />
-                  <div className="flex flex-wrap gap-1.5">
-                    {isLoadingValues ? (
-                      <p className="text-xs text-muted-foreground">Loading values...</p>
-                    ) : filteredValues.length === 0 ? (
-                      <p className="text-xs text-muted-foreground">No matches.</p>
-                    ) : (
-                      filteredValues.map((item) => {
-                        const isActive = activeFilters[traitName]?.has(item.property) ?? false;
-                        return (
-                          <button
-                            key={`${traitName}-${item.property}`}
-                            onClick={() => toggleFilter(traitName, item.property)}
-                            type="button"
-                            className={cn(
-                              "inline-flex items-center rounded-full border px-2 py-0.5 text-xs transition-colors",
-                              isActive
-                                ? "border-primary bg-primary/10 text-primary"
-                                : "border-border text-muted-foreground hover:border-primary/50 hover:text-foreground",
-                            )}
-                          >
-                            {item.property} ({item.count})
-                          </button>
-                        );
-                      })
-                    )}
-                  </div>
+                  {isLoadingValues ? (
+                    <p className="text-xs text-muted-foreground">Loading values...</p>
+                  ) : (
+                    renderFilterControl(traitName, openGroupValues)
+                  )}
                 </div>
               ) : null}
             </div>

@@ -346,6 +346,7 @@ export function CollectionRouteView({
       <div className="grid gap-6 xl:grid-cols-[280px_1fr]">
         <div className="sticky top-20 self-start" data-testid="trait-sidebar-container">
           <TraitFilterSidebar
+            collectionAddress={address}
             traitNames={traitNamesQuery.data ?? []}
             activeFilters={resolvedActiveFilters}
             onActiveFiltersChange={onActiveFiltersChange}
