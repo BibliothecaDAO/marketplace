@@ -156,7 +156,10 @@ describe("collection market panel", () => {
           owner: "0x1234567890abcdef",
           status: "Executed",
           updatedAt: "2024-11-16T10:30:00.000Z",
-          image: "https://cdn.example/token-77.png",
+          token: {
+            token_id: "77",
+            metadata: { image: "https://cdn.example/token-77.png" },
+          },
         },
       ]),
     );
@@ -187,7 +190,10 @@ describe("collection market panel", () => {
           owner: "0x1234567890abcdef",
           status: "Placed",
           createdAt: "2024-11-16T10:30:00.000Z",
-          image: "https://cdn.example/token-42.png",
+          token: {
+            token_id: "42",
+            metadata: { image: "https://cdn.example/token-42.png" },
+          },
         },
       ]),
     );

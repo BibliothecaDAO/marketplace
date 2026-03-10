@@ -23,6 +23,7 @@ import {
   formatAddress,
   formatNumberish,
   formatPriceForDisplay,
+  tokenImage,
 } from "@/lib/marketplace/token-display";
 
 type CollectionMarketPanelProps = {
@@ -101,6 +102,21 @@ function formatActivityDate(value: unknown) {
   return null;
 }
 
+function firstTokenImage(candidates: unknown[]) {
+  for (const candidate of candidates) {
+    if (!candidate) {
+      continue;
+    }
+
+    const resolvedImage = tokenImage(candidate as never);
+    if (resolvedImage) {
+      return resolvedImage;
+    }
+  }
+
+  return null;
+}
+
 function displayStatus(status: string | null) {
   if (status === "Executed") {
     return "Filled";
@@ -168,6 +184,10 @@ function toActivityRow(raw: unknown, kind: ActivityKind, address: string): Activ
     nestedOrder?.tokenImage,
     nestedListing?.image,
     nestedListing?.tokenImage,
+  ]) ?? firstTokenImage([
+    fields.token,
+    nestedOrder?.token,
+    nestedListing?.token,
   ]);
   const occurredAt = formatActivityDate(
     fields.updatedAt ??
@@ -198,10 +218,10 @@ function toActivityRow(raw: unknown, kind: ActivityKind, address: string): Activ
 
 function ActivityRowItem({ row }: { row: ActivityRow }) {
   return (
-    <div className="rounded-md border border-border/60 bg-card px-3 py-2">
-      <div className="flex items-start justify-between gap-3">
-        <div className="flex items-start gap-3">
-          <div className="flex h-14 w-14 shrink-0 items-center justify-center overflow-hidden rounded-md border border-border/60 bg-muted">
+    <div className="rounded-md border border-border/60 bg-card px-4 py-3">
+      <div className="flex items-center justify-between gap-4">
+        <div className="flex min-w-0 items-center gap-3">
+          <div className="flex h-16 w-16 shrink-0 items-center justify-center overflow-hidden rounded-md border border-border/60 bg-muted">
             {row.tokenImage ? (
               // eslint-disable-next-line @next/next/no-img-element
               <img
@@ -213,20 +233,20 @@ function ActivityRowItem({ row }: { row: ActivityRow }) {
               <span className="text-[10px] text-muted-foreground">No image</span>
             )}
           </div>
-          <div className="space-y-1">
+          <div className="min-w-0 space-y-1">
             <p className="text-sm font-medium">
               {row.tokenId ? `Token #${row.tokenId}` : row.kind}
             </p>
-          <div className="flex flex-wrap gap-x-3 gap-y-1 text-xs text-muted-foreground">
-            {row.price ? <span>Price {row.price}</span> : null}
+            <div className="flex flex-wrap gap-x-3 gap-y-1 text-xs text-muted-foreground">
+              {row.price ? <span>Price {row.price}</span> : null}
             {row.owner ? <span>Owner {row.owner}</span> : null}
             {displayStatus(row.status) ? <span>Status {displayStatus(row.status)}</span> : null}
             {row.occurredAt ? <span>{row.occurredAt}</span> : null}
           </div>
-        </div>
+          </div>
         </div>
         {row.href ? (
-          <Button asChild size="sm" type="button" variant="outline">
+          <Button asChild size="sm" type="button" variant="outline" className="shrink-0">
             <Link href={row.href}>View token</Link>
           </Button>
         ) : null}
