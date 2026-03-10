@@ -2,6 +2,7 @@ import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { CollectionMarketPanel } from "@/features/collections/collection-market-panel";
+import { _resetConfigCache } from "@/lib/marketplace/config";
 
 const { mockUseCollectionOrdersQuery, mockUseCollectionListingsQuery } =
   vi.hoisted(() => ({
@@ -40,6 +41,9 @@ function errorQuery(error: Error) {
 
 describe("collection market panel", () => {
   beforeEach(() => {
+    process.env.NEXT_PUBLIC_MARKETPLACE_COLLECTIONS =
+      "0xrealm|Realms|project-realms,0xbeast|Beasts|project-beasts";
+    _resetConfigCache();
     mockUseCollectionOrdersQuery.mockReset();
     mockUseCollectionListingsQuery.mockReset();
 
@@ -178,6 +182,93 @@ describe("collection market panel", () => {
     expect(within(ordersPanel).queryByText(/executed/i)).toBeNull();
     expect(within(ordersPanel).getByText(/owner/i)).toBeVisible();
     expect(within(ordersPanel).getByText(/2024/i)).toBeVisible();
+  });
+
+  it("orders_rows_show_realms_resource_details", () => {
+    mockUseCollectionOrdersQuery.mockReturnValue(
+      successQuery([
+        {
+          id: 9,
+          tokenId: 77,
+          price: "150",
+          token: {
+            token_id: "77",
+            metadata: {
+              image: "https://cdn.example/realm-77.png",
+              attributes: [
+                { trait_type: "Resource", value: "Wood" },
+                { trait_type: "Resource", value: "Stone" },
+                { traitName: "Resource", traitValue: "Wood" },
+              ],
+            },
+          },
+        },
+      ]),
+    );
+
+    render(<CollectionMarketPanel address="0xrealm" />);
+
+    const ordersPanel = screen.getByTestId("orders-panel");
+    expect(within(ordersPanel).getByText("Wood")).toBeVisible();
+    expect(within(ordersPanel).getByText("Stone")).toBeVisible();
+    expect(within(ordersPanel).getAllByText("Wood")).toHaveLength(1);
+  });
+
+  it("listings_rows_show_beast_type_and_level", async () => {
+    mockUseCollectionListingsQuery.mockReturnValue(
+      successQuery([
+        {
+          id: 101,
+          tokenId: 42,
+          token: {
+            token_id: "42",
+            metadata: {
+              attributes: [
+                { name: "Beast", value: "Phoenix" },
+                { trait_type: "Level", value: 12 },
+                { trait_type: "Power", value: 1800 },
+              ],
+            },
+          },
+        },
+      ]),
+    );
+
+    const user = userEvent.setup();
+    render(<CollectionMarketPanel address="0xbeast" />);
+    await user.click(screen.getByRole("tab", { name: /listings/i }));
+
+    const listingsPanel = screen.getByTestId("listings-panel");
+    expect(within(listingsPanel).getByText("Type Phoenix")).toBeVisible();
+    expect(within(listingsPanel).getByText("Level 12")).toBeVisible();
+  });
+
+  it("generic_collections_do_not_render_extra_detail_chips", async () => {
+    mockUseCollectionListingsQuery.mockReturnValue(
+      successQuery([
+        {
+          id: 101,
+          tokenId: 42,
+          token: {
+            token_id: "42",
+            metadata: {
+              attributes: [
+                { trait_type: "Resource", value: "Wood" },
+                { trait_type: "Level", value: 12 },
+              ],
+            },
+          },
+        },
+      ]),
+    );
+
+    const user = userEvent.setup();
+    render(<CollectionMarketPanel address="0xgeneric" />);
+    await user.click(screen.getByRole("tab", { name: /listings/i }));
+
+    const listingsPanel = screen.getByTestId("listings-panel");
+    expect(within(listingsPanel).queryByText("Wood")).toBeNull();
+    expect(within(listingsPanel).queryByText("Level 12")).toBeNull();
   });
 
   it("listings_rows_expose_token_detail_navigation", async () => {
