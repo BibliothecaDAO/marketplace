@@ -85,4 +85,15 @@ describe("marketplace config", () => {
     const second = getMarketplaceRuntimeConfig().collections;
     expect(first).toBe(second);
   });
+
+  it("normalizes_legacy_beasts_collection_name", () => {
+    const result = getMarketplaceRuntimeConfigFromEnv({
+      NEXT_PUBLIC_MARKETPLACE_COLLECTIONS:
+        "0xbeast|Beasts V2.1|project-beasts",
+    });
+
+    expect(result.collections).toEqual([
+      { address: "0xbeast", name: "Beasts", projectId: "project-beasts" },
+    ]);
+  });
 });
