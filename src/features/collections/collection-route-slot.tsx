@@ -23,6 +23,7 @@ export function CollectionRouteSlot({
   useEffect(() => {
     let active = true;
 
+    // Load the interactive collection route client after the edge shell hydrates.
     void import("@/features/collections/collection-route-container").then(
       (module) => {
         if (active) {
