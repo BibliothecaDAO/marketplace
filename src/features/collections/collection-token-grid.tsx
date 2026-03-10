@@ -220,6 +220,7 @@ export function CollectionTokenGrid({
   });
 
   const onTokensChangeRef = useRef(onTokensChange);
+  const emittedVisibleTokensSignatureRef = useRef("");
   useEffect(() => {
     onTokensChangeRef.current = onTokensChange;
   });
@@ -234,21 +235,14 @@ export function CollectionTokenGrid({
     dispatch({ type: "APPEND_PAGE", pageTokens });
   }, [tokenQuery.data, tokenQuery.isSuccess]);
 
-  useEffect(() => {
-    onTokensChangeRef.current?.(pagination.tokens);
-  }, [pagination.tokens]);
-
   const listingPrices = cheapestListingByTokenId(listingQuery.data);
   const listingPriceMap = listingPriceByTokenId(listingQuery.data);
 
-  // When sorting by price, explicitly fetch the listed token IDs so they are
-  // present in the grid regardless of which page of the general query they fall on.
+  // Always resolve listed token IDs so listed inventory remains visible even
+  // when the paginated token query does not include those tokens on page 1.
   const listedQueryTokenIds = useMemo(
-    () =>
-      (sortMode !== "recent"
-        ? expandTokenIdQueryVariants(listingPriceMap.keys())
-        : []),
-    [listingPriceMap, sortMode],
+    () => expandTokenIdQueryVariants(listingPriceMap.keys()),
+    [listingPriceMap],
   );
   const listedTokensQuery = useCollectionTokensQuery(
     {
@@ -259,19 +253,32 @@ export function CollectionTokenGrid({
       fetchImages: true,
       attributeFilters,
     },
-    { enabled: sortMode !== "recent" && listedQueryTokenIds.length > 0 },
+    { enabled: listedQueryTokenIds.length > 0 },
   );
 
   const nextCursor = tokenQuery.data?.page?.nextCursor ?? null;
   const canLoadMore = Boolean(nextCursor);
 
-  // Merge explicitly-fetched listed tokens with the paginated set so that
-  // price sorting always has them available even if they are not on page 1.
+  // Append explicitly-fetched listed tokens after the current page to preserve
+  // recent ordering while still surfacing listed inventory that lives off-page.
   const visibleTokens = useMemo(() => {
     const listedTokens = listedTokensQuery.data?.page?.tokens;
     if (!listedTokens?.length) return pagination.tokens;
-    return dedupeTokens([...listedTokens, ...pagination.tokens]);
+    return dedupeTokens([...pagination.tokens, ...listedTokens]);
   }, [pagination.tokens, listedTokensQuery.data?.page?.tokens]);
+  const visibleTokensSignature = useMemo(
+    () => tokenSignature(visibleTokens),
+    [visibleTokens],
+  );
+
+  useEffect(() => {
+    if (emittedVisibleTokensSignatureRef.current === visibleTokensSignature) {
+      return;
+    }
+
+    emittedVisibleTokensSignatureRef.current = visibleTokensSignature;
+    onTokensChangeRef.current?.(visibleTokens);
+  }, [visibleTokens, visibleTokensSignature]);
 
   const sortedTokens = useMemo(
     () => sortTokens(visibleTokens, sortMode, listingPrices, listingPriceMap),
