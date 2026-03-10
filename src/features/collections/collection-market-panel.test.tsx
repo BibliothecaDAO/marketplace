@@ -181,6 +181,7 @@ describe("collection market panel", () => {
   });
 
   it("listings_rows_expose_token_detail_navigation", async () => {
+    const routeTokenId = "0x000000000000000000000000000000000000000000000000000000000000002a";
     mockUseCollectionListingsQuery.mockReturnValue(
       successQuery([
         {
@@ -191,7 +192,7 @@ describe("collection market panel", () => {
           status: "Placed",
           createdAt: "2024-11-16T10:30:00.000Z",
           token: {
-            token_id: "42",
+            token_id: routeTokenId,
             metadata: { image: "https://cdn.example/token-42.png" },
           },
         },
@@ -213,6 +214,6 @@ describe("collection market panel", () => {
     expect(within(listingsPanel).getByText(/2024/i)).toBeVisible();
 
     const tokenLink = within(listingsPanel).getByRole("link", { name: /view token/i });
-    expect(tokenLink).toHaveAttribute("href", "/collections/0xabc/42");
+    expect(tokenLink).toHaveAttribute("href", `/collections/0xabc/${routeTokenId}`);
   });
 });

@@ -23,6 +23,7 @@ import {
   formatAddress,
   formatNumberish,
   formatPriceForDisplay,
+  tokenId,
   tokenImage,
 } from "@/lib/marketplace/token-display";
 
@@ -45,6 +46,7 @@ type ActivityRow = {
   kind: ActivityKind;
   id: string;
   tokenId: string | null;
+  routeTokenId: string | null;
   tokenImage: string | null;
   price: string | null;
   owner: string | null;
@@ -117,6 +119,30 @@ function firstTokenImage(candidates: unknown[]) {
   return null;
 }
 
+function firstRouteTokenId(candidates: unknown[]) {
+  for (const candidate of candidates) {
+    if (!candidate) {
+      continue;
+    }
+
+    const fields = asRecord(candidate);
+    if (!fields) {
+      continue;
+    }
+
+    const resolvedTokenId = fields.token_id ?? fields.tokenId;
+    if (
+      typeof resolvedTokenId === "string"
+      || typeof resolvedTokenId === "number"
+      || typeof resolvedTokenId === "bigint"
+    ) {
+      return tokenId(candidate as never);
+    }
+  }
+
+  return null;
+}
+
 function displayStatus(status: string | null) {
   if (status === "Executed") {
     return "Filled";
@@ -148,6 +174,21 @@ function toActivityRow(raw: unknown, kind: ActivityKind, address: string): Activ
     nestedListing?.tokenId,
     nestedListing?.token_id,
   ]);
+  const routeTokenId =
+    firstRouteTokenId([
+      fields.token,
+      nestedOrder?.token,
+      nestedListing?.token,
+    ]) ??
+    firstString([
+      fields.tokenId,
+      fields.token_id,
+      nestedOrder?.tokenId,
+      nestedOrder?.token_id,
+      nestedListing?.tokenId,
+      nestedListing?.token_id,
+    ]) ??
+    tokenId;
   const rawPrice = firstNumberish([
     fields.price,
     fields.listingPrice,
@@ -201,12 +242,13 @@ function toActivityRow(raw: unknown, kind: ActivityKind, address: string): Activ
       nestedListing?.updatedAt ??
       nestedListing?.createdAt,
   );
-  const href = tokenId ? `/collections/${address}/${tokenId}` : null;
+  const href = routeTokenId ? `/collections/${address}/${routeTokenId}` : null;
 
   return {
     kind,
     id,
     tokenId,
+    routeTokenId,
     tokenImage,
     price: formatPriceForDisplay(rawPrice),
     owner: owner ? formatAddress(owner) : null,
@@ -221,28 +263,26 @@ function ActivityRowItem({ row }: { row: ActivityRow }) {
     <div className="rounded-md border border-border/60 bg-card px-4 py-3">
       <div className="flex items-center justify-between gap-4">
         <div className="flex min-w-0 items-center gap-3">
-          <div className="flex h-16 w-16 shrink-0 items-center justify-center overflow-hidden rounded-md border border-border/60 bg-muted">
-            {row.tokenImage ? (
-              // eslint-disable-next-line @next/next/no-img-element
+          {row.tokenImage ? (
+            <div className="flex h-16 w-16 shrink-0 items-center justify-center overflow-hidden rounded-md border border-border/60 bg-muted">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
               <img
                 alt={row.tokenId ? `Token #${row.tokenId} preview` : `${row.kind} preview`}
                 className="h-full w-full object-cover"
                 src={row.tokenImage}
               />
-            ) : (
-              <span className="text-[10px] text-muted-foreground">No image</span>
-            )}
-          </div>
+            </div>
+          ) : null}
           <div className="min-w-0 space-y-1">
             <p className="text-sm font-medium">
               {row.tokenId ? `Token #${row.tokenId}` : row.kind}
             </p>
             <div className="flex flex-wrap gap-x-3 gap-y-1 text-xs text-muted-foreground">
               {row.price ? <span>Price {row.price}</span> : null}
-            {row.owner ? <span>Owner {row.owner}</span> : null}
-            {displayStatus(row.status) ? <span>Status {displayStatus(row.status)}</span> : null}
-            {row.occurredAt ? <span>{row.occurredAt}</span> : null}
-          </div>
+              {row.owner ? <span>Owner {row.owner}</span> : null}
+              {displayStatus(row.status) ? <span>Status {displayStatus(row.status)}</span> : null}
+              {row.occurredAt ? <span>{row.occurredAt}</span> : null}
+            </div>
           </div>
         </div>
         {row.href ? (
