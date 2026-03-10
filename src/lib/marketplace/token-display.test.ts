@@ -188,6 +188,18 @@ describe("tokenName", () => {
     const token = tok({ token_id: "8", metadata: { name: 123 } });
     expect(tokenName(token)).toBe("Token #8");
   });
+
+  it("prefixes_loot_chest_names_with_source_when_available", () => {
+    const token = tok({
+      token_id: "2688",
+      metadata: {
+        name: "Chest #2688",
+        attributes: [{ trait_type: "Source", value: "Blitz" }],
+      },
+    });
+
+    expect(tokenName(token)).toBe("Blitz Chest #2688");
+  });
 });
 
 // ---------------------------------------------------------------------------
@@ -217,6 +229,30 @@ describe("tokenImage", () => {
       },
     });
     expect(tokenImage(token)).toBe("https://image.example.com");
+  });
+
+  it("uses_blitz_chest_placeholder_when_source_is_blitz_and_image_is_missing", () => {
+    const token = tok({
+      token_id: "2688",
+      metadata: {
+        name: "Chest #2688",
+        attributes: [{ trait_type: "Source", value: "Blitz" }],
+      },
+    });
+
+    expect(tokenImage(token)).toBe("/placeholders/blitz-chest.svg");
+  });
+
+  it("uses_s0_chest_placeholder_when_source_is_s0_and_image_is_missing", () => {
+    const token = tok({
+      token_id: "2689",
+      metadata: {
+        name: "Chest #2689",
+        attributes: [{ trait_type: "Source", value: "S0" }],
+      },
+    });
+
+    expect(tokenImage(token)).toBe("/placeholders/s0-chest.svg");
   });
 
   it("returns null when no image source is available", () => {
