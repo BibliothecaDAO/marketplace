@@ -1,10 +1,10 @@
 "use client";
 
 import Link from "next/link";
-import { useState } from "react";
+import { type SVGProps, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useAccount, useConnect, useDisconnect } from "@starknet-react/core";
-import { Github, Menu, MessageSquare, Twitter } from "lucide-react";
+import { Menu } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import dynamic from "next/dynamic";
 
@@ -57,10 +57,37 @@ const NAV_LINKS = [
   { label: "Eternum", href: "https://blitz.realms.world" },
 ] as const;
 
+function XIcon(props: SVGProps<SVGSVGElement>) {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      fill="currentColor"
+      aria-hidden="true"
+      data-testid="x-icon"
+      {...props}
+    >
+      <path d="M18.244 2H21l-6.59 7.53L22.16 22h-6.07l-4.75-6.2L5.91 22H3.15l7.04-8.05L1.84 2h6.21l4.3 5.7L18.244 2Zm-1.07 18h1.53L7.02 3.9H5.38L17.174 20Z" />
+    </svg>
+  );
+}
+
+function DiscordIcon(props: SVGProps<SVGSVGElement>) {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      fill="currentColor"
+      aria-hidden="true"
+      data-testid="discord-icon"
+      {...props}
+    >
+      <path d="M20.317 4.369A19.791 19.791 0 0 0 15.419 3a13.255 13.255 0 0 0-.627 1.288 18.27 18.27 0 0 0-5.584 0A12.548 12.548 0 0 0 8.58 3a19.736 19.736 0 0 0-4.9 1.37C.533 9.032-.32 13.579.107 18.063A19.94 19.94 0 0 0 6.13 21a14.63 14.63 0 0 0 1.29-2.112 12.89 12.89 0 0 1-2.033-.976c.171-.126.338-.257.5-.392 3.922 1.841 8.177 1.841 12.053 0 .165.136.333.267.504.392a12.78 12.78 0 0 1-2.037.978A14.4 14.4 0 0 0 17.701 21a19.902 19.902 0 0 0 6.026-2.937c.5-5.196-.853-9.702-3.41-13.694ZM8.678 15.33c-1.18 0-2.15-1.085-2.15-2.419 0-1.334.95-2.419 2.15-2.419 1.21 0 2.17 1.095 2.15 2.419 0 1.334-.95 2.419-2.15 2.419Zm6.644 0c-1.18 0-2.15-1.085-2.15-2.419 0-1.334.95-2.419 2.15-2.419 1.21 0 2.17 1.095 2.15 2.419 0 1.334-.94 2.419-2.15 2.419Z" />
+    </svg>
+  );
+}
+
 const SOCIAL_LINKS = [
-  { label: "Twitter / X", href: "https://x.com/lootrealms", Icon: Twitter },
-  { label: "Discord", href: "https://discord.gg/realmsworld", Icon: MessageSquare },
-  { label: "GitHub", href: "https://github.com/bibliothecaDAO", Icon: Github },
+  { label: "Twitter / X", href: "https://x.com/lootrealms", Icon: XIcon },
+  { label: "Discord", href: "https://discord.gg/realmsworld", Icon: DiscordIcon },
 ] as const;
 
 export function Header() {
