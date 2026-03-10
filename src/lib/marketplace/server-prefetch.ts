@@ -8,10 +8,8 @@ import {
   collectionTokensQueryOptions,
   getPortfolioTokenIds,
   getInitialCollectionTokensOptions,
-  getInitialHomeTokensOptions,
   getInitialListedTokensOptions,
   resolveCollectionProjectId,
-  selectFeaturedHomeCollection,
   tokenBalancesQueryOptions,
   tokenDetailQueryOptions,
   traitNamesSummaryQueryOptions,
@@ -22,42 +20,6 @@ import { cheapestListingByTokenId } from "@/features/cart/listing-utils";
 async function prefetch(queryClient: QueryClient, tasks: Array<Promise<unknown>>) {
   await Promise.all(tasks);
   return dehydrate(queryClient);
-}
-
-export async function buildHomePageHydrationState() {
-  const queryClient = makeQueryClient();
-  const featuredCollection = selectFeaturedHomeCollection();
-
-  if (!featuredCollection) {
-    return {
-      featuredCollection: null,
-      state: dehydrate(queryClient),
-    };
-  }
-
-  const { address, projectId } = featuredCollection;
-
-  return {
-    featuredCollection,
-    state: await prefetch(queryClient, [
-      queryClient.prefetchQuery(
-        collectionQueryOptions({ address, projectId, fetchImages: true }),
-      ),
-      queryClient.prefetchQuery(
-        collectionTokensQueryOptions(
-          getInitialHomeTokensOptions({ address, projectId }),
-        ),
-      ),
-      queryClient.prefetchQuery(
-        collectionListingsQueryOptions({
-          collection: address,
-          projectId,
-          limit: 100,
-          verifyOwnership: false,
-        }),
-      ),
-    ]),
-  };
 }
 
 export async function buildCollectionPageHydrationState(options: {

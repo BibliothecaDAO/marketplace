@@ -1,7 +1,7 @@
 import { Suspense } from "react";
 import { HydrationBoundary } from "@tanstack/react-query";
 import { MarketplaceHome } from "@/components/marketplace/marketplace-home";
-import { buildHomePageHydrationState } from "@/lib/marketplace/server-prefetch";
+import { buildHomePageHydrationState } from "@/lib/marketplace/home-prefetch";
 
 export const runtime = "edge";
 

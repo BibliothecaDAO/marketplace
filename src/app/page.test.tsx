@@ -22,7 +22,7 @@ vi.mock("@/components/marketplace/marketplace-home", () => ({
   MarketplaceHome: () => <div data-testid="marketplace-home-view">Marketplace Home</div>,
 }));
 
-vi.mock("@/lib/marketplace/server-prefetch", () => ({
+vi.mock("@/lib/marketplace/home-prefetch", () => ({
   buildHomePageHydrationState: vi.fn(async () => ({
     featuredCollection: { address: "0xabc", projectId: "project-a" },
     state: { queries: [{ queryKey: ["collection", "0xabc"] }] },
