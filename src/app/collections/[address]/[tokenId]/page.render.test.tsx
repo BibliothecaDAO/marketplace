@@ -28,7 +28,7 @@ vi.mock("@/features/token/token-detail-view", () => ({
   }) => <div data-testid="token-detail-view">{`${address}:${tokenId}`}</div>,
 }));
 
-vi.mock("@/lib/marketplace/server-prefetch", () => ({
+vi.mock("@/lib/marketplace/token-prefetch", () => ({
   buildTokenPageHydrationState: vi.fn(async () => ({
     state: { queries: [{ queryKey: ["token-detail", "0xabc", "42"] }] },
   })),

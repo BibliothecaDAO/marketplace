@@ -6,7 +6,6 @@ const {
   mockCollectionTokensQueryOptions,
   mockCollectionListingsQueryOptions,
   mockCollectionOrdersQueryOptions,
-  mockTokenDetailQueryOptions,
   mockTokenBalancesQueryOptions,
   mockTraitNamesSummaryQueryOptions,
   mockGetInitialCollectionTokensOptions,
@@ -20,7 +19,6 @@ const {
   mockCollectionTokensQueryOptions: vi.fn(),
   mockCollectionListingsQueryOptions: vi.fn(),
   mockCollectionOrdersQueryOptions: vi.fn(),
-  mockTokenDetailQueryOptions: vi.fn(),
   mockTokenBalancesQueryOptions: vi.fn(),
   mockTraitNamesSummaryQueryOptions: vi.fn(),
   mockGetInitialCollectionTokensOptions: vi.fn(),
@@ -36,7 +34,6 @@ vi.mock("@/lib/marketplace/read-queries", () => ({
   collectionTokensQueryOptions: mockCollectionTokensQueryOptions,
   collectionListingsQueryOptions: mockCollectionListingsQueryOptions,
   collectionOrdersQueryOptions: mockCollectionOrdersQueryOptions,
-  tokenDetailQueryOptions: mockTokenDetailQueryOptions,
   tokenBalancesQueryOptions: mockTokenBalancesQueryOptions,
   traitNamesSummaryQueryOptions: mockTraitNamesSummaryQueryOptions,
   getInitialCollectionTokensOptions: mockGetInitialCollectionTokensOptions,
@@ -64,7 +61,6 @@ describe("server-prefetch", () => {
     mockCollectionTokensQueryOptions.mockReset();
     mockCollectionListingsQueryOptions.mockReset();
     mockCollectionOrdersQueryOptions.mockReset();
-    mockTokenDetailQueryOptions.mockReset();
     mockTokenBalancesQueryOptions.mockReset();
     mockTraitNamesSummaryQueryOptions.mockReset();
     mockGetInitialCollectionTokensOptions.mockReset();
@@ -72,30 +68,6 @@ describe("server-prefetch", () => {
     mockGetPortfolioTokenIds.mockReset();
     mockParsePortfolioItems.mockReset();
     mockGroupPortfolioItemsByCollection.mockReset();
-  });
-
-  it("buildTokenPageHydrationState_prefetches_token_and_listings", async () => {
-    mockResolveCollectionProjectId.mockReturnValue("project-a");
-    mockTokenDetailQueryOptions.mockReturnValue(
-      resolvedQueryOptions(
-        ["token-detail", "0xabc", "42"],
-        { token: { token_id: "42" }, listings: [] },
-      ),
-    );
-    mockCollectionListingsQueryOptions.mockReturnValue(
-      resolvedQueryOptions(["collection-listings", "0xabc", "42"], []),
-    );
-
-    const { buildTokenPageHydrationState } = await import("@/lib/marketplace/server-prefetch");
-    const result = await buildTokenPageHydrationState({ address: "0xabc", tokenId: "42" });
-
-    expect(result.state.queries).toHaveLength(2);
-    expect(mockTokenDetailQueryOptions).toHaveBeenCalledWith({
-      collection: "0xabc",
-      tokenId: "42",
-      projectId: "project-a",
-      fetchImages: true,
-    });
   });
 
   it("buildWalletProfileHydrationState_prefetches_portfolio_and_collection_tokens", async () => {

@@ -11,7 +11,6 @@ import {
   getInitialListedTokensOptions,
   resolveCollectionProjectId,
   tokenBalancesQueryOptions,
-  tokenDetailQueryOptions,
   traitNamesSummaryQueryOptions,
 } from "@/lib/marketplace/read-queries";
 import type { ActiveFilters } from "@/lib/marketplace/traits";
@@ -91,36 +90,6 @@ export async function buildCollectionPageHydrationState(options: {
 
   return {
     state: dehydrate(queryClient),
-  };
-}
-
-export async function buildTokenPageHydrationState(options: {
-  address: string;
-  tokenId: string;
-}) {
-  const queryClient = makeQueryClient();
-  const projectId = resolveCollectionProjectId(options.address);
-
-  return {
-    state: await prefetch(queryClient, [
-      queryClient.prefetchQuery(
-        tokenDetailQueryOptions({
-          collection: options.address,
-          tokenId: options.tokenId,
-          projectId,
-          fetchImages: true,
-        }),
-      ),
-      queryClient.prefetchQuery(
-        collectionListingsQueryOptions({
-          collection: options.address,
-          tokenId: options.tokenId,
-          projectId,
-          limit: 50,
-          verifyOwnership: true,
-        }),
-      ),
-    ]),
   };
 }
 

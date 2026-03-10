@@ -3,7 +3,7 @@ import type { Metadata } from "next";
 import { HydrationBoundary } from "@tanstack/react-query";
 import { TokenDetailView } from "@/features/token/token-detail-view";
 import { buildMarketplacePageMetadata } from "@/lib/seo/metadata";
-import { buildTokenPageHydrationState } from "@/lib/marketplace/server-prefetch";
+import { buildTokenPageHydrationState } from "@/lib/marketplace/token-prefetch";
 
 export const runtime = "edge";
 
