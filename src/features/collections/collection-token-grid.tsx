@@ -31,6 +31,7 @@ import {
 import type { ActiveFilters } from "@/lib/marketplace/traits";
 import { COLLECTION_LISTING_SAMPLE_LIMIT } from "@/lib/marketplace/query-limits";
 import { expandTokenIdQueryVariants } from "@/lib/marketplace/token-id";
+import { getMarketplaceRuntimeConfig } from "@/lib/marketplace/config";
 import { cn } from "@/lib/utils";
 import {
   cartItemFromTokenListing,
@@ -72,6 +73,45 @@ function dedupeTokens(tokens: NormalizedToken[]) {
 
 function tokenSignature(tokens: NormalizedToken[]) {
   return tokens.map((item) => tokenId(item)).join(",");
+}
+
+function normalizeAddress(address: string) {
+  try {
+    return `0x${BigInt(address).toString(16)}`;
+  } catch {
+    return address.toLowerCase();
+  }
+}
+
+function numericAttribute(token: NormalizedToken, traitName: string) {
+  const metadata = token.metadata as { attributes?: unknown } | null;
+  if (!Array.isArray(metadata?.attributes)) {
+    return null;
+  }
+
+  for (const rawAttribute of metadata.attributes) {
+    if (!rawAttribute || typeof rawAttribute !== "object") {
+      continue;
+    }
+
+    const attribute = rawAttribute as Record<string, unknown>;
+    const resolvedTraitName = String(
+      attribute.trait_type ?? attribute.traitName ?? attribute.name ?? "",
+    ).trim();
+    if (resolvedTraitName !== traitName) {
+      continue;
+    }
+
+    const numericValue = Number(attribute.value ?? attribute.traitValue);
+    return Number.isFinite(numericValue) ? numericValue : null;
+  }
+
+  return null;
+}
+
+function isAliveAdventurer(token: NormalizedToken) {
+  const health = numericAttribute(token, "Health");
+  return health === null || health > 0;
 }
 
 function sortablePrice(
@@ -178,6 +218,7 @@ export function CollectionTokenGrid({
 }: CollectionTokenGridProps) {
   const { addListingToCart, isRecentlyAdded } = useAddToCartFeedback();
   const [gridMode, setGridMode] = useState<GridLayoutMode>("standard");
+  const emittedTokenSignatureRef = useRef("");
   const tokenIdsKey = useMemo(() => tokenIds?.join(",") ?? "", [tokenIds]);
   const activeFiltersKey = useMemo(
     () =>
@@ -234,12 +275,17 @@ export function CollectionTokenGrid({
     dispatch({ type: "APPEND_PAGE", pageTokens });
   }, [tokenQuery.data, tokenQuery.isSuccess]);
 
-  useEffect(() => {
-    onTokensChangeRef.current?.(pagination.tokens);
-  }, [pagination.tokens]);
-
   const listingPrices = cheapestListingByTokenId(listingQuery.data);
   const listingPriceMap = listingPriceByTokenId(listingQuery.data);
+  const isAdventurersCollection = useMemo(
+    () =>
+      getMarketplaceRuntimeConfig().collections.some(
+        (collection) =>
+          normalizeAddress(collection.address) === normalizeAddress(address)
+          && collection.name.trim().toLowerCase() === "adventurers",
+      ),
+    [address],
+  );
 
   // When sorting by price, explicitly fetch the listed token IDs so they are
   // present in the grid regardless of which page of the general query they fall on.
@@ -272,10 +318,27 @@ export function CollectionTokenGrid({
     if (!listedTokens?.length) return pagination.tokens;
     return dedupeTokens([...listedTokens, ...pagination.tokens]);
   }, [pagination.tokens, listedTokensQuery.data?.page?.tokens]);
+  const displayTokens = useMemo(
+    () =>
+      isAdventurersCollection
+        ? visibleTokens.filter(isAliveAdventurer)
+        : visibleTokens,
+    [isAdventurersCollection, visibleTokens],
+  );
+
+  useEffect(() => {
+    const nextSignature = tokenSignature(displayTokens);
+    if (emittedTokenSignatureRef.current === nextSignature) {
+      return;
+    }
+
+    emittedTokenSignatureRef.current = nextSignature;
+    onTokensChangeRef.current?.(displayTokens);
+  }, [displayTokens]);
 
   const sortedTokens = useMemo(
-    () => sortTokens(visibleTokens, sortMode, listingPrices, listingPriceMap),
-    [listingPriceMap, listingPrices, sortMode, visibleTokens],
+    () => sortTokens(displayTokens, sortMode, listingPrices, listingPriceMap),
+    [displayTokens, listingPriceMap, listingPrices, sortMode],
   );
   const isListMode = gridMode === "list";
   const gridClasses = GRID_CLASSES_BY_DENSITY[isListMode ? "standard" : gridMode];
@@ -503,7 +566,7 @@ export function CollectionTokenGrid({
         </Card>
       ) : null}
 
-      {tokenQuery.isSuccess && visibleTokens.length === 0 ? (
+      {tokenQuery.isSuccess && displayTokens.length === 0 ? (
         <Card className="border-dashed">
           <CardContent className="pt-6 text-sm text-muted-foreground">
             No tokens match your filters. Try removing some filters.
