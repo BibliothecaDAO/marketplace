@@ -176,10 +176,7 @@ export function useTokenDetailQuery(options: TokenDetailsOptions) {
     (primaryQuery.status === "error" || !hasUsableToken(primaryQuery.data)) &&
     (!hasAlternateTokenId ||
       (alternateQuery.status !== "pending" &&
-        (alternateQuery.status === "error" || !hasUsableToken(alternateQuery.data)))) &&
-    (!hasPaddedTokenId ||
-      (paddedQuery.status !== "pending" &&
-        (paddedQuery.status === "error" || !hasUsableToken(paddedQuery.data))));
+        (alternateQuery.status === "error" || !hasUsableToken(alternateQuery.data))));
 
   const scopedPrimaryQuery = useMarketplaceToken(
     {
