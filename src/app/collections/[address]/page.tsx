@@ -3,7 +3,7 @@ import type { Metadata } from "next";
 import { HydrationBoundary } from "@tanstack/react-query";
 import { CollectionRouteContainer } from "@/features/collections/collection-route-container";
 import { buildMarketplacePageMetadata } from "@/lib/seo/metadata";
-import { buildCollectionPageHydrationState } from "@/lib/marketplace/server-prefetch";
+import { buildCollectionPageHydrationState } from "@/lib/marketplace/collection-prefetch";
 import { collectionDiscoveryStateFromSearchParams } from "@/features/collections/collection-query-params";
 
 export const runtime = "edge";

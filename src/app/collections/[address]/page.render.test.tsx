@@ -26,7 +26,7 @@ vi.mock("@/features/collections/collection-route-container", () => ({
   }) => <div data-testid="collection-route-view">{address}</div>,
 }));
 
-vi.mock("@/lib/marketplace/server-prefetch", () => ({
+vi.mock("@/lib/marketplace/collection-prefetch", () => ({
   buildCollectionPageHydrationState: vi.fn(async () => ({
     state: { queries: [{ queryKey: ["collection", "0xabc"] }] },
   })),

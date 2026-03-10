@@ -4,12 +4,7 @@ const {
   mockResolveCollectionProjectId,
   mockCollectionQueryOptions,
   mockCollectionTokensQueryOptions,
-  mockCollectionListingsQueryOptions,
-  mockCollectionOrdersQueryOptions,
   mockTokenBalancesQueryOptions,
-  mockTraitNamesSummaryQueryOptions,
-  mockGetInitialCollectionTokensOptions,
-  mockGetInitialListedTokensOptions,
   mockGetPortfolioTokenIds,
   mockParsePortfolioItems,
   mockGroupPortfolioItemsByCollection,
@@ -17,12 +12,7 @@ const {
   mockResolveCollectionProjectId: vi.fn(),
   mockCollectionQueryOptions: vi.fn(),
   mockCollectionTokensQueryOptions: vi.fn(),
-  mockCollectionListingsQueryOptions: vi.fn(),
-  mockCollectionOrdersQueryOptions: vi.fn(),
   mockTokenBalancesQueryOptions: vi.fn(),
-  mockTraitNamesSummaryQueryOptions: vi.fn(),
-  mockGetInitialCollectionTokensOptions: vi.fn(),
-  mockGetInitialListedTokensOptions: vi.fn(),
   mockGetPortfolioTokenIds: vi.fn(),
   mockParsePortfolioItems: vi.fn(),
   mockGroupPortfolioItemsByCollection: vi.fn(),
@@ -32,12 +22,7 @@ vi.mock("@/lib/marketplace/read-queries", () => ({
   resolveCollectionProjectId: mockResolveCollectionProjectId,
   collectionQueryOptions: mockCollectionQueryOptions,
   collectionTokensQueryOptions: mockCollectionTokensQueryOptions,
-  collectionListingsQueryOptions: mockCollectionListingsQueryOptions,
-  collectionOrdersQueryOptions: mockCollectionOrdersQueryOptions,
   tokenBalancesQueryOptions: mockTokenBalancesQueryOptions,
-  traitNamesSummaryQueryOptions: mockTraitNamesSummaryQueryOptions,
-  getInitialCollectionTokensOptions: mockGetInitialCollectionTokensOptions,
-  getInitialListedTokensOptions: mockGetInitialListedTokensOptions,
   getPortfolioTokenIds: mockGetPortfolioTokenIds,
 }));
 
@@ -59,12 +44,7 @@ describe("server-prefetch", () => {
     mockResolveCollectionProjectId.mockReset();
     mockCollectionQueryOptions.mockReset();
     mockCollectionTokensQueryOptions.mockReset();
-    mockCollectionListingsQueryOptions.mockReset();
-    mockCollectionOrdersQueryOptions.mockReset();
     mockTokenBalancesQueryOptions.mockReset();
-    mockTraitNamesSummaryQueryOptions.mockReset();
-    mockGetInitialCollectionTokensOptions.mockReset();
-    mockGetInitialListedTokensOptions.mockReset();
     mockGetPortfolioTokenIds.mockReset();
     mockParsePortfolioItems.mockReset();
     mockGroupPortfolioItemsByCollection.mockReset();
@@ -99,6 +79,5 @@ describe("server-prefetch", () => {
     const result = await buildWalletProfileHydrationState("0xwallet");
 
     expect(result.state.queries).toHaveLength(3);
-    expect(mockCollectionTokensQueryOptions).toHaveBeenCalled();
   });
 });
