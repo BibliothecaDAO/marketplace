@@ -13,13 +13,6 @@ import {
   formatPriceForDisplay,
 } from "@/lib/marketplace/token-display";
 import { TokenSymbol } from "@/components/ui/token-symbol";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   type SeedCollection,
@@ -62,7 +55,6 @@ type CollectionRouteViewProps = {
   sortMode?: CollectionSortMode;
   onActiveFiltersChange?: (filters: ActiveFilters) => void;
   onSortModeChange?: (sortMode: CollectionSortMode) => void;
-  onNavigate?: (href: string) => void;
 };
 
 const DEFAULT_SORT_OPTIONS: CollectionSortOption[] = [
@@ -174,7 +166,6 @@ export function CollectionRouteView({
   sortMode = "recent",
   onActiveFiltersChange,
   onSortModeChange,
-  onNavigate,
 }: CollectionRouteViewProps) {
   const cartItems = useCartStore((state) => state.items);
   const cartOrderIds = useMemo(
@@ -323,13 +314,6 @@ export function CollectionRouteView({
     });
   }, [sweepScopeKey]);
 
-  const handleChange = useCallback(
-    (nextAddress: string) => {
-      onNavigate?.(`/collections/${nextAddress}`);
-    },
-    [onNavigate],
-  );
-
   const handleSweepCountChange = useCallback(
     (nextCount: number) => {
       setSweepCount(Math.min(Math.max(nextCount, 0), sweepMaxCount));
@@ -398,74 +382,58 @@ export function CollectionRouteView({
 
   return (
     <section className="w-full space-y-6 pb-20">
-      {/* Collection header */}
-      <div className="space-y-3 border-b border-border/60 pb-4">
-        {runtimeCollections.length > 1 && (
-          <Select value={address} onValueChange={handleChange}>
-            <SelectTrigger aria-label="Collection" className="w-64">
-              <SelectValue placeholder="Select collection" />
-            </SelectTrigger>
-            <SelectContent>
-              {runtimeCollections.map((collectionEntry) => (
-                <SelectItem
-                  key={collectionEntry.address}
-                  value={collectionEntry.address}
-                >
-                  {collectionEntry.name}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        )}
-
-        {displayName ? (
-          <h1 className="text-2xl font-semibold tracking-tight">{displayName}</h1>
-        ) : (
-          <h1 className="text-2xl font-semibold tracking-tight text-muted-foreground">
-            {selectedCollection?.name ?? address}
-          </h1>
-        )}
+      {/* Collection hero banner — breaks out of parent padding for full-bleed */}
+      <div
+        className="relative -mx-4 sm:-mx-6 lg:-mx-8 overflow-hidden bg-muted"
+        data-testid="collection-header-image"
+      >
         {headerImage ? (
-          <div className="overflow-hidden rounded-xl border border-border/60 bg-muted" data-testid="collection-header-image">
+          <>
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img
               alt={`${displayName ?? selectedCollection?.name ?? address} banner`}
-              className="h-40 w-full object-cover"
+              className="h-56 w-full object-cover"
               src={headerImage}
             />
+            {/* Gradient overlay for text readability */}
+            <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/30 to-transparent" />
+          </>
+        ) : (
+          <div className="h-56 w-full bg-muted" />
+        )}
+
+        {/* Overlay content */}
+        <div className="absolute inset-x-0 bottom-0 flex items-end justify-between px-4 pb-5 sm:px-6 lg:px-8">
+          {/* Collection name */}
+          <h1 className="text-3xl font-bold tracking-tight text-white drop-shadow-lg">
+            {displayName ?? selectedCollection?.name ?? address}
+          </h1>
+
+          {/* Stats */}
+          <div className="flex items-center gap-5 text-sm">
+            {listingCount > 0 && (
+              <span className="text-white/80">
+                <span className="text-white font-semibold text-base">{listingCountLabel}</span>
+                {" "}listed
+              </span>
+            )}
+            {floor && (
+              <span className="flex items-center gap-1 text-white/80">
+                Floor{" "}
+                <span className="text-white font-semibold text-base">{floor.price}</span>
+                <TokenSymbol address={floor.currency} className="text-white font-semibold" />
+              </span>
+            )}
           </div>
-        ) : null}
-
-        {/* Stats row */}
-        <div className="flex flex-wrap items-center gap-x-5 gap-y-1 text-sm text-muted-foreground">
-          {totalSupply !== undefined && (
-            <span>
-              <span className="text-foreground font-medium">{Number(totalSupply).toLocaleString()}</span>
-              {" "}items
-            </span>
-          )}
-          {listingCount > 0 && (
-            <span>
-              <span className="text-foreground font-medium">{listingCountLabel}</span>
-              {" "}listed
-            </span>
-          )}
-          {floor && (
-            <span className="flex items-center gap-1">
-              Floor{" "}
-              <span className="text-foreground font-medium">{floor.price}</span>
-              <TokenSymbol address={floor.currency} className="text-foreground font-medium" />
-            </span>
-          )}
         </div>
-
-        {collection.isSuccess && !collection.data ? (
-          <p className="text-sm text-muted-foreground font-mono">
-            <span className="text-primary mr-1">$</span>
-            find collection -- not found
-          </p>
-        ) : null}
       </div>
+
+      {collection.isSuccess && !collection.data ? (
+        <p className="text-sm text-muted-foreground font-mono">
+          <span className="text-primary mr-1">$</span>
+          find collection -- not found
+        </p>
+      ) : null}
 
       <div className="grid gap-6 xl:grid-cols-[280px_1fr]">
         <div
