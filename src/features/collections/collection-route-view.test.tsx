@@ -216,26 +216,6 @@ describe("collection route view", () => {
     expect(screen.getByRole("heading", { name: "Genesis" })).toBeVisible();
   });
 
-  it("collection_switch_updates_url_and_resets_cursor", async () => {
-    mockUseCollectionQuery.mockReturnValue(successQuery(null));
-    const onNavigate = vi.fn();
-    const user = userEvent.setup();
-
-    render(
-      <CollectionRouteView
-        address="0xabc"
-        collections={collections}
-        cursor="next-cursor-1"
-        onNavigate={onNavigate}
-      />,
-    );
-
-    await user.click(screen.getByRole("combobox", { name: /collection/i }));
-    await user.click(await screen.findByRole("option", { name: "Artifacts" }));
-
-    expect(onNavigate).toHaveBeenCalledWith("/collections/0xdef");
-  });
-
   it("collection_empty_state_shows_when_not_found", () => {
     mockUseCollectionQuery.mockReturnValue(successQuery(null));
 

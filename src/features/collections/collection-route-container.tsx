@@ -150,7 +150,6 @@ export function CollectionRouteContainer({
       cursor={cursor}
       collections={collections}
       onActiveFiltersChange={handleActiveFiltersChange}
-      onNavigate={(href) => router.push(href)}
       onSortModeChange={handleSortModeChange}
       sortMode={optimisticDiscoveryState.state.sortMode}
     />

@@ -1,12 +1,10 @@
 import { render, screen } from "@testing-library/react";
-import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { CollectionRouteContainer } from "@/features/collections/collection-route-container";
 import type { SeedCollection } from "@/lib/marketplace/config";
 
-const { mockUseCollectionQuery, mockPush } = vi.hoisted(() => ({
+const { mockUseCollectionQuery } = vi.hoisted(() => ({
   mockUseCollectionQuery: vi.fn(),
-  mockPush: vi.fn(),
 }));
 
 vi.mock("@/lib/marketplace/hooks", () => ({
@@ -47,7 +45,7 @@ vi.mock("@/features/collections/sweep-bar", () => ({
 
 vi.mock("next/navigation", () => ({
   useRouter: () => ({
-    push: mockPush,
+    push: vi.fn(),
   }),
   usePathname: () => "/collections/0xabc",
   useSearchParams: () => new URLSearchParams(),
@@ -61,10 +59,9 @@ const collections: SeedCollection[] = [
 describe("collection route container", () => {
   beforeEach(() => {
     mockUseCollectionQuery.mockReset();
-    mockPush.mockReset();
   });
 
-  it("collection_switch_uses_router_push", async () => {
+  it("renders_collection_header_with_name", () => {
     mockUseCollectionQuery.mockReturnValue({
       data: null,
       isLoading: false,
@@ -74,19 +71,15 @@ describe("collection route container", () => {
       isFetching: false,
       refetch: vi.fn(),
     });
-    const user = userEvent.setup();
 
     render(
       <CollectionRouteContainer
         address="0xabc"
         collections={collections}
-        cursor="next-cursor-1"
+        cursor={null}
       />,
     );
 
-    await user.click(screen.getByRole("combobox", { name: /collection/i }));
-    await user.click(await screen.findByRole("option", { name: "Artifacts" }));
-
-    expect(mockPush).toHaveBeenCalledWith("/collections/0xdef");
+    expect(screen.getByRole("heading", { name: "Genesis" })).toBeVisible();
   });
 });
