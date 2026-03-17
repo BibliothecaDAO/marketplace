@@ -5,6 +5,8 @@ import type {
   CollectionListingsOptions,
   CollectionOrdersOptions,
   CollectionSummaryOptions,
+  FetchTokenBalancesOptions,
+  FetchTokenBalancesResult,
   FetchCollectionTokensOptions,
   TokenDetails,
   TokenDetailsOptions,
@@ -332,14 +334,50 @@ export function useTokenHolderQuery(options: {
   );
 }
 
+async function fetchAllTokenBalancePages(
+  options: FetchTokenBalancesOptions,
+): Promise<FetchTokenBalancesResult> {
+  const { fetchTokenBalances } = await import("@cartridge/arcade/marketplace");
+  const balances: NonNullable<FetchTokenBalancesResult["page"]>["balances"] = [];
+  let cursor = options.cursor ?? null;
+
+  while (true) {
+    const result = await fetchTokenBalances({
+      ...options,
+      cursor,
+    });
+
+    if (result.error || !result.page) {
+      return result;
+    }
+
+    balances.push(...result.page.balances);
+
+    if (!result.page.nextCursor) {
+      return {
+        page: {
+          balances,
+          nextCursor: null,
+        },
+        error: null,
+      };
+    }
+
+    cursor = result.page.nextCursor;
+  }
+}
+
 export function useWalletPortfolioQuery(walletAddress: string | undefined) {
-  return useMarketplaceTokenBalances(
-    {
-      accountAddresses: walletAddress ? [walletAddress] : [],
-      limit: 200,
-    },
-    {
-      enabled: !!walletAddress,
-    },
-  );
+  return useQuery({
+    queryKey: ["wallet-portfolio", walletAddress] as const,
+    queryFn: async () =>
+      fetchAllTokenBalancePages({
+        accountAddresses: walletAddress ? [walletAddress] : [],
+        cursor: null,
+        limit: 200,
+      }),
+    enabled: !!walletAddress,
+    retry: false,
+    staleTime: 60_000,
+  });
 }
