@@ -1,5 +1,5 @@
 const COLLECTION_BANNERS_BY_NAME: Record<string, string> = {
-  adventurers: "/banners/adventurers.svg",
+  adventurers: "/banners/adventurers.png",
   beasts: "/banners/beasts.jpg",
 };
 
