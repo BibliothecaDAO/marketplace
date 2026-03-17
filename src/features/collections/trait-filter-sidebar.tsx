@@ -55,11 +55,34 @@ export function TraitFilterSidebar({
   );
 
   const sortedTraitNames = useMemo(
-    () =>
-      [...traitNames]
+    () => {
+      const order = new Map(
+        (collectionFilterConfig.orderedTraits ?? []).map((traitName, index) => [
+          traitName,
+          index,
+        ]),
+      );
+
+      return [...traitNames]
         .filter((trait) => !collectionFilterConfig.hiddenTraits.includes(trait.traitName))
-        .sort((a, b) => a.traitName.localeCompare(b.traitName)),
-    [collectionFilterConfig.hiddenTraits, traitNames],
+        .sort((left, right) => {
+          const leftOrder = order.get(left.traitName);
+          const rightOrder = order.get(right.traitName);
+
+          if (leftOrder !== undefined && rightOrder !== undefined) {
+            return leftOrder - rightOrder;
+          }
+          if (leftOrder !== undefined) {
+            return -1;
+          }
+          if (rightOrder !== undefined) {
+            return 1;
+          }
+
+          return left.traitName.localeCompare(right.traitName);
+        });
+    },
+    [collectionFilterConfig.hiddenTraits, collectionFilterConfig.orderedTraits, traitNames],
   );
 
   const openGroupValues = useMemo(() => {

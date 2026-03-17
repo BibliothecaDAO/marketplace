@@ -375,6 +375,38 @@ describe("trait filter sidebar", () => {
     expect(screen.queryByText("Eyes")).toBeNull();
   });
 
+  it("renders_collection_ordered_traits_before_remaining_alpha_traits", () => {
+    mockGetCollectionFilterConfig.mockReturnValue({
+      hiddenTraits: [],
+      orderedTraits: ["Beast", "Type", "Power"],
+      overrides: {},
+    });
+
+    render(
+      <TraitFilterSidebar
+        collectionAddress="0xbeast"
+        traitNames={[
+          traitName("Level"),
+          traitName("Power"),
+          traitName("Prefix"),
+          traitName("Type"),
+          traitName("Beast"),
+        ]}
+        activeFilters={{}}
+        onActiveFiltersChange={vi.fn()}
+        traitValues={null}
+        openTraitName={null}
+        onOpenTraitNameChange={vi.fn()}
+      />,
+    );
+
+    const labels = screen.getAllByRole("button").map((button) =>
+      button.textContent?.replace("›", "").trim(),
+    );
+
+    expect(labels).toEqual(["Beast", "Type", "Power", "Level", "Prefix"]);
+  });
+
   it("renders_boolean_filter_without_search_box", () => {
     mockGetCollectionFilterConfig.mockReturnValue({
       hiddenTraits: [],

@@ -32,6 +32,8 @@ type MarketplaceTokenCardProps = {
   buyNowLabel?: string;
   viewLabel?: string;
   inlineTraits?: React.ReactNode;
+  mediaContainerClassName?: string;
+  mediaImageClassName?: string;
 };
 
 export const MarketplaceTokenCard = React.memo(function MarketplaceTokenCard({
@@ -51,18 +53,25 @@ export const MarketplaceTokenCard = React.memo(function MarketplaceTokenCard({
   buyNowLabel = "Buy Now",
   viewLabel = "View",
   inlineTraits,
+  mediaContainerClassName,
+  mediaImageClassName,
 }: MarketplaceTokenCardProps) {
   const image = tokenImage(token);
   const displayPrice = formatPriceForDisplay(price);
   const attributes = useMemo(() => tokenAttributes(token.metadata), [token.metadata]);
   const interactiveContent = (
     <>
-      <div className="flex aspect-[4/5] items-center justify-center bg-muted">
+      <div
+        className={cn(
+          "flex aspect-[4/5] items-center justify-center bg-muted",
+          mediaContainerClassName,
+        )}
+      >
         {image ? (
           // eslint-disable-next-line @next/next/no-img-element
           <img
             alt={tokenName(token)}
-            className="h-full w-full object-cover"
+            className={cn("h-full w-full object-cover", mediaImageClassName)}
             src={image}
           />
         ) : (

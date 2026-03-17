@@ -224,6 +224,35 @@ describe("collection token grid", () => {
     );
   });
 
+  it("beasts_grid_uses_uncropped_card_media", async () => {
+    mockUseCollectionTokensQuery.mockReturnValue({
+      data: {
+        page: {
+          tokens: [
+            token("1", {
+              image: "https://cdn.example/beast-1.png",
+              metadata: { name: "Token #1" },
+            }),
+          ],
+          nextCursor: null,
+        },
+        error: null,
+      },
+      isLoading: false,
+      isSuccess: true,
+      isError: false,
+      error: null,
+      isFetching: false,
+      refetch: vi.fn(),
+    });
+
+    render(<CollectionTokenGrid address="0xbea57" projectId="project-beasts" />);
+
+    const image = await screen.findByAltText("Token #1");
+    expect(image.parentElement).toHaveClass("aspect-[3/4]");
+    expect(image).toHaveClass("object-contain");
+  });
+
   it("token_cards_link_to_token_detail_page", () => {
     mockUseCollectionTokensQuery.mockReturnValue({
       data: {

@@ -320,6 +320,7 @@ export function CollectionTokenGrid({
     [address],
   );
   const showInlineResources = collectionFilterConfig.showInlineResources === true;
+  const tokenCardConfig = collectionFilterConfig.tokenCard;
   const [gridMode, setGridMode] = useState<GridLayoutMode>("compact");
   const tokenIdsKey = useMemo(() => tokenIds?.join(",") ?? "", [tokenIds]);
   const activeFiltersKey = useMemo(
@@ -547,8 +548,10 @@ export function CollectionTokenGrid({
                         <ResourceTraitIcons resources={realmResources(token.metadata)} />
                       ) : undefined
                     }
-                    linkAriaLabel={`token-${tokenKey}`}
-                    onBuyNow={
+                  linkAriaLabel={`token-${tokenKey}`}
+                  mediaContainerClassName={tokenCardConfig?.mediaAspectRatioClassName}
+                  mediaImageClassName={tokenCardConfig?.mediaImageClassName}
+                  onBuyNow={
                       cardItem && !isSweepPreview
                         ? () => {
                           addListingToCart(cardItem);

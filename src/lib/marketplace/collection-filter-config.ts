@@ -28,8 +28,13 @@ export type FilterOverride =
 export type CollectionFilterConfig = {
   hiddenTraits: string[];
   overrides: Record<string, FilterOverride>;
+  orderedTraits?: string[];
   sortOptions?: CollectionSortOption[];
   showInlineResources?: boolean;
+  tokenCard?: {
+    mediaAspectRatioClassName?: string;
+    mediaImageClassName?: string;
+  };
   marketActivity?: {
     details: Array<{
       label?: string;
@@ -88,15 +93,30 @@ const COLLECTION_NAME_CONFIGS: Record<string, CollectionFilterConfig> = {
       Animated: { type: "boolean" },
       Shiny: { type: "boolean" },
       Genesis: { type: "boolean" },
-      Beast: { type: "pills", sort: "alpha", showCount: false, hideSearch: true },
+      Beast: { type: "pills", sort: "alpha", showCount: false },
       Suffix: { type: "pills", sort: "alpha", showCount: false },
       Prefix: { type: "pills", sort: "alpha", showCount: false },
       Tier: { type: "pills", sort: "alpha", showCount: false, hideSearch: true },
       Type: { type: "pills", sort: "alpha", showCount: false, hideSearch: true },
+      Power: { type: "range", min: 1, max: 1023 },
       Health: { type: "range", min: 1, max: 1023 },
       Level: { type: "range", min: 1, max: 250 },
       Rank: { type: "range", min: 1, max: 1023 },
     },
+    orderedTraits: [
+      "Beast",
+      "Type",
+      "Tier",
+      "Prefix",
+      "Suffix",
+      "Animated",
+      "Genesis",
+      "Shiny",
+      "Power",
+      "Health",
+      "Level",
+      "Rank",
+    ],
     sortOptions: [
       {
         label: "Price",
@@ -119,6 +139,10 @@ const COLLECTION_NAME_CONFIGS: Record<string, CollectionFilterConfig> = {
         defaultDirection: "desc",
       },
     ],
+    tokenCard: {
+      mediaAspectRatioClassName: "aspect-[3/4]",
+      mediaImageClassName: "object-contain",
+    },
     marketActivity: {
       details: [
         { label: "Type", traitNames: ["Type", "Beast"] },
