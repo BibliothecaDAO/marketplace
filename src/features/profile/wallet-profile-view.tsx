@@ -3,6 +3,14 @@
 import { useDeferredValue, useMemo, useState } from "react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { getMarketplaceRuntimeConfig } from "@/lib/marketplace/config";
 import { useWalletPortfolioQuery } from "@/lib/marketplace/hooks";
 import { formatNumberish } from "@/lib/marketplace/token-display";
 import { CollectionHoldingSection } from "./collection-holding-section";
@@ -21,11 +29,16 @@ type PortfolioItem = {
 };
 
 type GridDensityMode = "compact" | "standard";
+const ALL_COLLECTIONS_VALUE = "__all_collections__";
 
 function asRecord(value: unknown) {
   return value && typeof value === "object"
     ? (value as Record<string, unknown>)
     : null;
+}
+
+function normalizeCollectionAddress(address: string) {
+  return address.trim().toLowerCase();
 }
 
 function parsePortfolioItems(data: unknown): PortfolioItem[] {
@@ -88,6 +101,7 @@ export function WalletProfileView({
 }: WalletProfileViewProps) {
   const portfolioQuery = useWalletPortfolioQuery(address);
   const [filterInput, setFilterInput] = useState("");
+  const [selectedCollection, setSelectedCollection] = useState(ALL_COLLECTIONS_VALUE);
   const [density, setDensity] = useState<GridDensityMode>("standard");
 
   const isLoading =
@@ -100,23 +114,63 @@ export function WalletProfileView({
   );
 
   const collections = useMemo(() => groupByCollection(items), [items]);
+  const configuredCollectionsByAddress = useMemo(() => {
+    const configuredCollections = getMarketplaceRuntimeConfig().collections ?? [];
+    const labels = new Map<string, string>();
+
+    for (const collection of configuredCollections) {
+      labels.set(normalizeCollectionAddress(collection.address), collection.name);
+    }
+
+    return labels;
+  }, []);
+  const collectionOptions = useMemo(
+    () =>
+      collections.map(({ collectionAddress, tokenIds }) => ({
+        value: collectionAddress,
+        label:
+          configuredCollectionsByAddress.get(
+            normalizeCollectionAddress(collectionAddress),
+          ) ?? collectionAddress,
+        count: tokenIds.length,
+      })),
+    [collections, configuredCollectionsByAddress],
+  );
 
   const deferredFilter = useDeferredValue(filterInput);
 
   const filteredCollections = useMemo(() => {
     const normalized = deferredFilter.trim().toLowerCase();
-    if (!normalized) return collections;
+
     return collections
+      .filter(
+        ({ collectionAddress }) =>
+          selectedCollection === ALL_COLLECTIONS_VALUE ||
+          normalizeCollectionAddress(collectionAddress) ===
+            normalizeCollectionAddress(selectedCollection),
+      )
       .map(({ collectionAddress, tokenIds }) => ({
         collectionAddress,
-        tokenIds: tokenIds.filter((id) => id.toLowerCase().includes(normalized)),
-      }))
-      .filter(
-        ({ collectionAddress, tokenIds }) =>
+        tokenIds:
+          normalized.length === 0 ||
           collectionAddress.toLowerCase().includes(normalized) ||
-          tokenIds.length > 0,
-      );
-  }, [deferredFilter, collections]);
+          (
+            configuredCollectionsByAddress.get(
+              normalizeCollectionAddress(collectionAddress),
+            ) ?? collectionAddress
+          )
+            .toLowerCase()
+            .includes(normalized)
+            ? tokenIds
+            : tokenIds.filter((id) => id.toLowerCase().includes(normalized)),
+      }))
+      .filter(({ tokenIds }) => tokenIds.length > 0);
+  }, [
+    collections,
+    configuredCollectionsByAddress,
+    deferredFilter,
+    selectedCollection,
+  ]);
 
   const totalItems = items.length;
   const totalCollections = collections.length;
@@ -164,7 +218,7 @@ export function WalletProfileView({
               {totalItems} item{totalItems !== 1 ? "s" : ""} across{" "}
               {totalCollections} collection{totalCollections !== 1 ? "s" : ""}
             </p>
-            <div className="flex items-center gap-2">
+            <div className="flex flex-wrap items-center gap-2">
               <Input
                 aria-label="Filter collection or token"
                 className="h-8 w-48 text-xs"
@@ -172,6 +226,28 @@ export function WalletProfileView({
                 placeholder="Filter by token ID…"
                 value={filterInput}
               />
+              <Select
+                onValueChange={setSelectedCollection}
+                value={selectedCollection}
+              >
+                <SelectTrigger
+                  aria-label="Filter by collection"
+                  className="h-8 min-w-44 text-xs"
+                  size="sm"
+                >
+                  <SelectValue placeholder="All collections" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value={ALL_COLLECTIONS_VALUE}>
+                    All collections
+                  </SelectItem>
+                  {collectionOptions.map((collection) => (
+                    <SelectItem key={collection.value} value={collection.value}>
+                      {collection.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
               <div className="flex items-center gap-1">
                 <Button
                   aria-pressed={density === "standard"}

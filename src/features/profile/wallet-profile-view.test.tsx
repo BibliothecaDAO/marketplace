@@ -6,16 +6,22 @@ const {
   mockUseWalletPortfolioQuery,
   mockUseCollectionQuery,
   mockUseCollectionTokensQuery,
+  mockGetMarketplaceRuntimeConfig,
 } = vi.hoisted(() => ({
   mockUseWalletPortfolioQuery: vi.fn(),
   mockUseCollectionQuery: vi.fn(),
   mockUseCollectionTokensQuery: vi.fn(),
+  mockGetMarketplaceRuntimeConfig: vi.fn(),
 }));
 
 vi.mock("@/lib/marketplace/hooks", () => ({
   useWalletPortfolioQuery: mockUseWalletPortfolioQuery,
   useCollectionQuery: mockUseCollectionQuery,
   useCollectionTokensQuery: mockUseCollectionTokensQuery,
+}));
+
+vi.mock("@/lib/marketplace/config", () => ({
+  getMarketplaceRuntimeConfig: mockGetMarketplaceRuntimeConfig,
 }));
 
 import { WalletProfileView } from "@/features/profile/wallet-profile-view";
@@ -41,6 +47,7 @@ describe("WalletProfileView", () => {
     mockUseWalletPortfolioQuery.mockReset();
     mockUseCollectionQuery.mockReset();
     mockUseCollectionTokensQuery.mockReset();
+    mockGetMarketplaceRuntimeConfig.mockReset();
 
     mockUseWalletPortfolioQuery.mockReturnValue({
       data: { page: { balances: [] } },
@@ -51,6 +58,12 @@ describe("WalletProfileView", () => {
     });
     mockUseCollectionQuery.mockReturnValue(EMPTY_COLLECTION_QUERY);
     mockUseCollectionTokensQuery.mockReturnValue(EMPTY_TOKENS_QUERY);
+    mockGetMarketplaceRuntimeConfig.mockReturnValue({
+      collections: [
+        { address: "0xcollection-a", name: "Golden Token" },
+        { address: "0xcollection-b", name: "Realms" },
+      ],
+    });
   });
 
   it("shows_loading_state", () => {
@@ -158,5 +171,41 @@ describe("WalletProfileView", () => {
 
     expect(screen.queryByText("0xcollection-a")).toBeNull();
     expect(screen.getByText("0xcollection-b")).toBeVisible();
+  });
+
+  it("filters_items_by_selected_collection", async () => {
+    const user = userEvent.setup();
+    mockUseWalletPortfolioQuery.mockReturnValue({
+      data: {
+        page: {
+          balances: [
+            {
+              contract_address: "0xcollection-a",
+              token_id: "7",
+              balance: "1",
+            },
+            {
+              contract_address: "0xcollection-b",
+              token_id: "99",
+              balance: "1",
+            },
+          ],
+        },
+      },
+      status: "ready",
+      error: null,
+      isFetching: false,
+      refresh: vi.fn(),
+    });
+
+    render(<WalletProfileView address="0xabc123" />);
+
+    await user.click(
+      screen.getByRole("combobox", { name: /filter by collection/i }),
+    );
+    await user.click(screen.getByRole("option", { name: "Golden Token" }));
+
+    expect(screen.getByText("0xcollection-a")).toBeVisible();
+    expect(screen.queryByText("0xcollection-b")).toBeNull();
   });
 });

@@ -280,18 +280,55 @@ describe("marketplace hooks", () => {
     );
   });
 
-  it("useWalletPortfolioQuery_uses_sdk_balances_hook", async () => {
-    const expected = { status: "success", data: { page: { balances: [] } } };
-    mockUseMarketplaceTokenBalances.mockReturnValue(expected);
+  it("useWalletPortfolioQuery_fetches_all_balance_pages", async () => {
+    const mockFetchTokenBalances = vi
+      .fn()
+      .mockResolvedValueOnce({
+        page: {
+          balances: [{ contract_address: "0xcol1", token_id: "1", balance: "1" }],
+          nextCursor: "cursor-2",
+        },
+        error: null,
+      })
+      .mockResolvedValueOnce({
+        page: {
+          balances: [{ contract_address: "0xcol2", token_id: "2", balance: "1" }],
+          nextCursor: null,
+        },
+        error: null,
+      });
+
+    vi.doMock("@cartridge/arcade/marketplace", () => ({
+      fetchTokenBalances: mockFetchTokenBalances,
+    }));
 
     const { useWalletPortfolioQuery } = await import("@/lib/marketplace/hooks");
-    const { result } = renderHook(() => useWalletPortfolioQuery("0xwallet"));
+    const { result } = renderHook(() => useWalletPortfolioQuery("0xwallet"), {
+      wrapper: makeWrapper(),
+    });
 
-    expect(mockUseMarketplaceTokenBalances).toHaveBeenCalledWith(
-      { accountAddresses: ["0xwallet"], limit: 200 },
-      { enabled: true },
-    );
-    expect(result.current).toBe(expected);
+    await waitFor(() => expect(result.current.isSuccess).toBe(true));
+
+    expect(mockFetchTokenBalances).toHaveBeenNthCalledWith(1, {
+      accountAddresses: ["0xwallet"],
+      cursor: null,
+      limit: 200,
+    });
+    expect(mockFetchTokenBalances).toHaveBeenNthCalledWith(2, {
+      accountAddresses: ["0xwallet"],
+      cursor: "cursor-2",
+      limit: 200,
+    });
+    expect(result.current.data).toEqual({
+      page: {
+        balances: [
+          { contract_address: "0xcol1", token_id: "1", balance: "1" },
+          { contract_address: "0xcol2", token_id: "2", balance: "1" },
+        ],
+        nextCursor: null,
+      },
+      error: null,
+    });
   });
 
   describe("useTraitNamesSummaryQuery", () => {
