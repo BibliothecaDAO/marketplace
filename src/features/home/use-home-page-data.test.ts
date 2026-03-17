@@ -315,7 +315,7 @@ describe("useHomePageData", () => {
 
     const { result } = renderHook(() => useHomePageData());
 
-    expect(result.current.featuredCollection?.imageUrl).toBe("/banners/beasts.svg");
+    expect(result.current.featuredCollection?.imageUrl).toBe("/banners/beasts.jpg");
   });
 
   it("propagates_static_banner_images_to_sidebar_collections", () => {
@@ -335,8 +335,8 @@ describe("useHomePageData", () => {
     const { result } = renderHook(() => useHomePageData());
 
     expect(result.current.sidebarCollections).toEqual([
-      expect.objectContaining({ address: "0xadv", imageUrl: "/banners/adventurers.svg" }),
-      expect.objectContaining({ address: "0xbeast", imageUrl: "/banners/beasts.svg" }),
+      expect.objectContaining({ address: "0xadv", imageUrl: "/banners/adventurers.png" }),
+      expect.objectContaining({ address: "0xbeast", imageUrl: "/banners/beasts.jpg" }),
     ]);
   });
 });

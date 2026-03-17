@@ -11,6 +11,7 @@ const {
   mockUseMarketplaceCollectionListings,
   mockUseMarketplaceToken,
   mockUseMarketplaceTokenBalances,
+  mockGetMarketplaceRuntimeConfig,
 } = vi.hoisted(() => ({
   mockUseMarketplaceCollection: vi.fn(),
   mockUseMarketplaceCollectionTokens: vi.fn(),
@@ -18,6 +19,7 @@ const {
   mockUseMarketplaceCollectionListings: vi.fn(),
   mockUseMarketplaceToken: vi.fn(),
   mockUseMarketplaceTokenBalances: vi.fn(),
+  mockGetMarketplaceRuntimeConfig: vi.fn(),
 }));
 
 vi.mock("@cartridge/arcade/marketplace/react", () => ({
@@ -27,6 +29,10 @@ vi.mock("@cartridge/arcade/marketplace/react", () => ({
   useMarketplaceCollectionListings: mockUseMarketplaceCollectionListings,
   useMarketplaceToken: mockUseMarketplaceToken,
   useMarketplaceTokenBalances: mockUseMarketplaceTokenBalances,
+}));
+
+vi.mock("@/lib/marketplace/config", () => ({
+  getMarketplaceRuntimeConfig: mockGetMarketplaceRuntimeConfig,
 }));
 
 function makeWrapper() {
@@ -48,6 +54,10 @@ describe("marketplace hooks", () => {
     mockUseMarketplaceCollectionListings.mockReset();
     mockUseMarketplaceToken.mockReset();
     mockUseMarketplaceTokenBalances.mockReset();
+    mockGetMarketplaceRuntimeConfig.mockReset();
+    mockGetMarketplaceRuntimeConfig.mockReturnValue({
+      collections: [],
+    });
     vi.unstubAllGlobals();
   });
 
@@ -328,6 +338,41 @@ describe("marketplace hooks", () => {
         nextCursor: null,
       },
       error: null,
+    });
+  });
+
+  it("useWalletPortfolioQuery_scopes_balances_to_configured_marketplace_collections", async () => {
+    mockGetMarketplaceRuntimeConfig.mockReturnValue({
+      collections: [
+        { address: "0xcol1", name: "Collection One" },
+        { address: "0xcol2", name: "Collection Two" },
+      ],
+    });
+
+    const mockFetchTokenBalances = vi.fn().mockResolvedValue({
+      page: {
+        balances: [],
+        nextCursor: null,
+      },
+      error: null,
+    });
+
+    vi.doMock("@cartridge/arcade/marketplace", () => ({
+      fetchTokenBalances: mockFetchTokenBalances,
+    }));
+
+    const { useWalletPortfolioQuery } = await import("@/lib/marketplace/hooks");
+    const { result } = renderHook(() => useWalletPortfolioQuery("0xwallet"), {
+      wrapper: makeWrapper(),
+    });
+
+    await waitFor(() => expect(result.current.isSuccess).toBe(true));
+
+    expect(mockFetchTokenBalances).toHaveBeenCalledWith({
+      accountAddresses: ["0xwallet"],
+      contractAddresses: ["0xcol1", "0xcol2"],
+      cursor: null,
+      limit: 200,
     });
   });
 

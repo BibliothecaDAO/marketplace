@@ -23,6 +23,7 @@ import {
   canonicalizeTokenId,
   expandTokenIdVariants,
 } from "@/lib/marketplace/token-id";
+import { getMarketplaceRuntimeConfig } from "@/lib/marketplace/config";
 import type { TraitSelection } from "@/lib/marketplace/traits";
 import { aggregateTraitSummaryPages, aggregateTraitValuePages } from "@/lib/marketplace/traits";
 
@@ -368,11 +369,16 @@ async function fetchAllTokenBalancePages(
 }
 
 export function useWalletPortfolioQuery(walletAddress: string | undefined) {
+  const contractAddresses = getMarketplaceRuntimeConfig().collections
+    .map((collection) => collection.address)
+    .filter((address) => address.length > 0);
+
   return useQuery({
     queryKey: ["wallet-portfolio", walletAddress] as const,
     queryFn: async () =>
       fetchAllTokenBalancePages({
         accountAddresses: walletAddress ? [walletAddress] : [],
+        contractAddresses: contractAddresses.length > 0 ? contractAddresses : undefined,
         cursor: null,
         limit: 200,
       }),
