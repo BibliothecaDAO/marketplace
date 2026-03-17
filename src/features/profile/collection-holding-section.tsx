@@ -21,6 +21,7 @@ type CollectionHoldingSectionProps = {
   collectionName: string;
   tokenIds: string[];
   density: GridDensityMode;
+  projectId?: string;
 };
 
 export function CollectionHoldingSection({
@@ -28,15 +29,21 @@ export function CollectionHoldingSection({
   collectionName,
   tokenIds,
   density,
+  projectId,
 }: CollectionHoldingSectionProps) {
   const expandedTokenIds = useMemo(
     () => expandTokenIdVariants(tokenIds),
     [tokenIds],
   );
 
-  const collectionQuery = useCollectionQuery({ address: collectionAddress });
+  const collectionQuery = useCollectionQuery({
+    address: collectionAddress,
+    fetchImages: false,
+    projectId,
+  });
   const tokensQuery = useCollectionTokensQuery({
     address: collectionAddress,
+    project: projectId,
     tokenIds: expandedTokenIds,
     limit: expandedTokenIds.length,
     fetchImages: true,
@@ -76,6 +83,12 @@ export function CollectionHoldingSection({
         <Card className="border-dashed">
           <CardContent className="py-4 text-sm text-muted-foreground">
             Failed to load tokens for this collection.
+          </CardContent>
+        </Card>
+      ) : tokens.length === 0 ? (
+        <Card className="border-dashed">
+          <CardContent className="py-4 text-sm text-muted-foreground">
+            No token details are available for this collection yet.
           </CardContent>
         </Card>
       ) : (
