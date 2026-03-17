@@ -1,4 +1,4 @@
-import { render, screen } from "@testing-library/react";
+import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 import { CollectionRouteContainer } from "@/features/collections/collection-route-container";
@@ -106,6 +106,33 @@ describe("collection route container url sync", () => {
 
     expect(mockPush).toHaveBeenCalledWith(
       "/collections/0xabc?foo=bar&trait=Eyes%3ABig&sort=power-desc",
+    );
+  });
+
+  it("updates_active_filters_optimistically_before_url_state_catches_up", async () => {
+    const user = userEvent.setup();
+
+    render(<CollectionRouteContainer address="0xabc" cursor={null} />);
+
+    await user.click(screen.getByRole("button", { name: /apply-filters/i }));
+
+    await waitFor(() => {
+      const latestProps = mockCollectionRouteView.mock.lastCall?.[0];
+      expect(Array.from(latestProps.activeFilters.Background)).toEqual(["Blue"]);
+      expect(latestProps.sortMode).toBe("price-asc");
+    });
+  });
+
+  it("preserves_pending_filters_when_sort_changes_during_navigation", async () => {
+    const user = userEvent.setup();
+
+    render(<CollectionRouteContainer address="0xabc" cursor={null} />);
+
+    await user.click(screen.getByRole("button", { name: /apply-filters/i }));
+    await user.click(screen.getByRole("button", { name: /sort-power-desc/i }));
+
+    expect(mockPush).toHaveBeenLastCalledWith(
+      "/collections/0xabc?foo=bar&trait=Background%3ABlue&sort=power-desc",
     );
   });
 });

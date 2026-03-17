@@ -41,7 +41,31 @@ describe("collection filter config", () => {
       },
     ]);
     expect(result.overrides.Animated).toEqual({ type: "boolean" });
+    expect(result.overrides.Beast).toEqual({
+      type: "pills",
+      sort: "alpha",
+      showCount: false,
+    });
     expect(result.overrides.Health).toEqual({ type: "range", min: 1, max: 1023 });
+    expect(result.overrides.Power).toEqual({ type: "range", min: 1, max: 1023 });
+    expect(result.orderedTraits).toEqual([
+      "Beast",
+      "Type",
+      "Tier",
+      "Prefix",
+      "Suffix",
+      "Animated",
+      "Genesis",
+      "Shiny",
+      "Power",
+      "Health",
+      "Level",
+      "Rank",
+    ]);
+    expect(result.tokenCard).toEqual({
+      mediaAspectRatioClassName: "aspect-[3/4]",
+      mediaImageClassName: "object-contain",
+    });
     expect(result.marketActivity).toEqual({
       details: [
         { label: "Type", traitNames: ["Type", "Beast"] },
