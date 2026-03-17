@@ -60,6 +60,7 @@ describe("WalletProfileView", () => {
     mockUseCollectionTokensQuery.mockReturnValue(EMPTY_TOKENS_QUERY);
     mockGetMarketplaceRuntimeConfig.mockReturnValue({
       collections: [
+        { address: "0xcol1", name: "Collected One" },
         { address: "0xcollection-a", name: "Golden Token" },
         { address: "0xcollection-b", name: "Realms" },
       ],
@@ -122,7 +123,7 @@ describe("WalletProfileView", () => {
     render(<WalletProfileView address="0xabc123" />);
 
     // Collection section header for the owned collection is visible
-    expect(screen.getByText("0xcol1")).toBeVisible();
+    expect(screen.getByText("Collected One")).toBeVisible();
 
     // Token link leads to the correct page
     const itemLink = screen.getByRole("link", { name: /view token 7/i });
@@ -169,8 +170,8 @@ describe("WalletProfileView", () => {
       "99",
     );
 
-    expect(screen.queryByText("0xcollection-a")).toBeNull();
-    expect(screen.getByText("0xcollection-b")).toBeVisible();
+    expect(screen.queryByText("Golden Token")).toBeNull();
+    expect(screen.getByText("Realms")).toBeVisible();
   });
 
   it("filters_items_by_selected_collection", async () => {
@@ -205,7 +206,47 @@ describe("WalletProfileView", () => {
     );
     await user.click(screen.getByRole("option", { name: "Golden Token" }));
 
-    expect(screen.getByText("0xcollection-a")).toBeVisible();
-    expect(screen.queryByText("0xcollection-b")).toBeNull();
+    expect(screen.getAllByText("Golden Token")).toHaveLength(2);
+    expect(screen.queryByText("Realms")).toBeNull();
+  });
+
+  it("shows_only_marketplace_collection_names_in_the_filter_and_results", async () => {
+    const user = userEvent.setup();
+    mockUseWalletPortfolioQuery.mockReturnValue({
+      data: {
+        page: {
+          balances: [
+            {
+              contract_address: "0xcollection-a",
+              token_id: "7",
+              balance: "1",
+            },
+            {
+              contract_address: "0xoutside-market",
+              token_id: "99",
+              balance: "1",
+            },
+          ],
+        },
+      },
+      status: "ready",
+      error: null,
+      isFetching: false,
+      refresh: vi.fn(),
+    });
+
+    render(<WalletProfileView address="0xabc123" />);
+
+    expect(screen.getByText("Golden Token")).toBeVisible();
+    expect(screen.queryByText("0xoutside-market")).toBeNull();
+
+    await user.click(
+      screen.getByRole("combobox", { name: /filter by collection/i }),
+    );
+
+    expect(screen.getByRole("option", { name: "Golden Token" })).toBeVisible();
+    expect(
+      screen.queryByRole("option", { name: "0xoutside-market" }),
+    ).toBeNull();
   });
 });
