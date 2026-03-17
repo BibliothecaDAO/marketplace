@@ -18,12 +18,14 @@ const GRID_CLASSES: Record<GridDensityMode, string> = {
 
 type CollectionHoldingSectionProps = {
   collectionAddress: string;
+  collectionName: string;
   tokenIds: string[];
   density: GridDensityMode;
 };
 
 export function CollectionHoldingSection({
   collectionAddress,
+  collectionName,
   tokenIds,
   density,
 }: CollectionHoldingSectionProps) {
@@ -40,9 +42,9 @@ export function CollectionHoldingSection({
     fetchImages: true,
   });
 
-  const collectionName = resolveCollectionName(
+  const resolvedCollectionName = resolveCollectionName(
     collectionQuery.data?.metadata,
-    collectionAddress,
+    collectionName,
   );
 
   const tokens = tokensQuery.data?.page?.tokens ?? [];
@@ -52,7 +54,7 @@ export function CollectionHoldingSection({
   return (
     <section className="space-y-3">
       <div className="flex items-center gap-2 border-b border-border/50 pb-2">
-        <h2 className="text-sm font-semibold">{collectionName}</h2>
+        <h2 className="text-sm font-semibold">{resolvedCollectionName}</h2>
         <span className="rounded-full bg-muted px-2 py-0.5 text-xs text-muted-foreground">
           {tokenIds.length}
         </span>
@@ -92,12 +94,12 @@ export function CollectionHoldingSection({
   );
 }
 
-function resolveCollectionName(metadata: unknown, fallbackAddress: string): string {
+function resolveCollectionName(metadata: unknown, fallbackName: string): string {
   if (metadata && typeof metadata === "object") {
     const name = (metadata as Record<string, unknown>).name;
     if (typeof name === "string" && name.trim().length > 0) {
       return name;
     }
   }
-  return fallbackAddress;
+  return fallbackName;
 }
