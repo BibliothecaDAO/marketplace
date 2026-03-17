@@ -341,7 +341,7 @@ describe("marketplace hooks", () => {
     });
   });
 
-  it("useWalletPortfolioQuery_scopes_balances_to_configured_marketplace_collections", async () => {
+  it("useWalletPortfolioQuery_does_not_scope_balances_to_configured_marketplace_collections", async () => {
     mockGetMarketplaceRuntimeConfig.mockReturnValue({
       collections: [
         { address: "0xcol1", name: "Collection One" },
@@ -370,7 +370,6 @@ describe("marketplace hooks", () => {
 
     expect(mockFetchTokenBalances).toHaveBeenCalledWith({
       accountAddresses: ["0xwallet"],
-      contractAddresses: ["0xcol1", "0xcol2"],
       cursor: null,
       limit: 200,
     });

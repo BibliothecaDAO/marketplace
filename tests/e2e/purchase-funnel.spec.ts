@@ -81,7 +81,7 @@ test.describe("purchase funnel skeleton", () => {
     await page.getByRole("button", { name: /load holdings/i }).click();
 
     const profileViewVisible =
-      (await page.locator("main[data-testid='wallet-profile-view']").count()) > 0;
+      (await page.locator("[data-testid='wallet-profile-view']").count()) > 0;
     test.skip(
       !profileViewVisible,
       "Portfolio holdings view did not initialize in this environment.",

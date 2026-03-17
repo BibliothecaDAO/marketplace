@@ -10,6 +10,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { normalizeMarketplaceAddress } from "@/lib/marketplace/address";
 import { getMarketplaceRuntimeConfig } from "@/lib/marketplace/config";
 import { useWalletPortfolioQuery } from "@/lib/marketplace/hooks";
 import { formatNumberish } from "@/lib/marketplace/token-display";
@@ -31,6 +32,7 @@ type PortfolioItem = {
 type CollectionGroup = {
   collectionAddress: string;
   collectionName: string;
+  projectId?: string;
   tokenIds: string[];
 };
 
@@ -43,9 +45,10 @@ function asRecord(value: unknown) {
     : null;
 }
 
-function normalizeCollectionAddress(address: string) {
-  return address.trim().toLowerCase();
-}
+type ConfiguredCollectionDetails = {
+  name: string;
+  projectId?: string;
+};
 
 function parsePortfolioItems(data: unknown): PortfolioItem[] {
   const page = asRecord(asRecord(data)?.page);
@@ -86,11 +89,11 @@ function parsePortfolioItems(data: unknown): PortfolioItem[] {
 
 function groupByCollection(
   items: PortfolioItem[],
-  collectionNamesByAddress: ReadonlyMap<string, string>,
+  configuredCollectionsByAddress: ReadonlyMap<string, ConfiguredCollectionDetails>,
 ): CollectionGroup[] {
   const map = new Map<string, CollectionGroup>();
   for (const item of items) {
-    const normalizedAddress = normalizeCollectionAddress(item.collectionAddress);
+    const normalizedAddress = normalizeMarketplaceAddress(item.collectionAddress);
     const existing = map.get(normalizedAddress);
 
     if (existing) {
@@ -98,10 +101,11 @@ function groupByCollection(
       continue;
     }
 
+    const configuredCollection = configuredCollectionsByAddress.get(normalizedAddress);
     map.set(normalizedAddress, {
       collectionAddress: item.collectionAddress,
-      collectionName:
-        collectionNamesByAddress.get(normalizedAddress) ?? item.collectionAddress,
+      collectionName: configuredCollection?.name ?? item.collectionAddress,
+      projectId: configuredCollection?.projectId,
       tokenIds: [item.tokenId],
     });
   }
@@ -131,32 +135,27 @@ export function WalletProfileView({
   );
   const configuredCollectionsByAddress = useMemo(() => {
     const configuredCollections = getMarketplaceRuntimeConfig().collections ?? [];
-    const labels = new Map<string, string>();
+    const labels = new Map<string, ConfiguredCollectionDetails>();
 
     for (const collection of configuredCollections) {
-      labels.set(normalizeCollectionAddress(collection.address), collection.name);
+      labels.set(normalizeMarketplaceAddress(collection.address), {
+        name: collection.name,
+        projectId: collection.projectId,
+      });
     }
 
     return labels;
   }, []);
-  const marketplaceItems = useMemo(
-    () =>
-      items.filter((item) =>
-        configuredCollectionsByAddress.has(
-          normalizeCollectionAddress(item.collectionAddress),
-        ),
-      ),
-    [configuredCollectionsByAddress, items],
-  );
   const collections = useMemo(
-    () => groupByCollection(marketplaceItems, configuredCollectionsByAddress),
-    [configuredCollectionsByAddress, marketplaceItems],
+    () => groupByCollection(items, configuredCollectionsByAddress),
+    [configuredCollectionsByAddress, items],
   );
   const collectionOptions = useMemo(
     () =>
-      collections.map(({ collectionAddress, collectionName, tokenIds }) => ({
+      collections.map(({ collectionAddress, collectionName, projectId, tokenIds }) => ({
         value: collectionAddress,
         label: collectionName,
+        projectId,
         count: tokenIds.length,
       })),
     [collections],
@@ -171,12 +170,13 @@ export function WalletProfileView({
       .filter(
         ({ collectionAddress }) =>
           selectedCollection === ALL_COLLECTIONS_VALUE ||
-          normalizeCollectionAddress(collectionAddress) ===
-            normalizeCollectionAddress(selectedCollection),
+          normalizeMarketplaceAddress(collectionAddress) ===
+            normalizeMarketplaceAddress(selectedCollection),
       )
-      .map(({ collectionAddress, collectionName, tokenIds }) => ({
+      .map(({ collectionAddress, collectionName, projectId, tokenIds }) => ({
         collectionAddress,
         collectionName,
+        projectId,
         tokenIds:
           normalized.length === 0 ||
           collectionName.toLowerCase().includes(normalized)
@@ -190,7 +190,7 @@ export function WalletProfileView({
     selectedCollection,
   ]);
 
-  const totalItems = marketplaceItems.length;
+  const totalItems = items.length;
   const totalCollections = collections.length;
 
   return (
@@ -297,12 +297,13 @@ export function WalletProfileView({
             </p>
           ) : (
             <div className="space-y-8">
-              {filteredCollections.map(({ collectionAddress, collectionName, tokenIds }) => (
+              {filteredCollections.map(({ collectionAddress, collectionName, projectId, tokenIds }) => (
                 <CollectionHoldingSection
                   collectionAddress={collectionAddress}
                   collectionName={collectionName}
                   density={density}
                   key={collectionAddress}
+                  projectId={projectId}
                   tokenIds={tokenIds}
                 />
               ))}

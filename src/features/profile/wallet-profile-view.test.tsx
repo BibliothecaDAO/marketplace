@@ -210,7 +210,7 @@ describe("WalletProfileView", () => {
     expect(screen.queryByText("Realms")).toBeNull();
   });
 
-  it("shows_only_marketplace_collection_names_in_the_filter_and_results", async () => {
+  it("shows_configured_and_unconfigured_collection_names_in_the_filter_and_results", async () => {
     const user = userEvent.setup();
     mockUseWalletPortfolioQuery.mockReturnValue({
       data: {
@@ -238,15 +238,80 @@ describe("WalletProfileView", () => {
     render(<WalletProfileView address="0xabc123" />);
 
     expect(screen.getByText("Golden Token")).toBeVisible();
-    expect(screen.queryByText("0xoutside-market")).toBeNull();
+    expect(screen.getByText("0xoutside-market")).toBeVisible();
 
     await user.click(
       screen.getByRole("combobox", { name: /filter by collection/i }),
     );
 
     expect(screen.getByRole("option", { name: "Golden Token" })).toBeVisible();
-    expect(
-      screen.queryByRole("option", { name: "0xoutside-market" }),
-    ).toBeNull();
+    expect(screen.getByRole("option", { name: "0xoutside-market" })).toBeVisible();
+  });
+
+  it("matches_configured_collections_when_balance_addresses_use_different_hex_padding", () => {
+    mockGetMarketplaceRuntimeConfig.mockReturnValue({
+      collections: [{ address: "0x0abc", name: "Padded Collection" }],
+    });
+    mockUseWalletPortfolioQuery.mockReturnValue({
+      data: {
+        page: {
+          balances: [
+            {
+              contract_address: "0xabc",
+              token_id: "7",
+              balance: "1",
+            },
+          ],
+        },
+      },
+      status: "ready",
+      error: null,
+      isFetching: false,
+      refresh: vi.fn(),
+    });
+
+    render(<WalletProfileView address="0xabc123" />);
+
+    expect(screen.getByText("Padded Collection")).toBeVisible();
+  });
+
+  it("passes_project_id_to_collection_queries_for_configured_holdings", () => {
+    mockGetMarketplaceRuntimeConfig.mockReturnValue({
+      collections: [
+        { address: "0xcollection-a", name: "Golden Token", projectId: "project-a" },
+      ],
+    });
+    mockUseWalletPortfolioQuery.mockReturnValue({
+      data: {
+        page: {
+          balances: [
+            {
+              contract_address: "0xcollection-a",
+              token_id: "7",
+              balance: "1",
+            },
+          ],
+        },
+      },
+      status: "ready",
+      error: null,
+      isFetching: false,
+      refresh: vi.fn(),
+    });
+
+    render(<WalletProfileView address="0xabc123" />);
+
+    expect(mockUseCollectionQuery).toHaveBeenCalledWith(
+      expect.objectContaining({
+        address: "0xcollection-a",
+        projectId: "project-a",
+      }),
+    );
+    expect(mockUseCollectionTokensQuery).toHaveBeenCalledWith(
+      expect.objectContaining({
+        address: "0xcollection-a",
+        project: "project-a",
+      }),
+    );
   });
 });
