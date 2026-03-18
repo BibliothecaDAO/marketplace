@@ -3,6 +3,7 @@ import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { CollectionTokenGrid } from "@/features/collections/collection-token-grid";
 import { _resetConfigCache } from "@/lib/marketplace/config";
+import { encodeRangeFilterValue } from "@/lib/marketplace/traits";
 import type { ActiveFilters } from "@/lib/marketplace/traits";
 
 const { mockUseCollectionTokensQuery, mockUseCollectionListingsQuery } = vi.hoisted(() => ({
@@ -405,6 +406,54 @@ describe("collection token grid", () => {
     expect(mockUseCollectionTokensQuery).toHaveBeenCalledWith(
       expect.objectContaining({
         attributeFilters: { Background: ["Blue"] },
+      }),
+    );
+  });
+
+  it("range_filters_stay_client_side_and_do_not_forward_exact_attribute_filters", async () => {
+    const filters: ActiveFilters = { Level: new Set([encodeRangeFilterValue(10, 20)]) };
+    mockUseCollectionTokensQuery.mockReturnValue({
+      data: {
+        page: {
+          tokens: [
+            token("1", {
+              metadata: {
+                name: "Token #1",
+                attributes: [{ trait_type: "Level", value: "15" }],
+              },
+            }),
+            token("2", {
+              metadata: {
+                name: "Token #2",
+                attributes: [{ trait_type: "Level", value: "25" }],
+              },
+            }),
+          ],
+          nextCursor: null,
+        },
+        error: null,
+      },
+      isLoading: false,
+      isSuccess: true,
+      isError: false,
+      error: null,
+      isFetching: false,
+      refetch: vi.fn(),
+    });
+
+    render(
+      <CollectionTokenGrid
+        activeFilters={filters}
+        address="0xabc"
+        projectId="project-a"
+      />,
+    );
+
+    expect(await screen.findByText("Token #1")).toBeVisible();
+    expect(screen.queryByText("Token #2")).toBeNull();
+    expect(mockUseCollectionTokensQuery).toHaveBeenCalledWith(
+      expect.objectContaining({
+        attributeFilters: undefined,
       }),
     );
   });
@@ -835,7 +884,23 @@ describe("collection token grid", () => {
 
     mockUseCollectionTokensQuery.mockImplementation((options) => {
       const hasBlue = options?.attributeFilters?.Background?.includes("Blue");
-      const tokens = hasBlue ? [token("10")] : [token("20")];
+      const tokens = hasBlue
+        ? [
+          token("10", {
+            metadata: {
+              name: "Token #10",
+              attributes: [{ trait_type: "Background", value: "Blue" }],
+            },
+          }),
+        ]
+        : [
+          token("20", {
+            metadata: {
+              name: "Token #20",
+              attributes: [{ trait_type: "Background", value: "Red" }],
+            },
+          }),
+        ];
       return {
         data: { page: { tokens, nextCursor: null }, error: null },
         isLoading: false,

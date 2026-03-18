@@ -30,8 +30,12 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { getCollectionFilterConfig } from "@/lib/marketplace/collection-filter-config";
-import type { ActiveFilters } from "@/lib/marketplace/traits";
-import { numericTraitValueByName } from "@/lib/marketplace/traits";
+import {
+  exactAttributeFiltersFromActiveFilters,
+  filterTokensByActiveFilters,
+  numericTraitValueByName,
+  type ActiveFilters,
+} from "@/lib/marketplace/traits";
 import { COLLECTION_LISTING_SAMPLE_LIMIT } from "@/lib/marketplace/query-limits";
 import { expandTokenIdQueryVariants } from "@/lib/marketplace/token-id";
 import { realmResourceCount, realmResources } from "@/lib/marketplace/token-attributes";
@@ -63,6 +67,7 @@ const GRID_CLASSES_BY_DENSITY: Record<GridDensityMode, string> = {
   compact: "grid-cols-2 sm:grid-cols-3 lg:grid-cols-4",
   dense: "grid-cols-2 sm:grid-cols-3 lg:grid-cols-6",
 };
+const EMPTY_ACTIVE_FILTERS: ActiveFilters = {};
 
 function dedupeTokens(tokens: NormalizedToken[]) {
   const unique = new Map<string, NormalizedToken>();
@@ -335,12 +340,7 @@ export function CollectionTokenGrid({
     [activeFilters],
   );
   const attributeFilters = useMemo(
-    () =>
-      activeFilters && Object.keys(activeFilters).length > 0
-        ? Object.fromEntries(
-            Object.entries(activeFilters).map(([k, v]) => [k, Array.from(v)]),
-          )
-        : undefined,
+    () => exactAttributeFiltersFromActiveFilters(activeFilters),
     [activeFilters],
   );
   const listedTokenEnrichmentScopeKey = useMemo(
@@ -439,12 +439,16 @@ export function CollectionTokenGrid({
     if (!listedTokens?.length) return pagination.tokens;
     return dedupeTokens([...pagination.tokens, ...listedTokens]);
   }, [pagination.tokens, listedTokensQuery.data?.page?.tokens]);
+  const filteredVisibleTokens = useMemo(
+    () => filterTokensByActiveFilters(visibleTokens, activeFilters ?? EMPTY_ACTIVE_FILTERS),
+    [activeFilters, visibleTokens],
+  );
   const displayTokens = useMemo(
     () =>
       isAdventurersCollection
-        ? visibleTokens.filter(isAliveAdventurer)
-        : visibleTokens,
-    [isAdventurersCollection, visibleTokens],
+        ? filteredVisibleTokens.filter(isAliveAdventurer)
+        : filteredVisibleTokens,
+    [filteredVisibleTokens, isAdventurersCollection],
   );
   const visibleTokensSignature = useMemo(
     () => tokenSignature(displayTokens),

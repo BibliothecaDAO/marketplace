@@ -14,11 +14,23 @@ vi.mock("@/lib/marketplace/collection-filter-config", () => ({
 }));
 
 vi.mock("@/components/ui/slider", () => ({
-  Slider: ({ value }: { value?: number[] }) => (
+  Slider: ({
+    value,
+    onValueChange,
+  }: {
+    value?: number[];
+    onValueChange?: (nextValue: number[]) => void;
+  }) => (
     <div data-testid="mock-slider">
       {(value ?? [0]).map((entry, index) => (
         <div key={`${entry}-${index}`} role="slider" aria-valuenow={entry} />
       ))}
+      <button type="button" aria-label="apply slider range" onClick={() => onValueChange?.([2, 3])}>
+        set-slider-range
+      </button>
+      <button type="button" aria-label="reset slider range" onClick={() => onValueChange?.([1, 3])}>
+        reset-slider-range
+      </button>
     </div>
   ),
 }));
@@ -448,6 +460,33 @@ describe("trait filter sidebar", () => {
 
     expect(screen.queryByRole("searchbox", { name: /search level/i })).toBeNull();
     expect(screen.getAllByRole("slider")).toHaveLength(2);
+  });
+
+  it("range_filter_emits_single_canonical_range_value", async () => {
+    mockGetCollectionFilterConfig.mockReturnValue({
+      hiddenTraits: [],
+      overrides: {
+        Level: { type: "range", min: 1, max: 3 },
+      },
+    });
+    const onActiveFiltersChange = vi.fn();
+    const user = userEvent.setup();
+
+    render(
+      <SidebarWrapper
+        collectionAddress="0xbeast"
+        traitNames={[traitName("Level")]}
+        traitValues={[traitValue("1"), traitValue("2"), traitValue("3")]}
+        initialOpenTraitName="Level"
+        onActiveFiltersChange={onActiveFiltersChange}
+      />,
+    );
+
+    await user.click(screen.getByRole("button", { name: /apply slider range/i }));
+
+    expect(onActiveFiltersChange).toHaveBeenCalledWith({
+      Level: new Set(["__range__:2:3"]),
+    });
   });
 
   it("renders_pills_filter_with_alpha_sort_hidden_counts_and_hidden_search", () => {
