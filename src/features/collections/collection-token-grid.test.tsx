@@ -1,4 +1,4 @@
-import { render, screen } from "@testing-library/react";
+import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { CollectionTokenGrid } from "@/features/collections/collection-token-grid";
@@ -181,7 +181,8 @@ describe("collection token grid", () => {
       />,
     );
 
-    expect(mockUseCollectionTokensQuery).toHaveBeenCalledWith(
+    expect(mockUseCollectionTokensQuery).toHaveBeenNthCalledWith(
+      1,
       expect.objectContaining({
         address: "0xabc",
         project: "project-a",
@@ -189,6 +190,56 @@ describe("collection token grid", () => {
         tokenIds: ["7", "9"],
       }),
     );
+  });
+
+  it("defers_listed_token_enrichment_until_after_initial_render", async () => {
+    mockUseCollectionTokensQuery.mockReturnValue({
+      data: { page: { tokens: [token("1")], nextCursor: null }, error: null },
+      isLoading: false,
+      isSuccess: true,
+      isError: false,
+      error: null,
+      isFetching: false,
+      refetch: vi.fn(),
+    });
+    mockUseCollectionListingsQuery.mockReturnValue(
+      successListingsResult([
+        { id: 101, tokenId: "7", price: 25, currency: "0xfee", quantity: 1 },
+      ]),
+    );
+
+    render(<CollectionTokenGrid address="0xabc" projectId="project-a" />);
+
+    expect(mockUseCollectionTokensQuery).toHaveBeenNthCalledWith(
+      1,
+      expect.objectContaining({
+        address: "0xabc",
+        project: "project-a",
+        tokenIds: undefined,
+      }),
+    );
+    expect(mockUseCollectionTokensQuery).toHaveBeenNthCalledWith(
+      2,
+      expect.objectContaining({
+        address: "0xabc",
+        project: "project-a",
+        tokenIds: expect.arrayContaining(["7", "0x7"]),
+      }),
+      expect.objectContaining({ enabled: false }),
+    );
+
+    await screen.findByText("Token #1");
+
+    await waitFor(() => {
+      expect(mockUseCollectionTokensQuery).toHaveBeenLastCalledWith(
+        expect.objectContaining({
+          address: "0xabc",
+          project: "project-a",
+          tokenIds: expect.arrayContaining(["7", "0x7"]),
+        }),
+        expect.objectContaining({ enabled: true }),
+      );
+    });
   });
 
   it("token_grid_uses_image_fallback_when_missing", async () => {

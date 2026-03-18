@@ -322,6 +322,7 @@ export function CollectionTokenGrid({
   const showInlineResources = collectionFilterConfig.showInlineResources === true;
   const tokenCardConfig = collectionFilterConfig.tokenCard;
   const [gridMode, setGridMode] = useState<GridLayoutMode>("compact");
+  const [armedListedTokenEnrichmentScopeKey, setArmedListedTokenEnrichmentScopeKey] = useState("");
   const tokenIdsKey = useMemo(() => tokenIds?.join(",") ?? "", [tokenIds]);
   const activeFiltersKey = useMemo(
     () =>
@@ -341,6 +342,10 @@ export function CollectionTokenGrid({
           )
         : undefined,
     [activeFilters],
+  );
+  const listedTokenEnrichmentScopeKey = useMemo(
+    () => [address, projectId ?? "", tokenIdsKey, activeFiltersKey].join("::"),
+    [activeFiltersKey, address, projectId, tokenIdsKey],
   );
   const [pagination, dispatch] = useReducer(gridPaginationReducer, {
     cursor: undefined,
@@ -372,6 +377,16 @@ export function CollectionTokenGrid({
   useEffect(() => {
     dispatch({ type: "RESET" });
   }, [address, projectId, limit, tokenIdsKey, activeFiltersKey]);
+
+  useEffect(() => {
+    const timeoutId = window.setTimeout(() => {
+      setArmedListedTokenEnrichmentScopeKey(listedTokenEnrichmentScopeKey);
+    }, 0);
+
+    return () => {
+      window.clearTimeout(timeoutId);
+    };
+  }, [listedTokenEnrichmentScopeKey]);
 
   useEffect(() => {
     if (!tokenQuery.isSuccess) return;
@@ -406,7 +421,12 @@ export function CollectionTokenGrid({
       fetchImages: true,
       attributeFilters,
     },
-    { enabled: listedQueryTokenIds.length > 0 },
+    {
+      enabled:
+        armedListedTokenEnrichmentScopeKey === listedTokenEnrichmentScopeKey
+        && !tokenIds?.length
+        && listedQueryTokenIds.length > 0,
+    },
   );
 
   const nextCursor = tokenQuery.data?.page?.nextCursor ?? null;

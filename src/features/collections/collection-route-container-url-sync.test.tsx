@@ -1,17 +1,19 @@
 import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import { CollectionRouteContainer } from "@/features/collections/collection-route-container";
 import type { ActiveFilters } from "@/lib/marketplace/traits";
 
 const {
   mockCollectionRouteView,
   mockPush,
+  mockReplace,
   mockSearchParams,
   mockPathname,
 } = vi.hoisted(() => ({
   mockCollectionRouteView: vi.fn(),
   mockPush: vi.fn(),
+  mockReplace: vi.fn(),
   mockSearchParams: new URLSearchParams("cursor=page-2&foo=bar&trait=Eyes:Big&sort=price-asc"),
   mockPathname: "/collections/0xabc",
 }));
@@ -19,6 +21,7 @@ const {
 vi.mock("next/navigation", () => ({
   useRouter: () => ({
     push: mockPush,
+    replace: mockReplace,
   }),
   usePathname: () => mockPathname,
   useSearchParams: () => mockSearchParams,
@@ -81,7 +84,13 @@ vi.mock("@/features/collections/collection-route-view", () => ({
 }));
 
 describe("collection route container url sync", () => {
-  it("parses_trait_filters_from_url_and_pushes_updated_query", async () => {
+  beforeEach(() => {
+    mockCollectionRouteView.mockClear();
+    mockPush.mockClear();
+    mockReplace.mockClear();
+  });
+
+  it("parses_trait_filters_from_url_and_replaces_updated_query", async () => {
     const user = userEvent.setup();
 
     render(<CollectionRouteContainer address="0xabc" cursor={null} />);
@@ -92,19 +101,19 @@ describe("collection route container url sync", () => {
 
     await user.click(screen.getByRole("button", { name: /apply-filters/i }));
 
-    expect(mockPush).toHaveBeenCalledWith(
+    expect(mockReplace).toHaveBeenCalledWith(
       "/collections/0xabc?foo=bar&trait=Background%3ABlue",
     );
   });
 
-  it("pushes_updated_sort_to_url_and_resets_cursor", async () => {
+  it("replaces_updated_sort_in_url_and_resets_cursor", async () => {
     const user = userEvent.setup();
 
     render(<CollectionRouteContainer address="0xabc" cursor={null} />);
 
     await user.click(screen.getByRole("button", { name: /sort-power-desc/i }));
 
-    expect(mockPush).toHaveBeenCalledWith(
+    expect(mockReplace).toHaveBeenCalledWith(
       "/collections/0xabc?foo=bar&trait=Eyes%3ABig&sort=power-desc",
     );
   });
@@ -131,8 +140,19 @@ describe("collection route container url sync", () => {
     await user.click(screen.getByRole("button", { name: /apply-filters/i }));
     await user.click(screen.getByRole("button", { name: /sort-power-desc/i }));
 
-    expect(mockPush).toHaveBeenLastCalledWith(
+    expect(mockReplace).toHaveBeenLastCalledWith(
       "/collections/0xabc?foo=bar&trait=Background%3ABlue&sort=power-desc",
     );
+  });
+
+  it("does_not_push_history_entries_for_in_page_discovery_changes", async () => {
+    const user = userEvent.setup();
+
+    render(<CollectionRouteContainer address="0xabc" cursor={null} />);
+
+    await user.click(screen.getByRole("button", { name: /apply-filters/i }));
+
+    expect(mockPush).not.toHaveBeenCalled();
+    expect(mockReplace).toHaveBeenCalledTimes(1);
   });
 });
