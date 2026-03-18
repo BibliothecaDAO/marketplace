@@ -74,9 +74,16 @@ export type PrecomputedFilterData = {
   properties: Record<string, PrecomputedFilterProperty[]>;
 };
 
+export type NumericRangeFilter = {
+  min: number;
+  max: number;
+};
+
 type TokenLike = {
   metadata?: unknown;
 };
+
+const RANGE_FILTER_PREFIX = "__range__:";
 
 function normalizeTraitValue(value: unknown) {
   if (value === null || value === undefined) {
@@ -84,6 +91,34 @@ function normalizeTraitValue(value: unknown) {
   }
 
   return String(value);
+}
+
+export function encodeRangeFilterValue(min: number, max: number) {
+  const lower = Math.min(min, max);
+  const upper = Math.max(min, max);
+  return `${RANGE_FILTER_PREFIX}${lower}:${upper}`;
+}
+
+export function decodeRangeFilterValue(value: string): NumericRangeFilter | null {
+  if (!value.startsWith(RANGE_FILTER_PREFIX)) {
+    return null;
+  }
+
+  const [rawMin, rawMax] = value.slice(RANGE_FILTER_PREFIX.length).split(":");
+  const min = Number(rawMin);
+  const max = Number(rawMax);
+  if (!Number.isFinite(min) || !Number.isFinite(max)) {
+    return null;
+  }
+
+  return {
+    min: Math.min(min, max),
+    max: Math.max(min, max),
+  };
+}
+
+export function isRangeFilterValue(value: string) {
+  return decodeRangeFilterValue(value) !== null;
 }
 
 export function aggregateTraitSummaryPages(pages: TraitNameSummaryPage[]) {
@@ -213,6 +248,27 @@ export function flattenActiveFilters(activeFilters: ActiveFilters): TraitSelecti
   return entries;
 }
 
+export function flattenExactActiveFilters(activeFilters: ActiveFilters): TraitSelection[] {
+  return flattenActiveFilters(activeFilters).filter((entry) => !isRangeFilterValue(entry.value));
+}
+
+export function exactAttributeFiltersFromActiveFilters(activeFilters?: ActiveFilters) {
+  if (!activeFilters || Object.keys(activeFilters).length === 0) {
+    return undefined;
+  }
+
+  const filters = Object.fromEntries(
+    Object.entries(activeFilters)
+      .map(([traitName, values]) => [
+        traitName,
+        Array.from(values).filter((value) => !isRangeFilterValue(value)),
+      ])
+      .filter(([, values]) => values.length > 0),
+  );
+
+  return Object.keys(filters).length > 0 ? filters : undefined;
+}
+
 export function activeFiltersToSearchParams(activeFilters: ActiveFilters) {
   const params = new URLSearchParams();
   flattenActiveFilters(activeFilters).forEach((entry) => {
@@ -304,6 +360,20 @@ export function tokenMatchesActiveFilters(
   return entries.every(([traitName, acceptedValues]) => {
     if (acceptedValues.size === 0) {
       return true;
+    }
+
+    const rangeFilters = Array.from(acceptedValues)
+      .map((value) => decodeRangeFilterValue(value))
+      .filter((value): value is NumericRangeFilter => value !== null);
+    if (rangeFilters.length > 0) {
+      const actualNumericValue = numericTraitValueByName(token.metadata, traitName);
+      if (actualNumericValue === null) {
+        return false;
+      }
+
+      return rangeFilters.some(
+        (range) => actualNumericValue >= range.min && actualNumericValue <= range.max,
+      );
     }
 
     const actual = traitValueByName(token.metadata, traitName);

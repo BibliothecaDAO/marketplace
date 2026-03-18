@@ -18,7 +18,11 @@ import {
   type SeedCollection,
   getMarketplaceRuntimeConfig,
 } from "@/lib/marketplace/config";
-import { type ActiveFilters, type TraitSelection } from "@/lib/marketplace/traits";
+import {
+  flattenExactActiveFilters,
+  type ActiveFilters,
+  type TraitSelection,
+} from "@/lib/marketplace/traits";
 import dynamic from "next/dynamic";
 
 const CollectionMarketPanel = dynamic(
@@ -198,13 +202,8 @@ export function CollectionRouteView({
 
   const otherTraitFilters = useMemo(() => {
     if (!openTraitName) return undefined;
-    const result: TraitSelection[] = [];
-    for (const [name, values] of Object.entries(resolvedActiveFilters)) {
-      if (name === openTraitName) continue;
-      for (const value of values) {
-        result.push({ name, value });
-      }
-    }
+    const result: TraitSelection[] = flattenExactActiveFilters(resolvedActiveFilters)
+      .filter((entry) => entry.name !== openTraitName);
     return result.length > 0 ? result : undefined;
   }, [openTraitName, resolvedActiveFilters]);
 

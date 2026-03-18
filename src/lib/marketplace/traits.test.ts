@@ -5,6 +5,7 @@ import {
   aggregateTraitSummaryPages,
   computeAvailableFilters,
   computePrecomputedFilters,
+  encodeRangeFilterValue,
   fetchFilteredTraitValues,
   fetchTraitNamesSummary,
   filterTokensByActiveFilters,
@@ -128,6 +129,22 @@ describe("marketplace trait utilities", () => {
     expect(Array.from(roundTripped.Eyes).sort()).toEqual(["Big"]);
   });
 
+  it("range_filters_round_trip_with_single_url_entry", () => {
+    const filters = {
+      Level: new Set([encodeRangeFilterValue(10, 20)]),
+    };
+
+    const params = activeFiltersToSearchParams(filters);
+    const roundTripped = activeFiltersFromSearchParams(params);
+
+    expect(params.getAll("trait")).toEqual([
+      "Level:__range__:10:20",
+    ]);
+    expect(Array.from(roundTripped.Level)).toEqual([
+      "__range__:10:20",
+    ]);
+  });
+
   it("trait_names_summary_calls_fetcher_and_aggregates", async () => {
     const fetcher = vi.fn(async () => ({
       pages: [
@@ -194,6 +211,28 @@ describe("marketplace trait utilities", () => {
     expect(byBatch.map((item) => item.token_id)).toEqual(
       bySingle.map((item) => item.token_id),
     );
+  });
+
+  it("token_matches_numeric_range_filters", () => {
+    const filters = { Level: new Set([encodeRangeFilterValue(10, 20)]) };
+    const tokens = [
+      {
+        token_id: "1",
+        metadata: {
+          attributes: [{ trait_type: "Level", value: "15" }],
+        },
+      },
+      {
+        token_id: "2",
+        metadata: {
+          attributes: [{ trait_type: "Level", value: "25" }],
+        },
+      },
+    ];
+
+    expect(tokenMatchesActiveFilters(tokens[0], filters)).toBe(true);
+    expect(tokenMatchesActiveFilters(tokens[1], filters)).toBe(false);
+    expect(filterTokensByActiveFilters(tokens, filters).map((item) => item.token_id)).toEqual(["1"]);
   });
 
   it("reads_trait_values_from_mixed_metadata_shapes", () => {

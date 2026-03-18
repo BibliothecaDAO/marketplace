@@ -1,7 +1,11 @@
 "use client";
 
 import { Slider } from "@/components/ui/slider";
-import type { PrecomputedFilterProperty } from "@/lib/marketplace/traits";
+import {
+  decodeRangeFilterValue,
+  encodeRangeFilterValue,
+  type PrecomputedFilterProperty,
+} from "@/lib/marketplace/traits";
 
 type RangeSliderFilterProps = {
   activeValues?: Set<string>;
@@ -40,6 +44,16 @@ function selectedBounds(
   min: number,
   max: number,
 ) {
+  const rangeFilter = Array.from(activeValues ?? [])
+    .map((value) => decodeRangeFilterValue(value))
+    .find((value): value is NonNullable<typeof value> => value !== null);
+  if (rangeFilter) {
+    return [
+      Math.max(min, rangeFilter.min),
+      Math.min(max, rangeFilter.max),
+    ] as const;
+  }
+
   const selected = numericValues
     .filter((item) => activeValues?.has(item.rawValue) ?? false)
     .map((item) => item.numericValue);
@@ -88,11 +102,12 @@ export function RangeSliderFilter({
         onValueChange={(nextValue) => {
           const start = Math.min(nextValue[0] ?? min, nextValue[1] ?? max);
           const end = Math.max(nextValue[0] ?? min, nextValue[1] ?? max);
-          onChange(
-            numericValues
-              .filter((item) => item.numericValue >= start && item.numericValue <= end)
-              .map((item) => item.rawValue),
-          );
+          if (start <= min && end >= max) {
+            onChange([]);
+            return;
+          }
+
+          onChange([encodeRangeFilterValue(start, end)]);
         }}
       />
       <div className="flex items-center justify-between text-xs text-muted-foreground">

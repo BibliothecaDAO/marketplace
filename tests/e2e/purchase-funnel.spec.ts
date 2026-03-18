@@ -87,7 +87,9 @@ test.describe("purchase funnel skeleton", () => {
       "Portfolio holdings view did not initialize in this environment.",
     );
 
-    await expect(page.getByText("0x1")).toBeVisible();
+    await expect(
+      page.getByRole("textbox", { name: /wallet address/i }),
+    ).toHaveValue("0x1");
 
     const emptyStateVisible =
       (await page.getByText(/no items found for this wallet/i).count()) > 0;

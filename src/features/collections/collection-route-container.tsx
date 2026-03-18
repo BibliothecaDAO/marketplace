@@ -119,7 +119,7 @@ export function CollectionRouteContainer({
 
     dispatchOptimisticDiscoveryState({ type: "APPLY", state: clonedState });
     startTransition(() => {
-      router.push(query ? `${pathname}?${query}` : pathname);
+      router.replace(query ? `${pathname}?${query}` : pathname);
     });
   }, [pathname, router, searchParamsKey]);
 

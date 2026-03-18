@@ -25,7 +25,8 @@ import {
 } from "@/lib/marketplace/token-id";
 import { normalizeMarketplaceAddress } from "@/lib/marketplace/address";
 import type { TraitSelection } from "@/lib/marketplace/traits";
-import { aggregateTraitSummaryPages, aggregateTraitValuePages } from "@/lib/marketplace/traits";
+import { aggregateTraitValuePages } from "@/lib/marketplace/traits";
+import { traitNamesSummaryQueryOptions } from "@/lib/marketplace/trait-summary-query";
 
 function hasUsableToken(data: TokenDetails | null | undefined): data is TokenDetails {
   return data !== null && data !== undefined && data.token !== null && data.token !== undefined;
@@ -255,17 +256,7 @@ export function useTraitNamesSummaryQuery(options: {
   projectId?: string;
 }) {
   return useQuery({
-    queryKey: ["trait-names-summary", options.address, options.projectId] as const,
-    queryFn: async () => {
-      const { fetchTraitNamesSummary } = await import(
-        "@cartridge/arcade/marketplace"
-      );
-      const result = await fetchTraitNamesSummary({
-        address: options.address,
-        defaultProjectId: options.projectId,
-      });
-      return aggregateTraitSummaryPages(result.pages);
-    },
+    ...traitNamesSummaryQueryOptions(options),
     enabled: !!options.address,
   });
 }
