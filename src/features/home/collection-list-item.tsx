@@ -1,18 +1,86 @@
 "use client";
 
+import { useMemo } from "react";
 import Link from "next/link";
-import type { CollectionCardData } from "@/features/home/types";
+import {
+  useCollectionQuery,
+  useCollectionListingsQuery,
+} from "@/lib/marketplace/hooks";
+import {
+  formatPriceForDisplay,
+  formatNumberish,
+} from "@/lib/marketplace/token-display";
+import { getCollectionBannerImage } from "@/lib/marketplace/collection-banners";
+import { cheapestListingByTokenId } from "@/features/cart/listing-utils";
+import { COLLECTION_LISTING_SAMPLE_LIMIT } from "@/lib/marketplace/query-limits";
 
-type CollectionListItemProps = CollectionCardData;
+type CollectionListItemProps = {
+  address: string;
+  name: string;
+  projectId?: string;
+  /** Pre-resolved image — if not provided, attempts banner lookup */
+  imageUrl?: string | null;
+};
+
+function metadataImage(metadata: unknown): string | null {
+  if (!metadata || typeof metadata !== "object") return null;
+  const fields = metadata as Record<string, unknown>;
+  const image = fields.image ?? fields.image_url;
+  return typeof image === "string" && image.trim() ? image : null;
+}
 
 export function CollectionListItem({
   address,
   name,
-  imageUrl,
-  floorPrice,
-  totalSupply,
-  listingCount,
+  projectId,
+  imageUrl: imageUrlProp,
 }: CollectionListItemProps) {
+  const collectionQuery = useCollectionQuery({
+    address,
+    projectId,
+    fetchImages: true,
+  });
+
+  const listingsQuery = useCollectionListingsQuery({
+    collection: address,
+    projectId,
+    limit: COLLECTION_LISTING_SAMPLE_LIMIT,
+    verifyOwnership: false,
+  });
+
+  const cheapestListings = useMemo(
+    () => cheapestListingByTokenId(listingsQuery.data),
+    [listingsQuery.data],
+  );
+
+  const floorPrice = useMemo(() => {
+    let minPrice: bigint | null = null;
+    for (const listing of cheapestListings.values()) {
+      try {
+        const parsed = BigInt(listing.price);
+        if (minPrice === null || parsed < minPrice) {
+          minPrice = parsed;
+        }
+      } catch {
+        // skip
+      }
+    }
+    if (minPrice === null) return null;
+    return formatPriceForDisplay(minPrice.toString());
+  }, [cheapestListings]);
+
+  const totalSupply = formatNumberish(collectionQuery.data?.totalSupply) ?? null;
+  const listingCount = Array.isArray(listingsQuery.data)
+    ? String(listingsQuery.data.length)
+    : null;
+
+  const resolvedImage =
+    imageUrlProp ??
+    metadataImage(collectionQuery.data?.metadata) ??
+    getCollectionBannerImage(name);
+
+  const isLoading = collectionQuery.isLoading || listingsQuery.isLoading;
+
   return (
     <Link
       href={`/collections/${address}`}
@@ -20,11 +88,11 @@ export function CollectionListItem({
     >
       {/* Collection image */}
       <div className="h-14 w-14 shrink-0 overflow-hidden rounded-md bg-muted">
-        {imageUrl ? (
+        {resolvedImage ? (
           // eslint-disable-next-line @next/next/no-img-element
           <img
             alt={`${name} preview`}
-            src={imageUrl}
+            src={resolvedImage}
             className="h-full w-full object-cover"
           />
         ) : (
@@ -40,21 +108,34 @@ export function CollectionListItem({
           {name}
         </p>
         <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-0.5 text-xs text-muted-foreground">
-          {floorPrice ? (
-            <span>
-              Floor <span className="font-medium text-primary">{floorPrice}</span>
-            </span>
-          ) : null}
-          {totalSupply ? (
-            <span>
-              Items <span className="font-medium text-foreground">{totalSupply}</span>
-            </span>
-          ) : null}
-          {listingCount ? (
-            <span>
-              Listed <span className="font-medium text-foreground">{listingCount}</span>
-            </span>
-          ) : null}
+          {isLoading ? (
+            <span className="inline-block h-3 w-32 animate-pulse rounded bg-muted" />
+          ) : (
+            <>
+              {floorPrice ? (
+                <span>
+                  Floor{" "}
+                  <span className="font-medium text-primary">{floorPrice}</span>
+                </span>
+              ) : null}
+              {totalSupply ? (
+                <span>
+                  Items{" "}
+                  <span className="font-medium text-foreground">
+                    {totalSupply}
+                  </span>
+                </span>
+              ) : null}
+              {listingCount ? (
+                <span>
+                  Listed{" "}
+                  <span className="font-medium text-foreground">
+                    {listingCount}
+                  </span>
+                </span>
+              ) : null}
+            </>
+          )}
         </div>
       </div>
 
@@ -66,7 +147,11 @@ export function CollectionListItem({
         strokeWidth={2}
         stroke="currentColor"
       >
-        <path strokeLinecap="round" strokeLinejoin="round" d="M8.25 4.5l7.5 7.5-7.5 7.5" />
+        <path
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          d="M8.25 4.5l7.5 7.5-7.5 7.5"
+        />
       </svg>
     </Link>
   );

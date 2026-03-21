@@ -112,7 +112,11 @@ export function MarketplaceHome() {
                 ))
               : filteredCollections.map((collection) => (
                   <div key={collection.address} data-collection-row>
-                    <CollectionListItem {...collection} />
+                    <CollectionListItem
+                      address={collection.address}
+                      name={collection.name}
+                      projectId={collection.projectId}
+                    />
                   </div>
                 ))}
           </div>
@@ -125,14 +129,9 @@ export function MarketplaceHome() {
               Featured
             </h2>
             <PromotedCollection
-              collection={{
-                address: promotedCollection.address,
-                name: promotedCollection.name,
-                imageUrl: promotedCollection.imageUrl,
-                floorPrice: promotedCollection.floorPrice,
-                totalSupply: promotedCollection.totalSupply ?? null,
-                listingCount: promotedCollection.listingCount ?? null,
-              }}
+              address={promotedCollection.address}
+              name={promotedCollection.name}
+              projectId={promotedCollection.projectId}
             />
           </div>
         ) : null}

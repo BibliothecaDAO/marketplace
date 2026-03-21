@@ -27,8 +27,8 @@ vi.mock("@/features/home/collection-list-item", () => ({
 }));
 
 vi.mock("@/features/home/promoted-collection", () => ({
-  PromotedCollection: ({ collection }: { collection: { name: string } }) => (
-    <div data-testid="promoted-collection">{collection.name}</div>
+  PromotedCollection: ({ name }: { name: string }) => (
+    <div data-testid="promoted-collection">{name}</div>
   ),
 }));
 
