@@ -80,18 +80,22 @@ export const MarketplaceTokenCard = React.memo(function MarketplaceTokenCard({
       </div>
       <CardContent
         aria-label={cardContentAriaLabel}
-        className={cn("space-y-1 px-3 pb-3 pt-2", contentClassName)}
+        className={cn("flex-1 space-y-1 px-3 pb-3 pt-2", contentClassName)}
         role={cardContentRole}
       >
         <p className="text-sm font-medium">{tokenName(token)}</p>
         <p className="text-xs text-muted-foreground">#{displayTokenId(token)}</p>
         {inlineTraits}
-        {displayPrice ? (
-          <p className="text-xs text-primary font-medium flex items-center gap-1">
-            {displayPrice}
-            {currency ? <TokenSymbol address={currency} className="text-muted-foreground" /> : null}
-          </p>
-        ) : null}
+        <p className="text-xs text-primary font-medium flex items-center gap-1 min-h-[1.25rem]">
+          {displayPrice ? (
+            <>
+              {displayPrice}
+              {currency ? <TokenSymbol address={currency} className="text-muted-foreground" /> : null}
+            </>
+          ) : (
+            <span className="invisible">—</span>
+          )}
+        </p>
       </CardContent>
       <div
         className="pointer-events-none absolute inset-0 flex items-end bg-background/85 p-2 opacity-0 transition-opacity duration-150 group-hover:pointer-events-auto group-hover:opacity-100 group-focus-visible:pointer-events-auto group-focus-visible:opacity-100 group-focus-within:pointer-events-auto group-focus-within:opacity-100"
@@ -145,7 +149,7 @@ export const MarketplaceTokenCard = React.memo(function MarketplaceTokenCard({
   return (
     <Card
       className={cn(
-        "relative overflow-hidden py-0 transition-all duration-150 hover:shadow-[0_0_12px_oklch(0.75_0.1_75/0.1)]",
+        "relative flex flex-col overflow-hidden py-0 transition-all duration-150 hover:shadow-[0_0_12px_oklch(0.75_0.1_75/0.1)]",
         cardClassName,
       )}
     >
@@ -153,7 +157,7 @@ export const MarketplaceTokenCard = React.memo(function MarketplaceTokenCard({
         <button
           type="button"
           className={cn(
-            "group block w-full text-left transition-all duration-150 hover:-translate-y-1 hover:border-primary/30",
+            "group flex flex-1 flex-col w-full text-left transition-all duration-150 hover:-translate-y-1 hover:border-primary/30",
             linkClassName,
           )}
           onClick={onSelect}
@@ -164,7 +168,7 @@ export const MarketplaceTokenCard = React.memo(function MarketplaceTokenCard({
       ) : (
         <Link
           className={cn(
-            "group block transition-all duration-150 hover:-translate-y-1 hover:border-primary/30",
+            "group flex flex-1 flex-col transition-all duration-150 hover:-translate-y-1 hover:border-primary/30",
             linkClassName,
           )}
           href={href}
@@ -175,7 +179,7 @@ export const MarketplaceTokenCard = React.memo(function MarketplaceTokenCard({
       )}
 
       {showActions ? (
-        <div className="grid grid-cols-2 gap-2 border-t border-border/60 px-3 py-3">
+        <div className="mt-auto grid grid-cols-2 gap-2 border-t border-border/60 px-3 py-3">
           {onBuyNow ? (
             <Button onClick={onBuyNow} type="button" size="sm">
               {buyNowLabel}
