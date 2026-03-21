@@ -1,8 +1,10 @@
 "use client";
 
 import { useDeferredValue, useMemo, useState } from "react";
+import { Copy, Check } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
+import { useEntrance } from "@/lib/animation";
 import {
   Select,
   SelectContent,
@@ -124,6 +126,13 @@ export function WalletProfileView({
   const [filterInput, setFilterInput] = useState("");
   const [selectedCollection, setSelectedCollection] = useState(ALL_COLLECTIONS_VALUE);
   const [density, setDensity] = useState<GridDensityMode>("standard");
+  const [copied, setCopied] = useState(false);
+
+  const holdingsRef = useEntrance<HTMLDivElement>({
+    selector: '[data-holding-section]',
+    staggerDelay: 60,
+    translateY: 16,
+  });
 
   const isLoading =
     portfolioQuery.status === "pending" || portfolioQuery.isFetching;
@@ -202,9 +211,23 @@ export function WalletProfileView({
         <div className="space-y-1">
           <h1 className="text-2xl font-semibold tracking-tight">{title}</h1>
           <p className="text-sm text-muted-foreground">{addressLabel}</p>
-          <code className="block w-full overflow-x-auto rounded-sm border border-border/70 bg-muted/30 p-3 text-xs sm:text-sm">
-            {address}
-          </code>
+          <div className="flex items-center gap-2">
+            <code className="block overflow-x-auto rounded-sm border border-border/70 bg-muted/30 px-3 py-2 text-xs sm:text-sm font-mono">
+              {address.slice(0, 6)}...{address.slice(-4)}
+            </code>
+            <button
+              type="button"
+              onClick={() => {
+                navigator.clipboard.writeText(address);
+                setCopied(true);
+                setTimeout(() => setCopied(false), 2000);
+              }}
+              className="flex h-8 w-8 shrink-0 items-center justify-center rounded-sm border border-border/70 bg-muted/30 text-muted-foreground hover:text-foreground transition-colors"
+              aria-label="Copy address"
+            >
+              {copied ? <Check className="h-3.5 w-3.5" /> : <Copy className="h-3.5 w-3.5" />}
+            </button>
+          </div>
         </div>
       ) : null}
 
@@ -296,16 +319,17 @@ export function WalletProfileView({
               No items match the current filter.
             </p>
           ) : (
-            <div className="space-y-8">
+            <div ref={holdingsRef} className="space-y-8">
               {filteredCollections.map(({ collectionAddress, collectionName, projectId, tokenIds }) => (
-                <CollectionHoldingSection
-                  collectionAddress={collectionAddress}
-                  collectionName={collectionName}
-                  density={density}
-                  key={collectionAddress}
-                  projectId={projectId}
-                  tokenIds={tokenIds}
-                />
+                <div key={collectionAddress} data-holding-section>
+                  <CollectionHoldingSection
+                    collectionAddress={collectionAddress}
+                    collectionName={collectionName}
+                    density={density}
+                    projectId={projectId}
+                    tokenIds={tokenIds}
+                  />
+                </div>
               ))}
             </div>
           )}

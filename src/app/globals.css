@@ -37,10 +37,10 @@
   --sidebar-accent-foreground: oklch(0.20 0.01 260);
   --sidebar-border: oklch(0.88 0.005 260);
   --sidebar-ring: oklch(0.50 0.15 75);
-  --font-sans: Geist Mono, ui-monospace, monospace;
+  --font-sans: "Geist", ui-sans-serif, system-ui, sans-serif;
   --font-serif: serif;
   --font-mono: JetBrains Mono, monospace;
-  --radius: 0.25rem;
+  --radius: 0.5rem;
   --shadow-2xs: none;
   --shadow-xs: none;
   --shadow-sm: 0 0 0 1px oklch(0 0 0 / 0.06);
@@ -49,6 +49,8 @@
   --shadow-lg: 0 1px 3px 0 oklch(0 0 0 / 0.1);
   --shadow-xl: 0 2px 4px 0 oklch(0 0 0 / 0.12);
   --shadow-2xl: 0 2px 6px 0 oklch(0 0 0 / 0.15);
+  --shadow-glow-sm: 0 0 12px oklch(0.75 0.1 75 / 0.1);
+  --shadow-glow-md: 0 0 20px oklch(0.75 0.15 75 / 0.15);
   --tracking-normal: 0.02em;
   --spacing: 0.25rem;
 }
@@ -86,10 +88,10 @@
   --sidebar-accent-foreground: oklch(0.88 0.01 85);
   --sidebar-border: oklch(0.28 0.01 75);
   --sidebar-ring: oklch(0.75 0.15 75);
-  --font-sans: Geist Mono, ui-monospace, monospace;
+  --font-sans: "Geist", ui-sans-serif, system-ui, sans-serif;
   --font-serif: serif;
   --font-mono: JetBrains Mono, monospace;
-  --radius: 0.25rem;
+  --radius: 0.5rem;
   --shadow-2xs: none;
   --shadow-xs: none;
   --shadow-sm: 0 0 0 1px oklch(0 0 0 / 0.06);
@@ -98,6 +100,8 @@
   --shadow-lg: 0 1px 3px 0 oklch(0 0 0 / 0.1);
   --shadow-xl: 0 2px 4px 0 oklch(0 0 0 / 0.12);
   --shadow-2xl: 0 2px 6px 0 oklch(0 0 0 / 0.15);
+  --shadow-glow-sm: 0 0 12px oklch(0.75 0.1 75 / 0.12);
+  --shadow-glow-md: 0 0 20px oklch(0.75 0.15 75 / 0.18);
 }
 
 @theme inline {
@@ -148,6 +152,8 @@
   --shadow-lg: var(--shadow-lg);
   --shadow-xl: var(--shadow-xl);
   --shadow-2xl: var(--shadow-2xl);
+  --shadow-glow-sm: var(--shadow-glow-sm);
+  --shadow-glow-md: var(--shadow-glow-md);
   --tracking-tighter: calc(var(--tracking-normal) - 0.05em);
   --tracking-tight: calc(var(--tracking-normal) - 0.025em);
   --tracking-normal: var(--tracking-normal);
@@ -181,5 +187,11 @@
   ::selection {
     background: oklch(0.75 0.15 75 / 0.3);
     color: var(--foreground);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :root {
+    --animation-enabled: 0;
   }
 }

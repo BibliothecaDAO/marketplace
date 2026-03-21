@@ -40,6 +40,7 @@ import { COLLECTION_LISTING_SAMPLE_LIMIT } from "@/lib/marketplace/query-limits"
 import { expandTokenIdQueryVariants } from "@/lib/marketplace/token-id";
 import { realmResourceCount, realmResources } from "@/lib/marketplace/token-attributes";
 import { cn } from "@/lib/utils";
+import { useEntrance } from "@/lib/animation";
 import {
   cartItemFromTokenListing,
   cheapestListingByTokenId,
@@ -471,6 +472,15 @@ export function CollectionTokenGrid({
   const isListMode = gridMode === "list";
   const gridClasses = GRID_CLASSES_BY_DENSITY[isListMode ? "compact" : gridMode];
 
+  // Grid entrance stagger animation — re-triggers on filter/sort changes via key
+  const gridAnimationKey = `${activeFiltersKey}-${sortMode}-${gridMode}`;
+  const gridRef = useEntrance<HTMLDivElement>({
+    selector: "[data-token-card]",
+    staggerDelay: 30,
+    translateY: 12,
+    threshold: 0.05,
+  });
+
   return (
     <section className="space-y-4">
       <div className="flex flex-wrap items-center justify-between gap-3">
@@ -532,6 +542,8 @@ export function CollectionTokenGrid({
 
       {!tokenQuery.isLoading && !isListMode ? (
         <div
+          ref={gridRef}
+          key={gridAnimationKey}
           className={cn("grid gap-3", gridClasses)}
           data-testid="collection-token-grid-cards"
         >
@@ -554,7 +566,7 @@ export function CollectionTokenGrid({
               : null;
 
             return (
-              <div key={tokenId(token)}>
+              <div key={tokenId(token)} data-token-card>
                 <div
                   className={cn(
                     "rounded-lg transition-all duration-150",

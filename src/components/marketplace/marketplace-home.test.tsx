@@ -20,12 +20,20 @@ vi.mock("@/features/home/hero-banner", () => ({
   HeroBanner: () => <section data-testid="hero-banner">Hero</section>,
 }));
 
-vi.mock("@/features/home/trending-tokens-section", () => ({
-  TrendingTokensSection: () => <section data-testid="trending-tokens">Trending</section>,
+vi.mock("@/features/home/collection-list-item", () => ({
+  CollectionListItem: ({ name }: { name: string }) => (
+    <div data-testid="collection-list-item">{name}</div>
+  ),
 }));
 
-vi.mock("@/features/home/collection-cards-section", () => ({
-  CollectionCardsSection: () => <section data-testid="collection-cards">Collections</section>,
+vi.mock("@/features/home/promoted-collection", () => ({
+  PromotedCollection: ({ name }: { name: string }) => (
+    <div data-testid="promoted-collection">{name}</div>
+  ),
+}));
+
+vi.mock("@/lib/animation", () => ({
+  useEntrance: () => ({ current: null }),
 }));
 
 describe("MarketplaceHome", () => {
@@ -40,7 +48,10 @@ describe("MarketplaceHome", () => {
       },
       trendingTokens: [],
       sidebarCollections: [{ address: "0xabc", name: "Genesis" }],
-      collectionCards: [{ address: "0xabc", name: "Genesis" }],
+      collectionCards: [
+        { address: "0xabc", name: "Genesis" },
+        { address: "0xdef", name: "Alpha" },
+      ],
       isLoading: false,
     });
   });
@@ -51,16 +62,17 @@ describe("MarketplaceHome", () => {
     expect(screen.getByTestId("hero-banner")).toBeVisible();
   });
 
-  it("renders_trending_tokens_section", () => {
+  it("renders_collection_list_items", () => {
     render(<MarketplaceHome />);
 
-    expect(screen.getByTestId("trending-tokens")).toBeVisible();
+    const items = screen.getAllByTestId("collection-list-item");
+    expect(items.length).toBe(2);
   });
 
-  it("renders_collection_cards_section", () => {
+  it("renders_promoted_collection", () => {
     render(<MarketplaceHome />);
 
-    expect(screen.getByTestId("collection-cards")).toBeVisible();
+    expect(screen.getByTestId("promoted-collection")).toBeVisible();
   });
 
   it("renders_empty_state_when_no_collections", () => {

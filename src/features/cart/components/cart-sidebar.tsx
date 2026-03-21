@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { ArcadeProvider, NAMESPACE } from "@cartridge/arcade";
 import { useMarketplaceClient } from "@cartridge/arcade/marketplace/react";
 import { useAccount, useBalance } from "@starknet-react/core";
@@ -29,6 +29,7 @@ import {
 import { getMarketplaceRuntimeConfig } from "@/lib/marketplace/config";
 import { CART_LISTING_VALIDATION_LIMIT } from "@/lib/marketplace/query-limits";
 import { useCartStore } from "@/features/cart/store/cart-store";
+import { useListAnimation } from "@/lib/animation";
 
 const CLIENT_FEE_BPS = 500;
 const CLIENT_FEE_DENOMINATOR = 10_000;
@@ -463,6 +464,12 @@ export function CartSidebar() {
   const setItemError = useCartStore((state) => state.setItemError);
   const clearItemError = useCartStore((state) => state.clearItemError);
   const clearInlineErrors = useCartStore((state) => state.clearInlineErrors);
+  const itemsRef = useRef<HTMLDivElement>(null);
+  useListAnimation(itemsRef, {
+    enterFrom: { opacity: 0, translateX: 20 },
+    staggerDelay: 0,
+  });
+
   const { account, isConnected } = useAccount();
   const cartCurrency = items[0]?.currency;
   const { data: walletBalanceData, isLoading: isBalanceLoading } = useBalance({
@@ -1127,7 +1134,8 @@ export function CartSidebar() {
                 </Link>
               </div>
             ) : (
-              items.map((item) => {
+              <div ref={itemsRef} className="space-y-3">
+              {items.map((item) => {
                 const hasError = !!inlineErrors[item.orderId];
                 const detailHref = `/collections/${item.collection}/${item.tokenId}`;
                 return (
@@ -1212,7 +1220,8 @@ export function CartSidebar() {
                     ) : null}
                   </div>
                 );
-              })
+              })}
+              </div>
             )}
           </div>
 

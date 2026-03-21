@@ -1,6 +1,9 @@
+"use client";
+
+import { useRef, useEffect } from "react";
 import Link from "next/link";
+import { animate, stagger } from "animejs";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 
 type HeroBannerProps = {
@@ -22,23 +25,36 @@ export function HeroBanner({
   listingCount,
   isLoading = false,
 }: HeroBannerProps) {
+  const containerRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const el = containerRef.current;
+    if (!el || isLoading) return;
+    if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+
+    animate(el.querySelectorAll(".hero-image"), { opacity: [0, 1], duration: 600, ease: "easeOutCubic" });
+    animate(el.querySelectorAll(".hero-overlay"), { opacity: [0, 1], translateY: [20, 0], duration: 400, delay: 200, ease: "easeOutCubic" });
+    animate(el.querySelectorAll(".hero-title"), { opacity: [0, 1], translateY: [16, 0], duration: 500, delay: 300, ease: "easeOutCubic" });
+    animate(el.querySelectorAll(".hero-stat"), { opacity: [0, 1], translateY: [12, 0], delay: stagger(80, { start: 400 }), duration: 500, ease: "easeOutCubic" });
+    animate(el.querySelectorAll(".hero-cta"), { opacity: [0, 1], duration: 400, delay: 600, ease: "easeOutCubic" });
+  }, [isLoading]);
+
   if (isLoading) {
     return (
-      <Card data-testid="hero-banner" className="overflow-hidden py-0">
-        <div className="relative h-56 w-full">
-          <Skeleton data-testid="hero-banner-skeleton" className="h-full w-full rounded-none" />
-        </div>
-        <CardContent className="space-y-3 px-4 py-4 sm:px-6">
-          <Skeleton data-testid="hero-banner-skeleton" className="h-6 w-40" />
-          <Skeleton data-testid="hero-banner-skeleton" className="h-4 w-64" />
-        </CardContent>
-      </Card>
+      <div data-testid="hero-banner" className="relative h-56 sm:h-72 lg:h-80 w-full overflow-hidden rounded-lg">
+        <Skeleton data-testid="hero-banner-skeleton" className="h-full w-full rounded-none" />
+      </div>
     );
   }
 
   return (
-    <Card data-testid="hero-banner" className="overflow-hidden py-0">
-      <div className="relative h-56 w-full">
+    <div
+      ref={containerRef}
+      data-testid="hero-banner"
+      className="relative h-56 sm:h-72 lg:h-80 w-full overflow-hidden rounded-lg border border-primary/20"
+    >
+      {/* Background image */}
+      <div className="hero-image absolute inset-0">
         {imageUrl ? (
           // eslint-disable-next-line @next/next/no-img-element
           <img
@@ -52,31 +68,41 @@ export function HeroBanner({
             className="h-full w-full bg-gradient-to-br from-primary/35 via-accent to-muted"
           />
         )}
-        <div className="absolute inset-0 bg-gradient-to-t from-background/85 via-background/25 to-transparent" />
       </div>
 
-      <CardContent className="space-y-4 px-4 py-4 sm:px-6">
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <h2 className="text-xl font-semibold tracking-tight">{name}</h2>
-          <Button asChild size="sm">
+      {/* Gradient overlay — stronger at bottom for text readability */}
+      <div className="hero-overlay absolute inset-0 bg-gradient-to-t from-background via-background/40 to-transparent" />
+
+      {/* Content overlay — positioned at bottom */}
+      <div className="absolute inset-x-0 bottom-0 px-4 pb-4 sm:px-6 sm:pb-6">
+        {/* Title row */}
+        <div className="hero-title flex flex-wrap items-end justify-between gap-3 mb-3">
+          <div>
+            <h2 className="text-2xl sm:text-3xl font-bold tracking-tight text-foreground drop-shadow-sm">
+              {name}
+            </h2>
+          </div>
+          <Button asChild size="sm" className="hero-cta shrink-0">
             <Link href={`/collections/${address}`}>View Collection</Link>
           </Button>
         </div>
-        <div className="grid grid-cols-3 gap-2 text-xs sm:text-sm">
-          <div className="rounded-md border border-border/70 bg-muted/40 px-3 py-2">
-            <p className="text-muted-foreground">Floor</p>
-            <p className="font-medium">{floorPrice ?? "--"}</p>
+
+        {/* Stats row — glass pills */}
+        <div className="flex flex-wrap gap-2">
+          <div className="hero-stat rounded-md border border-border/50 backdrop-blur-md bg-background/50 px-3 py-1.5 text-xs sm:text-sm">
+            <span className="text-muted-foreground mr-1.5">Floor</span>
+            <span className="font-medium text-foreground">{floorPrice ?? "--"}</span>
           </div>
-          <div className="rounded-md border border-border/70 bg-muted/40 px-3 py-2">
-            <p className="text-muted-foreground">Supply</p>
-            <p className="font-medium">{totalSupply ?? "--"}</p>
+          <div className="hero-stat rounded-md border border-border/50 backdrop-blur-md bg-background/50 px-3 py-1.5 text-xs sm:text-sm">
+            <span className="text-muted-foreground mr-1.5">Supply</span>
+            <span className="font-medium text-foreground">{totalSupply ?? "--"}</span>
           </div>
-          <div className="rounded-md border border-border/70 bg-muted/40 px-3 py-2">
-            <p className="text-muted-foreground">Listed</p>
-            <p className="font-medium">{listingCount ?? "--"}</p>
+          <div className="hero-stat rounded-md border border-border/50 backdrop-blur-md bg-background/50 px-3 py-1.5 text-xs sm:text-sm">
+            <span className="text-muted-foreground mr-1.5">Listed</span>
+            <span className="font-medium text-foreground">{listingCount ?? "--"}</span>
           </div>
         </div>
-      </CardContent>
-    </Card>
+      </div>
+    </div>
   );
 }

@@ -1149,8 +1149,10 @@ describe("token detail view", () => {
 
     render(<TokenDetailView address="0xabc" tokenId="0x17a" />);
 
-    // Should display as decimal, not raw hex
-    expect(screen.getByText("#378")).toBeVisible();
+    // Should display as decimal, not raw hex (breadcrumb + detail both show #378)
+    const matches = screen.getAllByText("#378");
+    expect(matches.length).toBeGreaterThanOrEqual(1);
+    matches.forEach((el) => expect(el).toBeVisible());
     expect(screen.queryByText("#0x17a")).toBeNull();
   });
 

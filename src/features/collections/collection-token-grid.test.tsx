@@ -806,7 +806,8 @@ describe("collection token grid", () => {
     expect(grid).toHaveClass("grid-cols-2", "sm:grid-cols-3", "lg:grid-cols-4");
 
     await user.click(screen.getByRole("button", { name: /dense/i }));
-    expect(grid).toHaveClass("grid-cols-2", "sm:grid-cols-3", "lg:grid-cols-6");
+    const denseGrid = screen.getByTestId("collection-token-grid-cards");
+    expect(denseGrid).toHaveClass("grid-cols-2", "sm:grid-cols-3", "lg:grid-cols-6");
   });
 
   it("list_view_renders_tokens_in_a_table_layout", async () => {

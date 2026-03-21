@@ -9,6 +9,7 @@ import {
   getCollectionFilterConfig,
   type PillsFilterOverride,
 } from "@/lib/marketplace/collection-filter-config";
+import { useEntrance } from "@/lib/animation";
 import { cn } from "@/lib/utils";
 import {
   type ActiveFilters,
@@ -184,6 +185,14 @@ export function TraitFilterSidebar({
     );
   }
 
+  function AnimatedFilterPanel({ children }: { children: React.ReactNode }) {
+    const ref = useEntrance<HTMLDivElement>({
+      translateY: 6,
+      duration: 300,
+    });
+    return <div ref={ref}>{children}</div>;
+  }
+
   return (
     <div className="space-y-4">
       {/* Header */}
@@ -235,7 +244,7 @@ export function TraitFilterSidebar({
                 aria-controls={traitPanelId}
                 aria-expanded={isOpen}
                 onClick={() => toggleTraitGroup(traitName)}
-                className="flex w-full items-center justify-between rounded-sm px-2 py-1.5 text-left text-xs font-medium uppercase tracking-wide text-muted-foreground transition-colors hover:bg-muted/50 hover:text-foreground"
+                className="flex w-full items-center justify-between rounded-sm px-2 py-1.5 text-left text-xs font-medium uppercase tracking-wide text-muted-foreground transition-all duration-150 hover:bg-muted/50 hover:text-foreground"
               >
                 <span className="flex items-center gap-1.5">
                   {traitName}
@@ -255,18 +264,20 @@ export function TraitFilterSidebar({
                 </span>
               </button>
               {isOpen ? (
-                <div
-                  id={traitPanelId}
-                  role="region"
-                  aria-labelledby={traitButtonId}
-                  className="space-y-2 px-2 pb-2"
-                >
-                  {isLoadingValues ? (
-                    <p className="text-xs text-muted-foreground">Loading values...</p>
-                  ) : (
-                    renderFilterControl(traitName, openGroupValues)
-                  )}
-                </div>
+                <AnimatedFilterPanel>
+                  <div
+                    id={traitPanelId}
+                    role="region"
+                    aria-labelledby={traitButtonId}
+                    className="space-y-2 px-2 pb-2"
+                  >
+                    {isLoadingValues ? (
+                      <p className="text-xs text-muted-foreground">Loading values...</p>
+                    ) : (
+                      renderFilterControl(traitName, openGroupValues)
+                    )}
+                  </div>
+                </AnimatedFilterPanel>
               ) : null}
             </div>
           );

@@ -1,7 +1,8 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
+import { animate } from "animejs";
 import { useAccount } from "@starknet-react/core";
 import type { NormalizedToken } from "@cartridge/arcade/marketplace";
 import { useMarketplaceClient } from "@cartridge/arcade/marketplace/react";
@@ -40,6 +41,7 @@ import {
 } from "@/features/cart/listing-utils";
 import { useAddToCartFeedback } from "@/features/cart/hooks/use-add-to-cart-feedback";
 import { TokenSymbol } from "@/components/ui/token-symbol";
+import { useEntrance } from "@/lib/animation";
 
 
 type TokenDetailViewProps = {
@@ -276,6 +278,41 @@ export function TokenDetailView({
   // True when the user's own listing happens to be the cheapest
   const isOwnCheapest = !!(ownListing && cheapestListing?.orderId === String(ownListing.id));
 
+  // Image reveal animation ref
+  const imageRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const el = imageRef.current;
+    if (!el || window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+    animate(el, { opacity: [0, 1], scale: [0.96, 1], duration: 600, ease: "easeOutCubic" });
+  }, []);
+
+  // Listings stagger animation
+  const listingsRef = useEntrance<HTMLDivElement>({
+    selector: "[data-listing-row]",
+    staggerDelay: 50,
+    translateY: 8,
+  });
+
+  // Details section stagger animation
+  const detailsRef = useEntrance<HTMLDivElement>({
+    selector: "[data-detail-section]",
+    staggerDelay: 80,
+    translateY: 12,
+  });
+
+  // Attributes grid stagger animation
+  const attributesRef = useEntrance<HTMLDivElement>({
+    selector: "[data-attr-pill]",
+    staggerDelay: 30,
+    translateY: 8,
+  });
+
+  // Fee estimate card entrance animation
+  const feeCardRef = useEntrance<HTMLDivElement>({
+    translateY: 8,
+    duration: 400,
+  });
+
   useEffect(() => {
     let disposed = false;
 
@@ -458,28 +495,25 @@ export function TokenDetailView({
   return (
     <div className="space-y-8">
       {/* Breadcrumbs */}
-      <nav aria-label="breadcrumb">
-        <ol className="flex items-center gap-1.5 text-xs text-muted-foreground">
-          <li>
-            <Link href="/" className="hover:text-foreground transition-colors">Home</Link>
-          </li>
-          <li aria-hidden>/</li>
-          <li>
-            <Link
-              href={`/collections/${address}`}
-              className="inline-block max-w-[120px] truncate align-bottom hover:text-foreground transition-colors sm:max-w-[220px]"
-            >
-              {collectionName}
-            </Link>
-          </li>
-          <li aria-hidden>/</li>
-          <li className="text-foreground truncate max-w-[200px]">{name}</li>
-        </ol>
+      <nav className="flex items-center gap-1.5 text-xs text-muted-foreground mb-4" aria-label="breadcrumb">
+        <Link href="/" className="hover:text-foreground transition-colors">Home</Link>
+        <span>/</span>
+        <Link
+          href={`/collections/${address}`}
+          className="hover:text-foreground transition-colors truncate max-w-[200px]"
+        >
+          {collectionName}
+        </Link>
+        <span>/</span>
+        <span className="text-foreground font-medium">#{displayTokenId(token)}</span>
       </nav>
 
-      <div className="grid gap-6 lg:grid-cols-2">
-        {/* Token image */}
-        <div className="flex aspect-square items-center justify-center bg-muted">
+      <div className="lg:grid lg:grid-cols-[1fr_1fr] lg:gap-8">
+        {/* Token image — sticky on desktop */}
+        <div
+          ref={imageRef}
+          className="flex aspect-square items-center justify-center bg-muted rounded-lg overflow-hidden lg:sticky lg:top-20 lg:self-start"
+        >
           {image ? (
             // eslint-disable-next-line @next/next/no-img-element
             <img
@@ -493,8 +527,8 @@ export function TokenDetailView({
         </div>
 
         {/* Token details */}
-        <div className="space-y-6">
-          <div>
+        <div ref={detailsRef} className="space-y-6 mt-6 lg:mt-0">
+          <div data-detail-section>
             <h1 className="text-2xl font-bold tracking-wide">{name}</h1>
             <p className="text-sm text-primary font-mono">
               #{displayTokenId(token)}
@@ -519,9 +553,9 @@ export function TokenDetailView({
 
           {/* Action block — list for sale (owner) or buy (non-owner) */}
           {listingQuery.isLoading ? (
-            <Skeleton className="h-16 w-full" />
+            <Skeleton data-detail-section className="h-16 w-full" />
           ) : isConnected && effectiveIsOwner ? (
-            <div className="rounded-sm border border-border bg-muted/20 px-4 py-3 space-y-3">
+            <div data-detail-section className="rounded-sm border border-border bg-muted/20 px-4 py-3 space-y-3">
               <p className="text-[10px] uppercase tracking-widest text-muted-foreground">List for sale</p>
               {ownListing ? (
                 <div className="flex items-center justify-between gap-2">
@@ -625,7 +659,7 @@ export function TokenDetailView({
               ) : null}
             </div>
           ) : cheapestListing ? (
-            <div className="flex flex-wrap items-center justify-between gap-3 rounded-sm border border-border bg-muted/20 px-4 py-3">
+            <div data-detail-section className="flex flex-wrap items-center justify-between gap-3 rounded-sm border border-border bg-muted/20 px-4 py-3">
               <div>
                 <p className="text-[10px] uppercase tracking-widest text-muted-foreground mb-0.5">Best price</p>
                 <p className="text-xl font-bold flex items-center gap-1.5">
@@ -649,15 +683,16 @@ export function TokenDetailView({
 
           {/* Attributes */}
           {attributes.length > 0 ? (
-            <div className="space-y-2">
+            <div data-detail-section className="space-y-2">
               <h2 className="text-sm font-medium tracking-widest uppercase text-muted-foreground">Attributes</h2>
-              <div className="grid grid-cols-2 gap-1.5 sm:grid-cols-3">
+              <div ref={attributesRef} className="grid grid-cols-2 gap-1.5 sm:grid-cols-3">
                 {attributes.map((attr) => {
                   const params = new URLSearchParams();
                   params.append("trait", `${attr.trait_type}:${attr.value}`);
                   return (
                     <Link
                       key={`${attr.trait_type}-${attr.value}`}
+                      data-attr-pill
                       href={`/collections/${address}?${params.toString()}`}
                       aria-label={`${attr.trait_type} ${attr.value}`}
                       className="rounded border border-border/60 bg-muted/30 px-2 py-1.5 hover:border-primary/40 hover:bg-muted/60 transition-colors"
@@ -678,7 +713,7 @@ export function TokenDetailView({
       {/* Listings section */}
       <div className="space-y-3">
         {!effectiveIsOwner ? (
-        <Card className="border-dashed" data-testid="token-fee-card">
+        <Card ref={feeCardRef} className="border-dashed" data-testid="token-fee-card">
           <CardContent className="space-y-2 p-3">
             <h2 className="text-sm font-medium tracking-widest uppercase text-muted-foreground">
               Purchase estimate
@@ -861,7 +896,7 @@ export function TokenDetailView({
         {listingRows.length === 0 ? (
           <p className="text-sm text-muted-foreground">No listings</p>
         ) : (
-          <div className="rounded border border-border overflow-hidden">
+          <div ref={listingsRef} className="rounded border border-border overflow-hidden">
             {/* Table header */}
             <div className="hidden grid-cols-[1fr_auto_auto_auto] items-center gap-x-4 border-b border-border bg-muted/40 px-3 py-2 sm:grid">
               <span className="text-[10px] uppercase tracking-wider text-muted-foreground">Price</span>
@@ -869,7 +904,7 @@ export function TokenDetailView({
               <span className="text-[10px] uppercase tracking-wider text-muted-foreground">Expires</span>
               <span />
             </div>
-            {listingRows.map((listing) => {
+            {listingRows.map((listing, index) => {
               const isCheapest = cheapestListing?.orderId === String(listing.id);
               const rowOrderId = String(listing.id);
               const isRowAdded = isRecentlyAdded(rowOrderId);
@@ -883,7 +918,8 @@ export function TokenDetailView({
               return (
                 <div
                   key={listing.id}
-                  className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-x-3 gap-y-1 border-b border-border/50 px-3 py-2.5 transition-colors last:border-b-0 hover:bg-muted/20 sm:grid-cols-[1fr_auto_auto_auto] sm:gap-x-4 sm:gap-y-0"
+                  data-listing-row
+                  className={`grid grid-cols-[minmax(0,1fr)_auto] items-center gap-x-3 gap-y-1 border-b border-border/50 px-3 py-2.5 transition-colors last:border-b-0 hover:bg-muted/20 sm:grid-cols-[1fr_auto_auto_auto] sm:gap-x-4 sm:gap-y-0${index % 2 === 1 ? " bg-muted/30" : ""}`}
                 >
                   <div className="col-start-1 row-start-1 flex min-w-0 items-center gap-2">
                     <span className="text-sm font-medium text-primary font-mono flex items-center gap-1.5">

@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useMemo, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import type { NormalizedToken } from "@cartridge/arcade/marketplace";
 import {
   useCollectionListingsQuery,
@@ -23,6 +23,7 @@ import {
   type ActiveFilters,
   type TraitSelection,
 } from "@/lib/marketplace/traits";
+import { animate, stagger } from "animejs";
 import dynamic from "next/dynamic";
 
 const CollectionMarketPanel = dynamic(
@@ -238,6 +239,54 @@ export function CollectionRouteView({
   );
   const sortOptions = collectionFilterConfig.sortOptions ?? DEFAULT_SORT_OPTIONS;
 
+  // Hero entrance animation
+  const heroRef = useRef<HTMLDivElement>(null);
+  const [activeTab, setActiveTab] = useState("tokens");
+
+  useEffect(() => {
+    const hero = heroRef.current;
+    if (!hero) return;
+    const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    if (reducedMotion) {
+      hero.querySelectorAll<HTMLElement>(".hero-image, .hero-content > *").forEach((el) => {
+        el.style.opacity = "1";
+        el.style.transform = "none";
+      });
+      return;
+    }
+
+    const img = hero.querySelector<HTMLElement>(".hero-image");
+    if (img) {
+      animate(img, { opacity: [0, 1], duration: 600, ease: "easeOutCubic" });
+    }
+
+    const contentChildren = hero.querySelectorAll<HTMLElement>(".hero-content > *");
+    if (contentChildren.length > 0) {
+      animate(contentChildren, {
+        opacity: [0, 1],
+        translateY: [12, 0],
+        delay: stagger(60, { start: 300 }),
+        duration: 500,
+        ease: "spring(1, 120, 20, 0)",
+      });
+    }
+  }, [address]);
+
+  // Tab content entrance animation
+  const tabContentRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const el = tabContentRef.current;
+    if (!el) return;
+    const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    if (reducedMotion) return;
+    animate(el, {
+      opacity: [0, 1],
+      translateY: [4, 0],
+      duration: 300,
+      ease: "easeOutCubic",
+    });
+  }, [activeTab]);
+
   const visibleTokens = visibleTokensByScope[sweepScopeKey] ?? EMPTY_VISIBLE_TOKENS;
   const hasVisibleTokenSnapshot = Object.prototype.hasOwnProperty.call(
     visibleTokensByScope,
@@ -383,6 +432,7 @@ export function CollectionRouteView({
     <section className="w-full space-y-6 pb-20">
       {/* Collection hero banner — breaks out of parent padding for full-bleed */}
       <div
+        ref={heroRef}
         className="relative -mx-4 sm:-mx-6 lg:-mx-8 overflow-hidden bg-muted"
         data-testid="collection-header-image"
       >
@@ -391,7 +441,7 @@ export function CollectionRouteView({
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img
               alt={`${displayName ?? selectedCollection?.name ?? address} banner`}
-              className="h-56 w-full object-cover"
+              className="hero-image h-56 w-full object-cover"
               src={headerImage}
             />
             {/* Gradient overlay for text readability */}
@@ -402,7 +452,7 @@ export function CollectionRouteView({
         )}
 
         {/* Overlay content */}
-        <div className="absolute inset-x-0 bottom-0 flex items-end justify-between px-4 pb-5 sm:px-6 lg:px-8">
+        <div className="hero-content absolute inset-x-0 bottom-0 flex items-end justify-between px-4 pb-5 sm:px-6 lg:px-8">
           {/* Collection name */}
           <h1 className="text-3xl font-bold tracking-tight text-white drop-shadow-lg">
             {displayName ?? selectedCollection?.name ?? address}
@@ -453,25 +503,34 @@ export function CollectionRouteView({
         </div>
 
         <div className="w-full space-y-4" data-testid="collection-content-container">
-          <Tabs defaultValue="tokens" className="w-full">
-            <TabsList>
-              <TabsTrigger value="tokens">Tokens</TabsTrigger>
-              <TabsTrigger value="market-activity">Market Activity</TabsTrigger>
-            </TabsList>
+          <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
+            <div className="flex items-center justify-between gap-3">
+              <TabsList>
+                <TabsTrigger value="tokens">Tokens</TabsTrigger>
+                <TabsTrigger value="market-activity">Market Activity</TabsTrigger>
+              </TabsList>
+              {activeTab === "tokens" && visibleTokens.length > 0 && (
+                <span className="text-xs text-muted-foreground">{visibleTokens.length} items</span>
+              )}
+            </div>
             <TabsContent value="tokens">
-              <CollectionTokenGrid
-                key={sweepScopeKey}
-                activeFilters={resolvedActiveFilters}
-                address={address}
-                onTokensChange={handleTokensChange}
-                projectId={projectId}
-                sortControls={sortControls}
-                sortMode={sortMode}
-                sweepPreviewTokenIds={sweepPreviewTokenIds}
-              />
+              <div ref={activeTab === "tokens" ? tabContentRef : undefined} key={`tab-tokens-${activeTab}`}>
+                <CollectionTokenGrid
+                  key={sweepScopeKey}
+                  activeFilters={resolvedActiveFilters}
+                  address={address}
+                  onTokensChange={handleTokensChange}
+                  projectId={projectId}
+                  sortControls={sortControls}
+                  sortMode={sortMode}
+                  sweepPreviewTokenIds={sweepPreviewTokenIds}
+                />
+              </div>
             </TabsContent>
             <TabsContent value="market-activity">
-              <CollectionMarketPanel address={address} projectId={projectId} />
+              <div ref={activeTab === "market-activity" ? tabContentRef : undefined} key={`tab-market-${activeTab}`}>
+                <CollectionMarketPanel address={address} projectId={projectId} />
+              </div>
             </TabsContent>
           </Tabs>
           <SweepBar
