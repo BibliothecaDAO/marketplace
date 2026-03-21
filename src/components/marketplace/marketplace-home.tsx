@@ -77,7 +77,7 @@ export function MarketplaceHome() {
   return (
     <main
       data-testid="marketplace-home"
-      className="flex-1 space-y-8 px-4 pt-6 sm:px-6 lg:px-8"
+      className="flex-1 space-y-10 px-4 pt-6 pb-12 sm:px-6 lg:px-8"
     >
       <HeroBanner
         name={featuredCollection?.name ?? "Featured Collection"}

@@ -45,8 +45,8 @@ export function TrendingTokensSection({
           <div className="pointer-events-none absolute right-0 top-0 bottom-0 z-10 w-8 bg-gradient-to-l from-background to-transparent" />
           <div data-testid="trending-tokens-scroll" className="overflow-x-auto">
             <div ref={scrollRef} className="flex gap-3 pb-2">
-              {tokens.map((entry) => (
-                <div key={entry.href} className="w-48 shrink-0" data-trending-item>
+              {tokens.map((entry, index) => (
+                <div key={entry.href} className={index === 0 ? "w-72 shrink-0" : "w-56 shrink-0"} data-trending-item>
                   <MarketplaceTokenCard
                     token={entry.token}
                     href={entry.href}

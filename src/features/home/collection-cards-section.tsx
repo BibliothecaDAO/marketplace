@@ -47,9 +47,13 @@ export function CollectionCardsSection({
           data-testid="collection-cards-grid"
           className="grid grid-cols-2 gap-3 md:grid-cols-3 lg:grid-cols-4"
         >
-          {collections.map((collection) => (
-            <div key={collection.address} data-card>
-              <CollectionCard {...collection} />
+          {collections.map((collection, index) => (
+            <div
+              key={collection.address}
+              data-card
+              className={index < 2 ? "sm:col-span-2 md:col-span-1 lg:col-span-2" : ""}
+            >
+              <CollectionCard {...collection} featured={index < 2} />
             </div>
           ))}
         </div>

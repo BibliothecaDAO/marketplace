@@ -117,36 +117,36 @@ describe("Header", () => {
     expect(homeLink).toHaveAttribute("href", "/");
   });
 
-  it("renders_nav_links", () => {
+  it("renders_nav_links", async () => {
+    const user = userEvent.setup();
     render(<Header />);
 
-    const stakingLinks = screen.getAllByRole("link", { name: /staking/i });
-    expect(stakingLinks.length).toBeGreaterThan(0);
-    expect(stakingLinks[0]).toHaveAttribute("href", "https://account.realms.world");
+    // Nav links are inside the Ecosystem dropdown
+    await user.click(screen.getByRole("button", { name: /ecosystem/i }));
 
-    const ecosystemLinks = screen.getAllByRole("link", { name: /ecosystem/i });
-    expect(ecosystemLinks.length).toBeGreaterThan(0);
-    expect(ecosystemLinks[0]).toHaveAttribute("href", "https://realms.world");
+    const stakingItem = screen.getByRole("menuitem", { name: /staking/i });
+    expect(stakingItem.closest("a")).toHaveAttribute("href", "https://account.realms.world");
 
-    const eternumLinks = screen.getAllByRole("link", { name: /eternum/i });
-    expect(eternumLinks.length).toBeGreaterThan(0);
-    expect(eternumLinks[0]).toHaveAttribute("href", "https://blitz.realms.world");
+    const eternumItem = screen.getByRole("menuitem", { name: /eternum/i });
+    expect(eternumItem.closest("a")).toHaveAttribute("href", "https://blitz.realms.world");
   });
 
-  it("renders_social_icon_links", () => {
+  it("renders_social_icon_links", async () => {
+    const user = userEvent.setup();
     render(<Header />);
 
-    const twitterLinks = screen.getAllByRole("link", { name: /twitter/i });
-    expect(twitterLinks.length).toBeGreaterThan(0);
-    expect(twitterLinks[0]).toHaveAttribute("href", "https://x.com/lootrealms");
-    expect(within(twitterLinks[0]).getByTestId("x-icon")).toBeVisible();
+    // Social links are inside the Ecosystem dropdown
+    await user.click(screen.getByRole("button", { name: /ecosystem/i }));
 
-    const discordLinks = screen.getAllByRole("link", { name: /discord/i });
-    expect(discordLinks.length).toBeGreaterThan(0);
-    expect(discordLinks[0]).toHaveAttribute("href", "https://discord.gg/realmsworld");
-    expect(within(discordLinks[0]).getByTestId("discord-icon")).toBeVisible();
+    const twitterItem = screen.getByRole("menuitem", { name: /twitter/i });
+    expect(twitterItem.closest("a")).toHaveAttribute("href", "https://x.com/lootrealms");
+    expect(within(twitterItem).getByTestId("x-icon")).toBeVisible();
 
-    expect(screen.queryByRole("link", { name: /github/i })).toBeNull();
+    const discordItem = screen.getByRole("menuitem", { name: /discord/i });
+    expect(discordItem.closest("a")).toHaveAttribute("href", "https://discord.gg/realmsworld");
+    expect(within(discordItem).getByTestId("discord-icon")).toBeVisible();
+
+    expect(screen.queryByRole("menuitem", { name: /github/i })).toBeNull();
   });
 
   it("shows_login_button_when_disconnected", () => {

@@ -4,7 +4,7 @@ import Link from "next/link";
 import { type SVGProps, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useAccount, useConnect, useDisconnect } from "@starknet-react/core";
-import { Menu } from "lucide-react";
+import { ChevronDown, Menu } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import dynamic from "next/dynamic";
 
@@ -142,21 +142,34 @@ export function Header() {
         </Link>
 
         {/* Desktop nav */}
-        <nav aria-label="Main navigation" className="hidden md:flex items-center gap-1">
-          {NAV_LINKS.map(({ label, href }) => (
-            <a
-              key={label}
-              href={href}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="px-3 py-1.5 text-sm text-muted-foreground hover:text-foreground transition-colors"
-            >
-              {label}
-            </a>
-          ))}
-        </nav>
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button variant="ghost" size="sm" className="hidden md:inline-flex text-muted-foreground">
+              Ecosystem
+              <ChevronDown className="ml-1 h-3 w-3" />
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="start">
+            {NAV_LINKS.map(({ label, href }) => (
+              <DropdownMenuItem key={label} asChild>
+                <a href={href} target="_blank" rel="noopener noreferrer">
+                  {label}
+                </a>
+              </DropdownMenuItem>
+            ))}
+            <DropdownMenuSeparator />
+            {SOCIAL_LINKS.map(({ label, href, Icon }) => (
+              <DropdownMenuItem key={label} asChild>
+                <a href={href} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2">
+                  <Icon className="h-3.5 w-3.5" />
+                  {label}
+                </a>
+              </DropdownMenuItem>
+            ))}
+          </DropdownMenuContent>
+        </DropdownMenu>
 
-        <div className="hidden md:block lg:min-w-72">
+        <div className="hidden md:block lg:min-w-96">
           <Input
             aria-label="Search"
             placeholder="Search..."
@@ -167,28 +180,12 @@ export function Header() {
                 handleSearchSubmit();
               }
             }}
-            className="w-56 lg:w-72"
+            className="w-72 lg:w-96"
           />
         </div>
 
         {/* Right side actions */}
         <div className="ml-auto flex items-center gap-1 sm:gap-2">
-          {/* Social icons */}
-          <div className="hidden sm:flex items-center gap-1 mr-1">
-            {SOCIAL_LINKS.map(({ label, href, Icon }) => (
-              <a
-                key={label}
-                href={href}
-                target="_blank"
-                rel="noopener noreferrer"
-                aria-label={label}
-                className="flex h-8 w-8 items-center justify-center rounded-sm text-muted-foreground hover:text-foreground transition-colors"
-              >
-                <Icon className="h-4 w-4" />
-              </a>
-            ))}
-          </div>
-
           <CartSidebar />
           <Button size="sm" variant="ghost" asChild className="hidden sm:inline-flex">
             <Link href="/portfolio">Portfolio</Link>

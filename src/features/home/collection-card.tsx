@@ -3,9 +3,12 @@ import Link from "next/link";
 import { Card, CardContent } from "@/components/ui/card";
 import { useCollectionTokensQuery } from "@/lib/marketplace/hooks";
 import { tokenImage } from "@/lib/marketplace/token-display";
+import { cn } from "@/lib/utils";
 import type { CollectionCardData } from "@/features/home/types";
 
-type CollectionCardProps = CollectionCardData;
+type CollectionCardProps = CollectionCardData & {
+  featured?: boolean;
+};
 
 const PREVIEW_QUERY_STALE_TIME_MS = 5 * 60 * 1000;
 
@@ -17,6 +20,7 @@ export function CollectionCard({
   floorPrice,
   totalSupply,
   listingCount,
+  featured,
 }: CollectionCardProps) {
   const [cardElement, setCardElement] = useState<HTMLDivElement | null>(null);
   const [previewRequested, setPreviewRequested] = useState(false);
@@ -84,7 +88,7 @@ export function CollectionCard({
     >
       <div ref={setCardElement}>
         <Card className="overflow-hidden py-0 transition-all duration-200 hover:border-primary/40 hover:shadow-[0_0_12px_oklch(0.75_0.1_75/0.1)] hover:-translate-y-1">
-          <div className="aspect-square bg-muted">
+          <div className={cn("bg-muted", featured ? "aspect-[16/9]" : "aspect-square")}>
             {resolvedImageUrl ? (
               // eslint-disable-next-line @next/next/no-img-element
               <img
@@ -101,10 +105,10 @@ export function CollectionCard({
               </div>
             )}
           </div>
-          <CardContent className="space-y-1 px-3 py-3">
-            <p className="truncate text-sm font-medium">{name}</p>
+          <CardContent className={cn("space-y-1", featured ? "px-4 py-4" : "px-3 py-3")}>
+            <p className={cn("truncate", featured ? "text-base font-semibold" : "text-sm font-medium")}>{name}</p>
             {floorPrice ? (
-              <p className="text-xs text-muted-foreground">Floor {floorPrice}</p>
+              <p className={cn("text-xs", featured ? "text-primary" : "text-muted-foreground")}>Floor {floorPrice}</p>
             ) : null}
             {totalSupply ? (
               <p className="text-xs text-muted-foreground">Items {totalSupply}</p>
