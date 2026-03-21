@@ -8,6 +8,7 @@ import { useCollectionQuery, useCollectionTokensQuery } from "@/lib/marketplace/
 import { expandTokenIdVariants } from "@/lib/marketplace/token-id";
 import { tokenId } from "@/lib/marketplace/token-display";
 import { cn } from "@/lib/utils";
+import { useEntrance } from "@/lib/animation";
 
 type GridDensityMode = "compact" | "standard";
 
@@ -54,6 +55,12 @@ export function CollectionHoldingSection({
     collectionName,
   );
 
+  const gridRef = useEntrance<HTMLDivElement>({
+    selector: "[data-holding-token]",
+    staggerDelay: 30,
+    translateY: 12,
+  });
+
   const tokens = tokensQuery.data?.page?.tokens ?? [];
   const isLoading = tokensQuery.isLoading;
   const gridClasses = GRID_CLASSES[density];
@@ -92,14 +99,15 @@ export function CollectionHoldingSection({
           </CardContent>
         </Card>
       ) : (
-        <div className={cn("grid gap-3", gridClasses)}>
+        <div ref={gridRef} className={cn("grid gap-3", gridClasses)}>
           {tokens.map((token) => (
-            <MarketplaceTokenCard
-              key={tokenId(token)}
-              token={token}
-              href={`/collections/${collectionAddress}/${tokenId(token)}`}
-              linkAriaLabel={`View token ${tokenId(token)}`}
-            />
+            <div key={tokenId(token)} data-holding-token>
+              <MarketplaceTokenCard
+                token={token}
+                href={`/collections/${collectionAddress}/${tokenId(token)}`}
+                linkAriaLabel={`View token ${tokenId(token)}`}
+              />
+            </div>
           ))}
         </div>
       )}

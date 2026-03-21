@@ -29,6 +29,7 @@ import {
 import { getCollectionFilterConfig } from "@/lib/marketplace/collection-filter-config";
 import { ResourceTraitIcons } from "@/components/marketplace/resource-trait-icons";
 import { resolveMarketActivityDetails } from "@/lib/marketplace/market-activity-details";
+import { useEntrance } from "@/lib/animation";
 
 type CollectionMarketPanelProps = {
   address: string;
@@ -288,7 +289,7 @@ function ActivityRowItem({
   renderResourcesAsIcons?: boolean;
 }) {
   return (
-    <div className="rounded-md border border-border/60 bg-card px-4 py-3">
+    <div data-activity-row className="rounded-md border border-border/60 bg-card px-4 py-3 transition-all duration-200 hover:border-primary/30 hover:shadow-[0_0_12px_oklch(0.75_0.1_75/0.1)]">
       <div className="flex items-center justify-between gap-4">
         <div className="flex min-w-0 items-center gap-3">
           {row.tokenImage ? (
@@ -392,6 +393,18 @@ export function CollectionMarketPanel({
     [deferredListingTokenId],
   );
 
+  const ordersRef = useEntrance<HTMLDivElement>({
+    selector: "[data-activity-row]",
+    staggerDelay: 40,
+    translateY: 10,
+  });
+
+  const listingsAnimRef = useEntrance<HTMLDivElement>({
+    selector: "[data-activity-row]",
+    staggerDelay: 40,
+    translateY: 10,
+  });
+
   const orders = useCollectionOrdersQuery({
     collection: address,
     status: parsedOrderStatus,
@@ -475,7 +488,7 @@ export function CollectionMarketPanel({
               ) : null}
 
               {orders.isSuccess ? (
-                <div className="space-y-2">
+                <div ref={ordersRef} className="space-y-2">
                   {orderRows.map((row) => (
                     <ActivityRowItem
                       key={`${row.kind}-${row.id}-${row.tokenId ?? "none"}`}
@@ -520,7 +533,7 @@ export function CollectionMarketPanel({
               ) : null}
 
               {listings.isSuccess ? (
-                <div className="space-y-2">
+                <div ref={listingsAnimRef} className="space-y-2">
                   {listingRows.map((row) => (
                     <ActivityRowItem
                       key={`${row.kind}-${row.id}-${row.tokenId ?? "none"}`}

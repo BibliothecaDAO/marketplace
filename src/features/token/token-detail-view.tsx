@@ -293,6 +293,26 @@ export function TokenDetailView({
     translateY: 8,
   });
 
+  // Details section stagger animation
+  const detailsRef = useEntrance<HTMLDivElement>({
+    selector: "[data-detail-section]",
+    staggerDelay: 80,
+    translateY: 12,
+  });
+
+  // Attributes grid stagger animation
+  const attributesRef = useEntrance<HTMLDivElement>({
+    selector: "[data-attr-pill]",
+    staggerDelay: 30,
+    translateY: 8,
+  });
+
+  // Fee estimate card entrance animation
+  const feeCardRef = useEntrance<HTMLDivElement>({
+    translateY: 8,
+    duration: 400,
+  });
+
   useEffect(() => {
     let disposed = false;
 
@@ -507,8 +527,8 @@ export function TokenDetailView({
         </div>
 
         {/* Token details */}
-        <div className="space-y-6 mt-6 lg:mt-0">
-          <div>
+        <div ref={detailsRef} className="space-y-6 mt-6 lg:mt-0">
+          <div data-detail-section>
             <h1 className="text-2xl font-bold tracking-wide">{name}</h1>
             <p className="text-sm text-primary font-mono">
               #{displayTokenId(token)}
@@ -533,9 +553,9 @@ export function TokenDetailView({
 
           {/* Action block — list for sale (owner) or buy (non-owner) */}
           {listingQuery.isLoading ? (
-            <Skeleton className="h-16 w-full" />
+            <Skeleton data-detail-section className="h-16 w-full" />
           ) : isConnected && effectiveIsOwner ? (
-            <div className="rounded-sm border border-border bg-muted/20 px-4 py-3 space-y-3">
+            <div data-detail-section className="rounded-sm border border-border bg-muted/20 px-4 py-3 space-y-3">
               <p className="text-[10px] uppercase tracking-widest text-muted-foreground">List for sale</p>
               {ownListing ? (
                 <div className="flex items-center justify-between gap-2">
@@ -639,7 +659,7 @@ export function TokenDetailView({
               ) : null}
             </div>
           ) : cheapestListing ? (
-            <div className="flex flex-wrap items-center justify-between gap-3 rounded-sm border border-border bg-muted/20 px-4 py-3">
+            <div data-detail-section className="flex flex-wrap items-center justify-between gap-3 rounded-sm border border-border bg-muted/20 px-4 py-3">
               <div>
                 <p className="text-[10px] uppercase tracking-widest text-muted-foreground mb-0.5">Best price</p>
                 <p className="text-xl font-bold flex items-center gap-1.5">
@@ -663,15 +683,16 @@ export function TokenDetailView({
 
           {/* Attributes */}
           {attributes.length > 0 ? (
-            <div className="space-y-2">
+            <div data-detail-section className="space-y-2">
               <h2 className="text-sm font-medium tracking-widest uppercase text-muted-foreground">Attributes</h2>
-              <div className="grid grid-cols-2 gap-1.5 sm:grid-cols-3">
+              <div ref={attributesRef} className="grid grid-cols-2 gap-1.5 sm:grid-cols-3">
                 {attributes.map((attr) => {
                   const params = new URLSearchParams();
                   params.append("trait", `${attr.trait_type}:${attr.value}`);
                   return (
                     <Link
                       key={`${attr.trait_type}-${attr.value}`}
+                      data-attr-pill
                       href={`/collections/${address}?${params.toString()}`}
                       aria-label={`${attr.trait_type} ${attr.value}`}
                       className="rounded border border-border/60 bg-muted/30 px-2 py-1.5 hover:border-primary/40 hover:bg-muted/60 transition-colors"
@@ -692,7 +713,7 @@ export function TokenDetailView({
       {/* Listings section */}
       <div className="space-y-3">
         {!effectiveIsOwner ? (
-        <Card className="border-dashed" data-testid="token-fee-card">
+        <Card ref={feeCardRef} className="border-dashed" data-testid="token-fee-card">
           <CardContent className="space-y-2 p-3">
             <h2 className="text-sm font-medium tracking-widest uppercase text-muted-foreground">
               Purchase estimate

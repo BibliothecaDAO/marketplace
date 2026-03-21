@@ -121,7 +121,7 @@ function CollectionSidebarItem({
         onFocus={() => setPreviewRequested(true)}
         onMouseEnter={() => setPreviewRequested(true)}
         className={cn(
-          "flex items-center rounded-md text-left transition-colors",
+          "flex items-center rounded-md text-left transition-all duration-150",
           collapsed
             ? "mx-auto h-11 w-11 justify-center px-0 py-0 hover:bg-muted/70"
             : "w-full gap-2 px-2 py-2 hover:bg-accent/60",
