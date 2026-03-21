@@ -83,7 +83,7 @@ export function CollectionCard({
       onMouseEnter={() => setPreviewRequested(true)}
     >
       <div ref={setCardElement}>
-        <Card className="overflow-hidden py-0 transition-colors hover:border-primary/40">
+        <Card className="overflow-hidden py-0 transition-all duration-200 hover:border-primary/40 hover:shadow-[0_0_12px_oklch(0.75_0.1_75/0.1)] hover:-translate-y-1">
           <div className="aspect-square bg-muted">
             {resolvedImageUrl ? (
               // eslint-disable-next-line @next/next/no-img-element

@@ -32,6 +32,7 @@ describe("profile route page", () => {
     expect(
       screen.getByRole("heading", { name: /wallet profile/i }),
     ).toBeVisible();
-    expect(screen.getByText("0xabc123")).toBeVisible();
+    // Address is truncated in the UI (e.g. "0xabc1...c123")
+    expect(screen.getByText(/0xabc1/)).toBeVisible();
   });
 });

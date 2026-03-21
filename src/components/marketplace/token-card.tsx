@@ -145,7 +145,7 @@ export const MarketplaceTokenCard = React.memo(function MarketplaceTokenCard({
   return (
     <Card
       className={cn(
-        "relative overflow-hidden py-0 transition-colors duration-150",
+        "relative overflow-hidden py-0 transition-all duration-150 hover:shadow-[0_0_12px_oklch(0.75_0.1_75/0.1)]",
         cardClassName,
       )}
     >
@@ -153,7 +153,7 @@ export const MarketplaceTokenCard = React.memo(function MarketplaceTokenCard({
         <button
           type="button"
           className={cn(
-            "group block w-full text-left transition-transform duration-150 hover:-translate-y-0.5 hover:border-primary/30",
+            "group block w-full text-left transition-all duration-150 hover:-translate-y-1 hover:border-primary/30",
             linkClassName,
           )}
           onClick={onSelect}
@@ -164,7 +164,7 @@ export const MarketplaceTokenCard = React.memo(function MarketplaceTokenCard({
       ) : (
         <Link
           className={cn(
-            "group block transition-transform duration-150 hover:-translate-y-0.5 hover:border-primary/30",
+            "group block transition-all duration-150 hover:-translate-y-1 hover:border-primary/30",
             linkClassName,
           )}
           href={href}
