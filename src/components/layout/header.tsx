@@ -4,7 +4,7 @@ import Link from "next/link";
 import { type SVGProps, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useAccount, useConnect, useDisconnect } from "@starknet-react/core";
-import { ChevronDown, Menu } from "lucide-react";
+import { ChevronDown, Github, Menu } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import dynamic from "next/dynamic";
 
@@ -58,9 +58,10 @@ function connectorIconUrl(connector: { icon?: unknown }) {
 }
 
 const NAV_LINKS = [
-  { label: "Staking", href: "https://account.realms.world" },
+  { label: "veLORDS", href: "https://account.realms.world/velords" },
   { label: "Ecosystem", href: "https://realms.world" },
-  { label: "Eternum", href: "https://blitz.realms.world" },
+  { label: "Games", href: "https://realms.world/games" },
+  { label: "Blitz", href: "https://blitz.realms.world" },
 ] as const;
 
 function XIcon(props: SVGProps<SVGSVGElement>) {
@@ -92,8 +93,9 @@ function DiscordIcon(props: SVGProps<SVGSVGElement>) {
 }
 
 const SOCIAL_LINKS = [
-  { label: "Twitter / X", href: "https://x.com/lootrealms", Icon: XIcon },
+  { label: "X / Twitter", href: "https://x.com/LootRealms", Icon: XIcon },
   { label: "Discord", href: "https://discord.gg/realmsworld", Icon: DiscordIcon },
+  { label: "GitHub", href: "https://github.com/BibliothecaDAO", Icon: Github },
 ] as const;
 
 export function Header() {
@@ -132,12 +134,14 @@ export function Header() {
       <div className="flex h-14 items-center gap-2 px-4">
         {/* Logo */}
         <Link href="/" className="flex items-center gap-2 shrink-0" aria-label="Realms.market home">
-          <span
-            data-testid="logo-placeholder"
-            className="flex h-7 w-7 items-center justify-center rounded-sm border border-primary/40 bg-primary/10 text-xs font-bold text-primary"
-          >
-            R
-          </span>
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src="/realms-mark.svg"
+            alt=""
+            aria-hidden="true"
+            data-testid="realms-logo"
+            className="h-7 w-7 object-contain"
+          />
           <span className="text-sm font-medium tracking-widest uppercase text-foreground">Realms.market</span>
         </Link>
 

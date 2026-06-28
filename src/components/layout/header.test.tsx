@@ -59,11 +59,12 @@ describe("Header", () => {
     });
   });
 
-  it("renders_logo_placeholder", () => {
+  it("renders_realms_logo", () => {
     render(<Header />);
 
-    const logo = screen.getByTestId("logo-placeholder");
+    const logo = screen.getByTestId("realms-logo");
     expect(logo).toBeVisible();
+    expect(logo).toHaveAttribute("src", "/realms-mark.svg");
   });
 
   it("renders_app_name", () => {
@@ -124,11 +125,14 @@ describe("Header", () => {
     // Nav links are inside the Ecosystem dropdown
     await user.click(screen.getByRole("button", { name: /ecosystem/i }));
 
-    const stakingItem = screen.getByRole("menuitem", { name: /staking/i });
-    expect(stakingItem.closest("a")).toHaveAttribute("href", "https://account.realms.world");
+    const stakingItem = screen.getByRole("menuitem", { name: /velords/i });
+    expect(stakingItem.closest("a")).toHaveAttribute("href", "https://account.realms.world/velords");
 
-    const eternumItem = screen.getByRole("menuitem", { name: /eternum/i });
-    expect(eternumItem.closest("a")).toHaveAttribute("href", "https://blitz.realms.world");
+    const gamesItem = screen.getByRole("menuitem", { name: /games/i });
+    expect(gamesItem.closest("a")).toHaveAttribute("href", "https://realms.world/games");
+
+    const blitzItem = screen.getByRole("menuitem", { name: /blitz/i });
+    expect(blitzItem.closest("a")).toHaveAttribute("href", "https://blitz.realms.world");
   });
 
   it("renders_social_icon_links", async () => {
@@ -138,15 +142,17 @@ describe("Header", () => {
     // Social links are inside the Ecosystem dropdown
     await user.click(screen.getByRole("button", { name: /ecosystem/i }));
 
-    const twitterItem = screen.getByRole("menuitem", { name: /twitter/i });
-    expect(twitterItem.closest("a")).toHaveAttribute("href", "https://x.com/lootrealms");
+    const twitterItem = screen.getByRole("menuitem", { name: /x \/ twitter/i });
+    expect(twitterItem.closest("a")).toHaveAttribute("href", "https://x.com/LootRealms");
     expect(within(twitterItem).getByTestId("x-icon")).toBeVisible();
 
     const discordItem = screen.getByRole("menuitem", { name: /discord/i });
     expect(discordItem.closest("a")).toHaveAttribute("href", "https://discord.gg/realmsworld");
     expect(within(discordItem).getByTestId("discord-icon")).toBeVisible();
 
-    expect(screen.queryByRole("menuitem", { name: /github/i })).toBeNull();
+
+    const githubItem = screen.getByRole("menuitem", { name: /github/i });
+    expect(githubItem.closest("a")).toHaveAttribute("href", "https://github.com/BibliothecaDAO");
   });
 
   it("shows_login_button_when_disconnected", () => {
@@ -203,21 +209,24 @@ describe("Header", () => {
     ).toBeVisible();
   });
 
-  it("mobile_menu_contains_updated_social_links_without_github", async () => {
+  it("mobile_menu_contains_updated_social_links", async () => {
     const user = userEvent.setup();
     render(<Header />);
 
     await user.click(screen.getByRole("button", { name: /open menu/i }));
 
     const mobileMenuDialog = await screen.findByRole("dialog");
-    const twitterLink = within(mobileMenuDialog).getByRole("link", { name: /twitter/i });
+    const twitterLink = within(mobileMenuDialog).getByRole("link", { name: /x \/ twitter/i });
     const discordLink = within(mobileMenuDialog).getByRole("link", { name: /discord/i });
 
-    expect(twitterLink).toHaveAttribute("href", "https://x.com/lootrealms");
+    expect(twitterLink).toHaveAttribute("href", "https://x.com/LootRealms");
     expect(within(twitterLink).getByTestId("x-icon")).toBeVisible();
     expect(discordLink).toHaveAttribute("href", "https://discord.gg/realmsworld");
     expect(within(discordLink).getByTestId("discord-icon")).toBeVisible();
-    expect(within(mobileMenuDialog).queryByRole("link", { name: /github/i })).toBeNull();
+    expect(within(mobileMenuDialog).getByRole("link", { name: /github/i })).toHaveAttribute(
+      "href",
+      "https://github.com/BibliothecaDAO",
+    );
   });
 
   it("login_opens_wallet_modal_with_all_connectors", async () => {
