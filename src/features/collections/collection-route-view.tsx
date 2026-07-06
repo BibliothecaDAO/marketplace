@@ -224,7 +224,6 @@ export function CollectionRouteView({
 
   const cheapestListings = cheapestListingByTokenId(listingQuery.data);
   const floor = floorFromListings(cheapestListings);
-  const totalSupply = collection.data?.totalSupply;
   const seedName = selectedCollection?.name?.trim() || null;
   const displayName = seedName
     ?? (collection.isSuccess && collection.data
@@ -415,8 +414,8 @@ export function CollectionRouteView({
               onClick={() => handleSortOptionClick(option)}
               className={
                 isActive
-                  ? "inline-flex h-7 items-center rounded-md bg-primary px-3 text-xs font-medium text-primary-foreground"
-                  : "inline-flex h-7 items-center rounded-md border border-border bg-background px-3 text-xs font-medium text-muted-foreground transition-colors hover:border-primary/50 hover:text-foreground"
+                  ? "inline-flex h-7 items-center rounded-[6px] border border-[color:var(--realm-border-strong)] bg-primary px-3 text-xs font-medium text-primary-foreground"
+                  : "inline-flex h-7 items-center rounded-[6px] border border-[color:var(--realm-border-etched)] bg-[color:var(--realm-surface-iron)]/70 px-3 text-xs font-medium text-muted-foreground transition-colors hover:border-[color:var(--realm-border-strong)] hover:text-foreground"
               }
             >
               {sortButtonLabel(option, sortMode)}
@@ -433,7 +432,7 @@ export function CollectionRouteView({
       {/* Collection hero banner — breaks out of parent padding for full-bleed */}
       <div
         ref={heroRef}
-        className="relative -mx-4 sm:-mx-6 lg:-mx-8 overflow-hidden bg-muted"
+        className="relative -mx-4 overflow-hidden border-y border-[color:var(--realm-border-etched)] bg-[color:var(--realm-surface-iron)] sm:-mx-6 lg:-mx-8"
         data-testid="collection-header-image"
       >
         {headerImage ? (
@@ -445,32 +444,32 @@ export function CollectionRouteView({
               src={headerImage}
             />
             {/* Gradient overlay for text readability */}
-            <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/30 to-transparent" />
+            <div className="absolute inset-0 bg-gradient-to-t from-[color:var(--realm-bg-void)] via-[color:var(--realm-bg-void)]/50 to-transparent" />
           </>
         ) : (
-          <div className="h-56 w-full bg-muted" />
+          <div className="h-56 w-full bg-[radial-gradient(circle_at_30%_20%,rgba(231,207,136,0.18),transparent_20rem),linear-gradient(145deg,#161b20,#070b0d)]" />
         )}
 
         {/* Overlay content */}
-        <div className="hero-content absolute inset-x-0 bottom-0 flex items-end justify-between px-4 pb-5 sm:px-6 lg:px-8">
+        <div className="hero-content absolute inset-x-0 bottom-0 flex flex-wrap items-end justify-between gap-3 px-4 pb-5 sm:px-6 lg:px-8">
           {/* Collection name */}
-          <h1 className="text-3xl font-bold tracking-tight text-white drop-shadow-lg">
+          <h1 className="realm-title text-4xl text-[color:var(--realm-title)] drop-shadow-[0_2px_12px_rgba(0,0,0,0.7)]">
             {displayName ?? selectedCollection?.name ?? address}
           </h1>
 
           {/* Stats */}
-          <div className="flex items-center gap-5 text-sm">
+          <div className="flex flex-wrap items-center gap-2 text-sm">
             {listingCount > 0 && (
-              <span className="text-white/80">
-                <span className="text-white font-semibold text-base">{listingCountLabel}</span>
+              <span className="realm-stat-pill px-3 py-1.5 text-[color:var(--realm-text-muted)]">
+                <span className="font-semibold text-[color:var(--realm-title)]">{listingCountLabel}</span>
                 {" "}listed
               </span>
             )}
             {floor && (
-              <span className="flex items-center gap-1 text-white/80">
+              <span className="realm-stat-pill flex items-center gap-1 px-3 py-1.5 text-[color:var(--realm-text-muted)]">
                 Floor{" "}
-                <span className="text-white font-semibold text-base">{floor.price}</span>
-                <TokenSymbol address={floor.currency} className="text-white font-semibold" />
+                <span className="font-semibold text-[color:var(--realm-title)]">{floor.price}</span>
+                <TokenSymbol address={floor.currency} className="font-semibold text-[color:var(--realm-title)]" />
               </span>
             )}
           </div>
@@ -486,7 +485,7 @@ export function CollectionRouteView({
 
       <div className="grid gap-6 xl:grid-cols-[280px_1fr]">
         <div
-          className="sticky top-20 self-start max-h-[calc(100vh-6rem)] overflow-y-auto"
+          className="sticky top-24 self-start max-h-[calc(100vh-7rem)] overflow-y-auto"
           data-testid="trait-sidebar-container"
         >
           <TraitFilterSidebar

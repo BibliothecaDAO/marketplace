@@ -194,15 +194,15 @@ export function TraitFilterSidebar({
   }
 
   return (
-    <div className="space-y-4">
+    <div className="realm-panel space-y-4 p-3">
       {/* Header */}
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2">
-          <span className="text-xs font-medium uppercase tracking-widest text-muted-foreground">
+          <span className="realm-kicker text-sm">
             Filters
           </span>
           {activeCount > 0 && (
-            <span className="inline-flex h-4 min-w-4 items-center justify-center rounded-full bg-primary px-1 text-[10px] font-medium text-primary-foreground">
+            <span className="inline-flex h-4 min-w-4 items-center justify-center rounded-[4px] bg-primary px-1 text-[10px] font-medium text-primary-foreground">
               {activeCount}
             </span>
           )}
@@ -244,12 +244,12 @@ export function TraitFilterSidebar({
                 aria-controls={traitPanelId}
                 aria-expanded={isOpen}
                 onClick={() => toggleTraitGroup(traitName)}
-                className="flex w-full items-center justify-between rounded-sm px-2 py-1.5 text-left text-xs font-medium uppercase tracking-wide text-muted-foreground transition-all duration-150 hover:bg-muted/50 hover:text-foreground"
+                className="flex w-full items-center justify-between rounded-[6px] border border-transparent px-2 py-1.5 text-left text-xs font-medium uppercase tracking-wide text-muted-foreground transition-all duration-150 hover:border-[color:var(--realm-border-etched)] hover:bg-muted/60 hover:text-foreground"
               >
                 <span className="flex items-center gap-1.5">
                   {traitName}
                   {activeInGroup > 0 && (
-                    <span className="inline-flex h-3.5 min-w-3.5 items-center justify-center rounded-full bg-primary px-0.5 text-[9px] font-medium text-primary-foreground">
+                    <span className="inline-flex h-3.5 min-w-3.5 items-center justify-center rounded-[4px] bg-primary px-0.5 text-[9px] font-medium text-primary-foreground">
                       {activeInGroup}
                     </span>
                   )}

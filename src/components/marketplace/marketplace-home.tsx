@@ -62,10 +62,10 @@ export function MarketplaceHome() {
     return (
       <main data-testid="marketplace-home" className="flex-1 p-4 sm:p-6 lg:p-8">
         <div className="flex flex-col items-center justify-center py-16 text-center">
-          <div className="rounded-full bg-muted p-4 mb-4">
+          <div className="mb-4 rounded-[8px] border border-[color:var(--realm-border-etched)] bg-muted/70 p-4">
             <SearchIcon className="h-6 w-6 text-muted-foreground" />
           </div>
-          <p className="text-sm font-medium text-foreground mb-1">
+          <p className="realm-title mb-1 text-xl text-foreground">
             No results for &quot;{query}&quot;
           </p>
           <p className="text-xs text-muted-foreground">
@@ -93,7 +93,7 @@ export function MarketplaceHome() {
       <div className="mt-8 grid grid-cols-1 gap-6 lg:grid-cols-[1fr_320px]">
         {/* Left column — Collection list */}
         <div className="space-y-3">
-          <h2 className="text-sm font-medium tracking-widest uppercase text-muted-foreground">
+          <h2 className="realm-kicker text-lg">
             Collections
           </h2>
           <div ref={listRef} className="space-y-2">
@@ -101,7 +101,7 @@ export function MarketplaceHome() {
               ? Array.from({ length: 6 }).map((_, i) => (
                   <div
                     key={i}
-                    className="flex items-center gap-4 rounded-lg border border-border/60 bg-card p-3"
+                    className="realm-panel flex items-center gap-4 p-3"
                   >
                     <div className="h-14 w-14 shrink-0 rounded-md bg-muted animate-pulse" />
                     <div className="flex-1 space-y-2">
@@ -125,7 +125,7 @@ export function MarketplaceHome() {
         {/* Right column — Promoted collection */}
         {promotedCollection && !isLoading ? (
           <div className="hidden lg:block">
-            <h2 className="text-sm font-medium tracking-widest uppercase text-muted-foreground mb-3">
+            <h2 className="realm-kicker mb-3 text-lg">
               Featured
             </h2>
             <PromotedCollection

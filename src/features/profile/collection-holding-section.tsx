@@ -67,9 +67,9 @@ export function CollectionHoldingSection({
 
   return (
     <section className="space-y-3">
-      <div className="flex items-center gap-2 border-b border-border/50 pb-2">
-        <h2 className="text-sm font-semibold">{resolvedCollectionName}</h2>
-        <span className="rounded-full bg-muted px-2 py-0.5 text-xs text-muted-foreground">
+      <div className="flex items-center gap-2 border-b border-[color:var(--realm-border-etched)] pb-2">
+        <h2 className="realm-kicker text-lg">{resolvedCollectionName}</h2>
+        <span className="rounded-[6px] border border-[color:var(--realm-border-etched)] bg-muted/60 px-2 py-0.5 text-xs text-muted-foreground">
           {tokenIds.length}
         </span>
       </div>

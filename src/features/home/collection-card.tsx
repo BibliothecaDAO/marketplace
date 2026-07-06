@@ -87,7 +87,7 @@ export function CollectionCard({
       onMouseEnter={() => setPreviewRequested(true)}
     >
       <div ref={setCardElement}>
-        <Card className="overflow-hidden py-0 transition-all duration-200 hover:border-primary/40 hover:shadow-[0_0_12px_oklch(0.75_0.1_75/0.1)] hover:-translate-y-1">
+        <Card className="overflow-hidden py-0 transition-all duration-200 hover:border-[color:var(--realm-border-strong)] hover:shadow-[0_0_18px_rgba(231,207,136,0.12)]">
           <div className={cn("bg-muted", featured ? "aspect-[16/9]" : "aspect-square")}>
             {resolvedImageUrl ? (
               // eslint-disable-next-line @next/next/no-img-element
@@ -99,14 +99,14 @@ export function CollectionCard({
             ) : (
               <div
                 data-testid="collection-card-image-fallback"
-                className="flex h-full w-full items-center justify-center bg-gradient-to-br from-muted via-muted/60 to-accent/50"
+                className="flex h-full w-full items-center justify-center bg-[radial-gradient(circle_at_30%_20%,rgba(231,207,136,0.18),transparent_12rem),linear-gradient(145deg,#161b20,#070b0d)]"
               >
                 <span className="text-xs text-muted-foreground">No image</span>
               </div>
             )}
           </div>
           <CardContent className={cn("space-y-1", featured ? "px-4 py-4" : "px-3 py-3")}>
-            <p className={cn("truncate", featured ? "text-base font-semibold" : "text-sm font-medium")}>{name}</p>
+            <p className={cn("realm-title truncate", featured ? "text-xl" : "text-base")}>{name}</p>
             {floorPrice ? (
               <p className={cn("text-xs", featured ? "text-primary" : "text-muted-foreground")}>Floor {floorPrice}</p>
             ) : null}

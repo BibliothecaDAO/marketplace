@@ -58,8 +58,8 @@ function connectorIconUrl(connector: { icon?: unknown }) {
 }
 
 const NAV_LINKS = [
-  { label: "veLORDS", href: "https://account.realms.world/velords" },
-  { label: "Ecosystem", href: "https://realms.world" },
+  { label: "Account", href: "https://account.realms.world/velords" },
+  { label: "Realms.World", href: "https://realms.world" },
   { label: "Games", href: "https://realms.world/games" },
   { label: "Blitz", href: "https://blitz.realms.world" },
 ] as const;
@@ -130,8 +130,8 @@ export function Header() {
   };
 
   return (
-    <header className="sticky top-0 z-50 w-full border-b border-border/80 bg-background/95 backdrop-blur-sm">
-      <div className="flex h-14 items-center gap-2 px-4">
+    <header className="sticky top-0 z-50 w-full border-b border-[color:var(--realm-border-etched)] bg-[color:var(--realm-bg-void)]/95 backdrop-blur-md">
+      <div className="flex h-16 items-center gap-3 px-4 sm:px-6 lg:px-8">
         {/* Logo */}
         <Link href="/" className="flex items-center gap-2 shrink-0" aria-label="Realms.market home">
           {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -142,18 +142,18 @@ export function Header() {
             data-testid="realms-logo"
             className="h-7 w-7 object-contain"
           />
-          <span className="text-sm font-medium tracking-widest uppercase text-foreground">Realms.market</span>
+          <span className="realm-title text-base text-[color:var(--realm-title)]">REALMS.MARKET</span>
         </Link>
 
         {/* Desktop nav */}
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
-            <Button variant="ghost" size="sm" className="hidden md:inline-flex text-muted-foreground">
+            <Button variant="ghost" size="sm" className="hidden rounded-[6px] border border-[color:var(--realm-border-etched)] bg-[color:var(--realm-surface-iron)]/70 text-[color:var(--realm-text-muted)] md:inline-flex">
               Ecosystem
               <ChevronDown className="ml-1 h-3 w-3" />
             </Button>
           </DropdownMenuTrigger>
-          <DropdownMenuContent align="start">
+          <DropdownMenuContent align="start" className="border-[color:var(--realm-border-etched)] bg-[color:var(--realm-surface-iron)]/95">
             {NAV_LINKS.map(({ label, href }) => (
               <DropdownMenuItem key={label} asChild>
                 <a href={href} target="_blank" rel="noopener noreferrer">
@@ -184,14 +184,14 @@ export function Header() {
                 handleSearchSubmit();
               }
             }}
-            className="w-72 lg:w-96"
+            className="w-72 border-[color:var(--realm-border-etched)] bg-[color:var(--realm-surface-iron)]/80 text-foreground placeholder:text-muted-foreground/70 lg:w-96"
           />
         </div>
 
         {/* Right side actions */}
         <div className="ml-auto flex items-center gap-1 sm:gap-2">
           <CartSidebar />
-          <Button size="sm" variant="ghost" asChild className="hidden sm:inline-flex">
+          <Button size="sm" variant="ghost" asChild className="hidden rounded-[6px] border border-[color:var(--realm-border-etched)] bg-[color:var(--realm-surface-iron)]/70 text-[color:var(--realm-text-muted)] sm:inline-flex">
             <Link href="/portfolio">Portfolio</Link>
           </Button>
 
@@ -201,12 +201,12 @@ export function Header() {
                 <button
                   data-testid="wallet-address"
                   type="button"
-                  className="hidden sm:inline-flex rounded-sm bg-muted/50 px-2 py-0.5 text-xs text-primary font-mono hover:bg-muted transition-colors cursor-pointer"
+                  className="hidden rounded-[6px] border border-[color:var(--realm-border-etched)] bg-[color:var(--realm-surface-iron)]/80 px-2 py-1 text-xs font-mono text-primary transition-colors hover:border-[color:var(--realm-border-strong)] hover:bg-muted sm:inline-flex cursor-pointer"
                 >
                   {formatAddress(address)}
                 </button>
               </DropdownMenuTrigger>
-              <DropdownMenuContent align="end" className="w-52">
+              <DropdownMenuContent align="end" className="w-52 border-[color:var(--realm-border-etched)] bg-[color:var(--realm-surface-iron)]/95">
                 <WalletBalances walletAddress={address} />
                 <DropdownMenuSeparator />
                 <DropdownMenuItem asChild>
@@ -235,7 +235,7 @@ export function Header() {
           <Dialog open={walletModalOpen} onOpenChange={setWalletModalOpen}>
             <DialogContent showCloseButton={!isBusy}>
               <DialogHeader>
-                <DialogTitle>Select wallet</DialogTitle>
+                <DialogTitle className="realm-title text-xl">SELECT WALLET</DialogTitle>
                 <DialogDescription>
                   Choose a wallet connector to continue.
                 </DialogDescription>
@@ -280,16 +280,16 @@ export function Header() {
                 type="button"
                 size="sm"
                 variant="ghost"
-                className="md:hidden px-2"
+                className="px-2 md:hidden"
                 aria-label="Open menu"
               >
                 <Menu className="h-4 w-4" />
               </Button>
             </SheetTrigger>
-            <SheetContent side="right" className="w-64">
+            <SheetContent side="right" className="w-64 border-[color:var(--realm-border-etched)] bg-[color:var(--realm-bg-void)]">
               <SheetHeader>
-                <SheetTitle className="text-left text-sm font-medium tracking-widest uppercase">
-                  Realms.market
+                <SheetTitle className="realm-title text-left text-base">
+                  REALMS.MARKET
                 </SheetTitle>
               </SheetHeader>
               <nav aria-label="Mobile navigation" className="mt-6 flex flex-col gap-1">
@@ -300,7 +300,7 @@ export function Header() {
                     target="_blank"
                     rel="noopener noreferrer"
                     onClick={() => setMobileMenuOpen(false)}
-                    className="px-2 py-2.5 text-sm text-muted-foreground hover:text-foreground transition-colors rounded-sm hover:bg-muted"
+                    className="rounded-[6px] border border-transparent px-2 py-2.5 text-sm text-muted-foreground transition-colors hover:border-[color:var(--realm-border-etched)] hover:bg-muted/70 hover:text-foreground"
                   >
                     {label}
                   </a>
@@ -308,7 +308,7 @@ export function Header() {
                 <Link
                   href="/portfolio"
                   onClick={() => setMobileMenuOpen(false)}
-                  className="px-2 py-2.5 text-sm text-muted-foreground hover:text-foreground transition-colors rounded-sm hover:bg-muted"
+                  className="rounded-[6px] border border-transparent px-2 py-2.5 text-sm text-muted-foreground transition-colors hover:border-[color:var(--realm-border-etched)] hover:bg-muted/70 hover:text-foreground"
                 >
                   Portfolio
                 </Link>
@@ -319,7 +319,7 @@ export function Header() {
                       setWalletModalOpen(true);
                       setMobileMenuOpen(false);
                     }}
-                    className="px-2 py-2.5 text-left text-sm text-muted-foreground hover:text-foreground transition-colors rounded-sm hover:bg-muted"
+                    className="rounded-[6px] border border-transparent px-2 py-2.5 text-left text-sm text-muted-foreground transition-colors hover:border-[color:var(--realm-border-etched)] hover:bg-muted/70 hover:text-foreground"
                   >
                     Connect Wallet
                   </button>
@@ -329,14 +329,14 @@ export function Header() {
                     <Link
                       href={`/profile/${address}`}
                       onClick={() => setMobileMenuOpen(false)}
-                      className="px-2 py-2.5 text-sm text-muted-foreground hover:text-foreground transition-colors rounded-sm hover:bg-muted"
+                      className="rounded-[6px] border border-transparent px-2 py-2.5 text-sm text-muted-foreground transition-colors hover:border-[color:var(--realm-border-etched)] hover:bg-muted/70 hover:text-foreground"
                     >
                       Profile
                     </Link>
                     <button
                       type="button"
                       onClick={() => { disconnect(); setMobileMenuOpen(false); }}
-                      className="px-2 py-2.5 text-left text-sm text-muted-foreground hover:text-foreground transition-colors rounded-sm hover:bg-muted"
+                      className="rounded-[6px] border border-transparent px-2 py-2.5 text-left text-sm text-muted-foreground transition-colors hover:border-[color:var(--realm-border-etched)] hover:bg-muted/70 hover:text-foreground"
                     >
                       Disconnect
                     </button>
@@ -351,7 +351,7 @@ export function Header() {
                     target="_blank"
                     rel="noopener noreferrer"
                     aria-label={label}
-                    className="flex h-8 w-8 items-center justify-center rounded-sm text-muted-foreground hover:text-foreground transition-colors"
+                    className="flex h-8 w-8 items-center justify-center rounded-[6px] border border-[color:var(--realm-border-etched)] text-muted-foreground transition-colors hover:border-[color:var(--realm-border-strong)] hover:text-foreground"
                   >
                     <Icon className="h-4 w-4" />
                   </a>

@@ -23,7 +23,7 @@ export function TrendingTokensSection({
 
   return (
     <section data-testid="trending-tokens" className="space-y-3">
-      <h2 className="text-sm font-medium tracking-widest uppercase text-muted-foreground">
+      <h2 className="realm-kicker text-lg">
         Trending Tokens
       </h2>
 

@@ -63,7 +63,7 @@ export const MarketplaceTokenCard = React.memo(function MarketplaceTokenCard({
     <>
       <div
         className={cn(
-          "flex aspect-[4/5] items-center justify-center bg-muted",
+          "flex aspect-[4/5] items-center justify-center bg-[color:var(--realm-surface-slate)]",
           mediaContainerClassName,
         )}
       >
@@ -98,10 +98,10 @@ export const MarketplaceTokenCard = React.memo(function MarketplaceTokenCard({
         </p>
       </CardContent>
       <div
-        className="pointer-events-none absolute inset-0 flex items-end bg-background/85 p-2 opacity-0 transition-opacity duration-150 group-hover:pointer-events-auto group-hover:opacity-100 group-focus-visible:pointer-events-auto group-focus-visible:opacity-100 group-focus-within:pointer-events-auto group-focus-within:opacity-100"
+        className="pointer-events-none absolute inset-0 flex items-end bg-[color:var(--realm-bg-void)]/88 p-2 opacity-0 transition-opacity duration-150 group-hover:pointer-events-auto group-hover:opacity-100 group-focus-visible:pointer-events-auto group-focus-visible:opacity-100 group-focus-within:pointer-events-auto group-focus-within:opacity-100"
         data-testid="token-attributes-overlay"
       >
-        <div className="w-full rounded-md border bg-background/95 p-2 shadow-sm">
+        <div className="realm-panel w-full p-2">
           <div
             className="max-h-44 overflow-y-auto pr-1"
             data-testid="token-attributes-scroll"
@@ -149,7 +149,7 @@ export const MarketplaceTokenCard = React.memo(function MarketplaceTokenCard({
   return (
     <Card
       className={cn(
-        "relative flex flex-col overflow-hidden py-0 transition-all duration-150 hover:shadow-[0_0_12px_oklch(0.75_0.1_75/0.1)]",
+        "relative flex flex-col overflow-hidden py-0 transition-all duration-150 hover:border-[color:var(--realm-border-strong)] hover:shadow-[0_0_18px_rgba(231,207,136,0.12)]",
         cardClassName,
       )}
     >
@@ -157,7 +157,7 @@ export const MarketplaceTokenCard = React.memo(function MarketplaceTokenCard({
         <button
           type="button"
           className={cn(
-            "group flex flex-1 flex-col w-full text-left transition-all duration-150 hover:-translate-y-1 hover:border-primary/30",
+            "group flex w-full flex-1 flex-col text-left transition-all duration-150 hover:border-[color:var(--realm-border-strong)]",
             linkClassName,
           )}
           onClick={onSelect}
@@ -168,7 +168,7 @@ export const MarketplaceTokenCard = React.memo(function MarketplaceTokenCard({
       ) : (
         <Link
           className={cn(
-            "group flex flex-1 flex-col transition-all duration-150 hover:-translate-y-1 hover:border-primary/30",
+            "group flex flex-1 flex-col transition-all duration-150 hover:border-[color:var(--realm-border-strong)]",
             linkClassName,
           )}
           href={href}
@@ -179,7 +179,7 @@ export const MarketplaceTokenCard = React.memo(function MarketplaceTokenCard({
       )}
 
       {showActions ? (
-        <div className="mt-auto grid grid-cols-2 gap-2 border-t border-border/60 px-3 py-3">
+        <div className="mt-auto grid grid-cols-2 gap-2 border-t border-[color:var(--realm-border-etched)] px-3 py-3">
           {onBuyNow ? (
             <Button onClick={onBuyNow} type="button" size="sm">
               {buyNowLabel}
