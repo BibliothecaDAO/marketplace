@@ -121,16 +121,16 @@ function CollectionSidebarItem({
         onFocus={() => setPreviewRequested(true)}
         onMouseEnter={() => setPreviewRequested(true)}
         className={cn(
-          "flex items-center rounded-md text-left transition-all duration-150",
+          "flex items-center rounded-[6px] border border-transparent text-left transition-all duration-150",
           collapsed
-            ? "mx-auto h-11 w-11 justify-center px-0 py-0 hover:bg-muted/70"
-            : "w-full gap-2 px-2 py-2 hover:bg-accent/60",
+            ? "mx-auto h-11 w-11 justify-center px-0 py-0 hover:border-[color:var(--realm-border-etched)] hover:bg-muted/70"
+            : "w-full gap-2 px-2 py-2 hover:border-[color:var(--realm-border-etched)] hover:bg-muted/60",
           isActive
-            ? "bg-accent text-accent-foreground"
+            ? "border-[color:var(--realm-border-strong)] bg-muted/70 text-accent-foreground"
             : collapsed ? "bg-muted/40" : "bg-transparent",
         )}
       >
-        <Avatar size={collapsed ? "default" : "sm"} className="rounded-md">
+        <Avatar size={collapsed ? "default" : "sm"} className="rounded-[6px]">
           {resolvedImageUrl ? (
             // eslint-disable-next-line @next/next/no-img-element
             <img
@@ -139,7 +139,7 @@ function CollectionSidebarItem({
               className="h-full w-full object-cover"
             />
           ) : null}
-          <AvatarFallback className="rounded-md">{initials(collection.name)}</AvatarFallback>
+          <AvatarFallback className="rounded-[6px]">{initials(collection.name)}</AvatarFallback>
         </Avatar>
         {!collapsed ? (
           <span className="min-w-0 flex-1">
