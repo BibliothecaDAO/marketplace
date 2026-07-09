@@ -310,7 +310,7 @@
 
 .realm-nav-link {
   position: relative;
-  font-family: var(--font-ui);
+  font-family: var(--font-title);
   letter-spacing: 0.16em;
 }
 
@@ -334,7 +334,8 @@
 }
 
 .realm-nav-link:hover::after,
-.realm-nav-link[aria-current="page"]::after {
+.realm-nav-link[aria-current="page"]::after,
+.realm-nav-link-active::after {
   opacity: 1;
   transform: scaleX(1);
 }

@@ -103,7 +103,7 @@ function topNavClass(isCurrent = false) {
   return [
     "realm-nav-link text-xs uppercase tracking-[0.15em] transition-colors",
     isCurrent
-      ? "text-primary"
+      ? "realm-nav-link-active text-primary"
       : "text-foreground/75 hover:text-primary",
   ].join(" ");
 }
@@ -141,10 +141,11 @@ export function Header() {
 
   return (
     <header className="sticky top-0 z-50 w-full">
-      <div className="realm-market-header-shell border-b border-[color:var(--realm-border-etched)] bg-black/45 backdrop-blur-xl supports-[backdrop-filter]:bg-black/35">
-        <div className="mx-auto px-3 sm:px-4 lg:px-8">
-          <div className="relative flex h-16 items-center justify-between gap-2 sm:gap-4">
-            <a
+      <div className="realm-market-header-shell border border-primary/25 bg-black/45 backdrop-blur-xl transition-all duration-300 supports-[backdrop-filter]:bg-black/35">
+        <div className="py-3.5 sm:py-4">
+          <div className="container mx-auto px-3 sm:px-4">
+            <div className="relative flex items-center justify-between gap-2 sm:gap-4">
+              <a
               href="https://realms.world/"
               target="_blank"
               rel="noopener noreferrer"
@@ -156,7 +157,7 @@ export function Header() {
                 src="/rw-logo.svg"
                 alt="Realms.World"
                 data-testid="realms-logo"
-                className="w-11 object-contain sm:w-[3.25rem]"
+                className="w-11 object-contain sm:w-13"
               />
             </a>
 
@@ -271,10 +272,11 @@ export function Header() {
           </div>
         </div>
       </div>
+      </div>
 
       <div className="border-b border-[color:var(--realm-border-etched)] bg-[color:var(--realm-bg-void)]/95 backdrop-blur-xl">
         <div className="mx-auto flex min-h-14 items-center px-3 sm:px-4 lg:px-8">
-          <div className="ml-auto flex w-full items-center justify-end gap-2 overflow-x-auto py-2 sm:gap-3">
+          <div className="flex w-full items-center gap-2 overflow-x-auto py-2 sm:gap-3">
             <form
               className="relative shrink-0"
               role="search"
@@ -293,18 +295,19 @@ export function Header() {
               />
             </form>
 
-            <CartSidebar />
+            <div className="ml-auto flex shrink-0 items-center justify-end gap-2 sm:gap-3">
+              <CartSidebar />
 
-            <Button
+              <Button
               size="sm"
               variant="ghost"
               asChild
               className="h-9 rounded-[6px] border border-[color:var(--realm-border-etched)] bg-[color:var(--realm-surface-iron)]/70 px-3 text-[color:var(--realm-text-muted)] hover:border-[color:var(--realm-border-strong)]"
             >
               <Link href="/portfolio">Portfolio</Link>
-            </Button>
+              </Button>
 
-            {isConnected && address ? (
+              {isConnected && address ? (
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
                   <button
@@ -342,7 +345,8 @@ export function Header() {
               >
                 Connect Wallet
               </Button>
-            )}
+              )}
+            </div>
           </div>
         </div>
       </div>
