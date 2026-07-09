@@ -20,6 +20,10 @@ const geistMono = Geist_Mono({
 export const metadata: Metadata = {
   title: "Realms.market",
   description: "The Realms ecosystem marketplace",
+  icons: {
+    icon: "/rw-logo.svg",
+    shortcut: "/rw-logo.svg",
+  },
 };
 
 export default function RootLayout({
