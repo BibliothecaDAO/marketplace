@@ -93,7 +93,7 @@ export function CollectionListItem({
           <img
             alt={`${name} preview`}
             src={resolvedImage}
-            className="h-full w-full object-cover"
+            className="h-full w-full object-cover object-center"
           />
         ) : (
           <div className="flex h-full w-full items-center justify-center bg-[radial-gradient(circle_at_30%_20%,rgba(231,207,136,0.18),transparent_4rem),linear-gradient(145deg,#161b20,#070b0d)]">

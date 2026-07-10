@@ -136,7 +136,7 @@ function CollectionSidebarItem({
             <img
               src={resolvedImageUrl}
               alt={`${collection.name} thumbnail`}
-              className="h-full w-full object-cover"
+              className="h-full w-full object-cover object-center"
             />
           ) : null}
           <AvatarFallback className="rounded-[6px]">{initials(collection.name)}</AvatarFallback>

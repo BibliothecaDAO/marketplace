@@ -440,7 +440,7 @@ export function CollectionRouteView({
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img
               alt={`${displayName ?? selectedCollection?.name ?? address} banner`}
-              className="hero-image h-56 w-full object-cover"
+              className="hero-image h-56 w-full object-cover object-center"
               src={headerImage}
             />
             {/* Gradient overlay for text readability */}

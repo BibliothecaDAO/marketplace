@@ -105,7 +105,7 @@ export function PromotedCollection({
           <img
             alt={`${name} promoted`}
             src={imageUrl}
-            className="h-full w-full object-cover"
+            className="h-full w-full object-cover object-center"
           />
         ) : (
           <div className="h-full w-full bg-[radial-gradient(circle_at_30%_20%,rgba(231,207,136,0.24),transparent_14rem),linear-gradient(145deg,#161b20,#070b0d_55%,#050709)]" />

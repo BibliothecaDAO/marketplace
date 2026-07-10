@@ -94,7 +94,7 @@ export function CollectionCard({
               <img
                 alt={`${name} preview`}
                 src={resolvedImageUrl}
-                className="h-full w-full object-cover"
+                className="h-full w-full object-cover object-center"
               />
             ) : (
               <div
