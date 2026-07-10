@@ -237,7 +237,7 @@ export function CollectionRow({
     <section className="space-y-3">
       {/* Heading with stats — padded for readability */}
       <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1 px-4 sm:px-6 lg:px-8">
-        <h2 className="text-sm font-medium tracking-widest uppercase text-muted-foreground">
+        <h2 className="realm-kicker text-lg">
           <Link href={`/collections/${address}`} className="hover:text-foreground transition-colors">
             {name}
           </Link>

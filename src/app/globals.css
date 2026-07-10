@@ -4,42 +4,62 @@
 
 @custom-variant dark (&:is(.dark *));
 
+@font-face {
+  font-family: "IM Fell English SC";
+  src: url("/brand/im-fell-english-sc-regular.ttf") format("truetype");
+  font-display: swap;
+}
+
 :root {
-  --background: oklch(0.97 0.003 260);
-  --foreground: oklch(0.20 0.01 260);
-  --card: oklch(0.99 0.002 260);
-  --card-foreground: oklch(0.20 0.01 260);
-  --popover: oklch(0.97 0.003 260);
-  --popover-foreground: oklch(0.20 0.01 260);
-  --primary: oklch(0.50 0.15 75);
-  --primary-foreground: oklch(0.98 0 0);
-  --secondary: oklch(0.92 0.005 260);
-  --secondary-foreground: oklch(0.25 0.01 260);
-  --muted: oklch(0.94 0.003 260);
-  --muted-foreground: oklch(0.50 0.01 75);
-  --accent: oklch(0.93 0.01 75);
-  --accent-foreground: oklch(0.20 0.01 260);
+  --background: oklch(0.98 0 0);
+  --foreground: oklch(0.24 0 0);
+  --card: oklch(0.99 0 0);
+  --card-foreground: oklch(0.24 0 0);
+  --popover: oklch(0.99 0 0);
+  --popover-foreground: oklch(0.24 0 0);
+  --primary: oklch(0.43 0.04 41.99);
+  --primary-foreground: oklch(1 0 0);
+  --secondary: oklch(0.92 0.07 74.37);
+  --secondary-foreground: oklch(0.35 0.07 40.83);
+  --muted: oklch(0.95 0 0);
+  --muted-foreground: oklch(0.5 0 0);
+  --accent: oklch(0.93 0 0);
+  --accent-foreground: oklch(0.24 0 0);
   --destructive: oklch(0.55 0.2 25);
   --destructive-foreground: oklch(0.98 0 0);
-  --border: oklch(0.88 0.005 260);
-  --input: oklch(0.90 0.003 260);
-  --ring: oklch(0.50 0.15 75);
+  --border: oklch(0.52 0.04 75);
+  --input: oklch(0.44 0.03 80);
+  --ring: oklch(0.43 0.04 41.99);
   --chart-1: oklch(0.70 0.15 75);
   --chart-2: oklch(0.55 0.12 250);
   --chart-3: oklch(0.70 0.15 140);
   --chart-4: oklch(0.60 0.10 310);
   --chart-5: oklch(0.65 0.12 30);
-  --sidebar: oklch(0.94 0.003 260);
-  --sidebar-foreground: oklch(0.20 0.01 260);
-  --sidebar-primary: oklch(0.50 0.15 75);
-  --sidebar-primary-foreground: oklch(0.98 0 0);
-  --sidebar-accent: oklch(0.93 0.01 75);
-  --sidebar-accent-foreground: oklch(0.20 0.01 260);
-  --sidebar-border: oklch(0.88 0.005 260);
-  --sidebar-ring: oklch(0.50 0.15 75);
-  --font-sans: "Geist", ui-sans-serif, system-ui, sans-serif;
-  --font-serif: serif;
-  --font-mono: JetBrains Mono, monospace;
+  --sidebar: oklch(0.99 0 0);
+  --sidebar-foreground: oklch(0.26 0 0);
+  --sidebar-primary: oklch(0.43 0.04 41.99);
+  --sidebar-primary-foreground: oklch(0.99 0 0);
+  --sidebar-accent: oklch(0.98 0 0);
+  --sidebar-accent-foreground: oklch(0.33 0 0);
+  --sidebar-border: oklch(0.52 0.04 75);
+  --sidebar-ring: oklch(0.77 0 0);
+  --font-sans: var(--font-exo-2), ui-sans-serif, system-ui, sans-serif;
+  --font-serif: "IM Fell English SC", Cinzel, serif;
+  --font-title: "IM Fell English SC", Cinzel, serif;
+  --font-ui: var(--font-exo-2), Rajdhani, sans-serif;
+  --font-mono: var(--font-geist-mono), JetBrains Mono, monospace;
+  --realm-bg-void: #050709;
+  --realm-bg-smoke: #070b0d;
+  --realm-surface-iron: #101417;
+  --realm-surface-slate: #161b20;
+  --realm-accent-ember: #c4874a;
+  --realm-accent-brass: #e7cf88;
+  --realm-accent-arcane: #8d98c8;
+  --realm-border-etched: rgba(231, 207, 136, 0.22);
+  --realm-border-strong: rgba(231, 207, 136, 0.38);
+  --realm-text: #e8dcc2;
+  --realm-text-muted: #d8c8a8;
+  --realm-title: #f5ead0;
   --radius: 0.5rem;
   --shadow-2xs: none;
   --shadow-xs: none;
@@ -51,46 +71,60 @@
   --shadow-2xl: 0 2px 6px 0 oklch(0 0 0 / 0.15);
   --shadow-glow-sm: 0 0 12px oklch(0.75 0.1 75 / 0.1);
   --shadow-glow-md: 0 0 20px oklch(0.75 0.15 75 / 0.15);
-  --tracking-normal: 0.02em;
+  --tracking-normal: 0;
   --spacing: 0.25rem;
 }
 
 .dark {
-  --background: oklch(0.14 0.005 260);
-  --foreground: oklch(0.88 0.01 85);
-  --card: oklch(0.17 0.005 260);
-  --card-foreground: oklch(0.88 0.01 85);
-  --popover: oklch(0.16 0.005 260);
-  --popover-foreground: oklch(0.88 0.01 85);
-  --primary: oklch(0.75 0.15 75);
-  --primary-foreground: oklch(0.14 0.02 75);
-  --secondary: oklch(0.30 0.01 260);
-  --secondary-foreground: oklch(0.88 0.01 85);
-  --muted: oklch(0.20 0.005 260);
-  --muted-foreground: oklch(0.55 0.02 85);
-  --accent: oklch(0.22 0.02 75);
-  --accent-foreground: oklch(0.88 0.01 85);
+  --background: #050709;
+  --foreground: #e8dcc2;
+  --card: #101417;
+  --card-foreground: #e8dcc2;
+  --popover: #101417;
+  --popover-foreground: #e8dcc2;
+  --primary: #e7cf88;
+  --primary-foreground: #17110a;
+  --secondary: rgba(231, 207, 136, 0.12);
+  --secondary-foreground: #f5ead0;
+  --muted: #161b20;
+  --muted-foreground: #d8c8a8;
+  --accent: rgba(196, 135, 74, 0.18);
+  --accent-foreground: #f5ead0;
   --destructive: oklch(0.55 0.2 25);
   --destructive-foreground: oklch(0.95 0 0);
-  --border: oklch(0.28 0.01 75);
-  --input: oklch(0.22 0.005 260);
-  --ring: oklch(0.75 0.15 75);
+  --border: rgba(231, 207, 136, 0.24);
+  --input: rgba(231, 207, 136, 0.28);
+  --ring: #e7cf88;
   --chart-1: oklch(0.70 0.15 75);
   --chart-2: oklch(0.55 0.12 250);
   --chart-3: oklch(0.70 0.15 140);
   --chart-4: oklch(0.60 0.10 310);
   --chart-5: oklch(0.65 0.12 30);
-  --sidebar: oklch(0.14 0.005 260);
-  --sidebar-foreground: oklch(0.88 0.01 85);
-  --sidebar-primary: oklch(0.75 0.15 75);
-  --sidebar-primary-foreground: oklch(0.14 0.02 75);
-  --sidebar-accent: oklch(0.22 0.02 75);
-  --sidebar-accent-foreground: oklch(0.88 0.01 85);
-  --sidebar-border: oklch(0.28 0.01 75);
-  --sidebar-ring: oklch(0.75 0.15 75);
-  --font-sans: "Geist", ui-sans-serif, system-ui, sans-serif;
-  --font-serif: serif;
-  --font-mono: JetBrains Mono, monospace;
+  --sidebar: #070b0d;
+  --sidebar-foreground: #e8dcc2;
+  --sidebar-primary: #e7cf88;
+  --sidebar-primary-foreground: #17110a;
+  --sidebar-accent: #161b20;
+  --sidebar-accent-foreground: #f5ead0;
+  --sidebar-border: rgba(231, 207, 136, 0.22);
+  --sidebar-ring: oklch(0.87 0.01 286.29);
+  --font-sans: var(--font-exo-2), ui-sans-serif, system-ui, sans-serif;
+  --font-serif: "IM Fell English SC", Cinzel, serif;
+  --font-title: "IM Fell English SC", Cinzel, serif;
+  --font-ui: var(--font-exo-2), Rajdhani, sans-serif;
+  --font-mono: var(--font-geist-mono), JetBrains Mono, monospace;
+  --realm-bg-void: #050709;
+  --realm-bg-smoke: #070b0d;
+  --realm-surface-iron: #101417;
+  --realm-surface-slate: #161b20;
+  --realm-accent-ember: #c4874a;
+  --realm-accent-brass: #e7cf88;
+  --realm-accent-arcane: #8d98c8;
+  --realm-border-etched: rgba(231, 207, 136, 0.22);
+  --realm-border-strong: rgba(231, 207, 136, 0.38);
+  --realm-text: #e8dcc2;
+  --realm-text-muted: #d8c8a8;
+  --realm-title: #f5ead0;
   --radius: 0.5rem;
   --shadow-2xs: none;
   --shadow-xs: none;
@@ -140,6 +174,7 @@
   --font-sans: var(--font-sans);
   --font-mono: var(--font-mono);
   --font-serif: var(--font-serif);
+  --font-title: var(--font-title);
   --radius-sm: calc(var(--radius) - 4px);
   --radius-md: calc(var(--radius) - 2px);
   --radius-lg: var(--radius);
@@ -154,8 +189,8 @@
   --shadow-2xl: var(--shadow-2xl);
   --shadow-glow-sm: var(--shadow-glow-sm);
   --shadow-glow-md: var(--shadow-glow-md);
-  --tracking-tighter: calc(var(--tracking-normal) - 0.05em);
-  --tracking-tight: calc(var(--tracking-normal) - 0.025em);
+  --tracking-tighter: var(--tracking-normal);
+  --tracking-tight: var(--tracking-normal);
   --tracking-normal: var(--tracking-normal);
   --tracking-wide: calc(var(--tracking-normal) + 0.025em);
   --tracking-wider: calc(var(--tracking-normal) + 0.05em);
@@ -167,27 +202,128 @@
     @apply border-border outline-ring/50;
   }
   body {
-    @apply bg-background text-foreground;
-    letter-spacing: var(--tracking-normal);
+    @apply text-foreground;
+    font-family: var(--font-sans);
+    letter-spacing: 0;
+    background:
+      radial-gradient(circle at 50% -10%, rgba(231, 207, 136, 0.1), transparent 34rem),
+      radial-gradient(circle at 92% 18%, rgba(141, 152, 200, 0.08), transparent 28rem),
+      linear-gradient(180deg, #040607 0%, #070b0d 54%, #050709 100%);
+    background-attachment: fixed;
+    background-position: center top, center top, center center;
+    background-size: auto, auto, auto;
   }
-  ::-webkit-scrollbar {
-    width: 6px;
-    height: 6px;
+  h1,
+  h2,
+  h3,
+  .realm-title {
+    color: var(--realm-title);
+    font-family: var(--font-title);
+    font-weight: 400;
+    letter-spacing: 0;
+    text-transform: uppercase;
   }
-  ::-webkit-scrollbar-track {
-    background: transparent;
+  aside {
+    background: color-mix(in oklab, var(--sidebar) 94%, transparent);
   }
-  ::-webkit-scrollbar-thumb {
-    background: var(--border);
-    border-radius: 3px;
+  [data-slot="card"],
+  [data-slot="dialog-content"],
+  [data-slot="sheet-content"],
+  [data-slot="dropdown-menu-content"],
+  [data-slot="popover-content"] {
+    background: linear-gradient(160deg, rgba(22, 27, 32, 0.96), rgba(7, 11, 13, 0.94));
+    border-color: var(--realm-border-etched);
+    border-radius: 8px;
+    box-shadow:
+      inset 0 1px 0 rgba(231, 207, 136, 0.08),
+      0 18px 36px rgba(0, 0, 0, 0.32);
   }
-  ::-webkit-scrollbar-thumb:hover {
-    background: var(--primary);
+  [data-slot="button"][data-variant="default"] {
+    border: 1px solid rgba(245, 234, 208, 0.28);
+    background: linear-gradient(180deg, #e7cf88 0%, #caa75d 100%);
+    color: #17110a;
+    box-shadow:
+      inset 0 1px 0 rgba(255, 255, 255, 0.28),
+      0 8px 20px rgba(231, 207, 136, 0.14);
+  }
+  [data-slot="button"][data-variant="default"]:hover {
+    background: linear-gradient(180deg, #f1dc9d 0%, #d4b46b 100%);
+  }
+  [data-slot="button"][data-variant="outline"],
+  [data-slot="button"][data-variant="ghost"] {
+    border-color: var(--realm-border-etched);
+  }
+  .realm-panel {
+    background: linear-gradient(160deg, rgba(16, 20, 23, 0.94), rgba(7, 11, 13, 0.92));
+    border: 1px solid var(--realm-border-etched);
+    border-radius: 8px;
+    box-shadow:
+      inset 0 1px 0 rgba(231, 207, 136, 0.08),
+      0 18px 36px rgba(0, 0, 0, 0.28);
+  }
+  .realm-kicker {
+    color: var(--realm-accent-brass);
+    font-family: var(--font-title);
+    font-weight: 400;
+    letter-spacing: 0;
+    text-transform: uppercase;
+  }
+  .realm-stat-pill {
+    background: rgba(5, 7, 9, 0.72);
+    border: 1px solid var(--realm-border-etched);
+    border-radius: 6px;
+    box-shadow: inset 0 1px 0 rgba(231, 207, 136, 0.08);
   }
   ::selection {
     background: oklch(0.75 0.15 75 / 0.3);
     color: var(--foreground);
   }
+}
+
+
+.realm-market-header-shell {
+  border: 1px solid color-mix(in oklab, var(--realm-border-strong) 70%, transparent);
+  background:
+    linear-gradient(
+      160deg,
+      color-mix(in oklab, var(--realm-surface-iron) 62%, transparent),
+      color-mix(in oklab, var(--realm-bg-void) 62%, transparent)
+    );
+  box-shadow:
+    inset 0 1px 0 color-mix(in oklab, var(--realm-accent-brass) 14%, transparent),
+    0 10px 22px color-mix(in oklab, black 40%, transparent);
+}
+
+.realm-nav-link {
+  position: relative;
+  font-family: var(--font-title);
+  letter-spacing: 0.16em;
+}
+
+.realm-nav-link::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: -0.35rem;
+  height: 1px;
+  background: linear-gradient(
+    90deg,
+    transparent,
+    color-mix(in oklab, var(--realm-accent-brass) 75%, transparent),
+    transparent
+  );
+  opacity: 0;
+  transform: scaleX(0.3);
+  transform-origin: center;
+  transition: transform 220ms ease, opacity 220ms ease;
+}
+
+.realm-nav-link:hover::after,
+.realm-nav-link[aria-current="page"]::after,
+.realm-nav-link-active::after {
+  opacity: 1;
+  transform: scaleX(1);
 }
 
 @media (prefers-reduced-motion: reduce) {

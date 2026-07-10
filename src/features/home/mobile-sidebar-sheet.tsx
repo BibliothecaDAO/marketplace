@@ -48,10 +48,10 @@ export function MobileSidebarSheet({
       <SheetContent
         data-testid="mobile-sidebar-sheet-content"
         side="left"
-        className="w-72 p-0"
+        className="w-72 border-[color:var(--realm-border-etched)] bg-[color:var(--realm-bg-void)] p-0"
       >
-        <SheetHeader className="border-b border-border/70">
-          <SheetTitle>Collections</SheetTitle>
+        <SheetHeader className="border-b border-[color:var(--realm-border-etched)]">
+          <SheetTitle className="realm-kicker text-lg">Collections</SheetTitle>
         </SheetHeader>
         <CollectionSidebar
           collections={collections}

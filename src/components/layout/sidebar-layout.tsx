@@ -53,11 +53,11 @@ export function SidebarLayout({ children }: { children: React.ReactNode }) {
   return (
     <div
       data-testid="sidebar-layout"
-      className="flex min-h-[calc(100vh-3.5rem)]"
+      className="flex min-h-[calc(100vh-4rem)]"
     >
       <aside
         className={cn(
-          "sticky top-14 hidden h-[calc(100vh-3.5rem)] shrink-0 border-r border-border transition-[width] duration-200 lg:flex lg:flex-col",
+          "sticky top-16 hidden h-[calc(100vh-4rem)] shrink-0 border-r border-[color:var(--realm-border-etched)] bg-[color:var(--realm-bg-void)]/72 transition-[width] duration-200 lg:flex lg:flex-col",
           collapsed ? "w-20" : "w-64",
         )}
       >
@@ -71,7 +71,7 @@ export function SidebarLayout({ children }: { children: React.ReactNode }) {
         </div>
         <div
           data-testid="sidebar-toggle-container"
-          className="mt-auto flex items-center justify-end border-t border-border/60 p-2"
+          className="mt-auto flex items-center justify-end border-t border-[color:var(--realm-border-etched)] p-2"
         >
           <Button
             type="button"
@@ -90,7 +90,7 @@ export function SidebarLayout({ children }: { children: React.ReactNode }) {
       </aside>
 
       <div className="min-w-0 flex-1">
-        <div className="border-b border-border/60 px-4 py-2 lg:hidden">
+        <div className="border-b border-[color:var(--realm-border-etched)] px-4 py-2 lg:hidden">
           <MobileSidebarSheet
             collections={sidebarCollections}
             activeAddress={activeAddress}

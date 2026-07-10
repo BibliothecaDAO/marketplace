@@ -65,7 +65,7 @@ export function ResourceTraitIcons({
           <span
             key={resource}
             className={cn(
-              "inline-flex items-center gap-1 rounded-full border border-border/70 bg-muted/40 px-1.5 py-0.5 text-[10px] text-muted-foreground",
+              "inline-flex items-center gap-1 rounded-[6px] border border-[color:var(--realm-border-etched)] bg-muted/40 px-1.5 py-0.5 text-[10px] text-muted-foreground",
               !showLabels && "px-1 py-1",
             )}
           >
@@ -77,7 +77,7 @@ export function ResourceTraitIcons({
                 src={iconSrc}
               />
             ) : (
-              <span className="inline-flex size-3 items-center justify-center rounded-full bg-muted text-[8px] font-semibold text-foreground">
+              <span className="inline-flex size-3 items-center justify-center rounded-[4px] bg-muted text-[8px] font-semibold text-foreground">
                 {resource.slice(0, 1).toUpperCase()}
               </span>
             )}

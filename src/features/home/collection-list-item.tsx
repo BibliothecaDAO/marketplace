@@ -84,19 +84,19 @@ export function CollectionListItem({
   return (
     <Link
       href={`/collections/${address}`}
-      className="group flex items-center gap-4 rounded-lg border border-border/60 bg-card p-3 transition-all duration-200 hover:border-primary/40 hover:shadow-[0_0_12px_oklch(0.75_0.1_75/0.1)]"
+      className="realm-panel group flex items-center gap-4 p-3 transition-all duration-200 hover:border-[color:var(--realm-border-strong)] hover:shadow-[0_0_18px_rgba(231,207,136,0.12)]"
     >
       {/* Collection image */}
-      <div className="h-14 w-14 shrink-0 overflow-hidden rounded-md bg-muted">
+      <div className="h-14 w-14 shrink-0 overflow-hidden rounded-[6px] border border-[color:var(--realm-border-etched)] bg-muted">
         {resolvedImage ? (
           // eslint-disable-next-line @next/next/no-img-element
           <img
             alt={`${name} preview`}
             src={resolvedImage}
-            className="h-full w-full object-cover"
+            className="h-full w-full object-cover object-center"
           />
         ) : (
-          <div className="flex h-full w-full items-center justify-center bg-gradient-to-br from-muted via-muted/60 to-accent/50">
+          <div className="flex h-full w-full items-center justify-center bg-[radial-gradient(circle_at_30%_20%,rgba(231,207,136,0.18),transparent_4rem),linear-gradient(145deg,#161b20,#070b0d)]">
             <span className="text-[10px] text-muted-foreground">&mdash;</span>
           </div>
         )}
@@ -104,7 +104,7 @@ export function CollectionListItem({
 
       {/* Collection info */}
       <div className="min-w-0 flex-1">
-        <p className="truncate text-sm font-semibold group-hover:text-primary transition-colors">
+        <p className="realm-title truncate text-base transition-colors group-hover:text-primary">
           {name}
         </p>
         <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-0.5 text-xs text-muted-foreground">

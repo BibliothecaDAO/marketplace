@@ -659,10 +659,10 @@ export function TokenDetailView({
               ) : null}
             </div>
           ) : cheapestListing ? (
-            <div data-detail-section className="flex flex-wrap items-center justify-between gap-3 rounded-sm border border-border bg-muted/20 px-4 py-3">
+            <div data-detail-section className="realm-panel flex flex-wrap items-center justify-between gap-3 px-4 py-3">
               <div>
-                <p className="text-[10px] uppercase tracking-widest text-muted-foreground mb-0.5">Best price</p>
-                <p className="text-xl font-bold flex items-center gap-1.5">
+                <p className="realm-kicker mb-0.5 text-xs">Best price</p>
+                <p className="flex items-center gap-1.5 text-xl font-bold text-primary">
                   {formatPriceForDisplay(cheapestListing.price) ?? cheapestListing.price}
                   <TokenSymbol address={cheapestListing.currency} className="text-sm font-normal text-muted-foreground" />
                 </p>
@@ -684,7 +684,7 @@ export function TokenDetailView({
           {/* Attributes */}
           {attributes.length > 0 ? (
             <div data-detail-section className="space-y-2">
-              <h2 className="text-sm font-medium tracking-widest uppercase text-muted-foreground">Attributes</h2>
+              <h2 className="realm-kicker text-lg">Attributes</h2>
               <div ref={attributesRef} className="grid grid-cols-2 gap-1.5 sm:grid-cols-3">
                 {attributes.map((attr) => {
                   const params = new URLSearchParams();
@@ -695,9 +695,9 @@ export function TokenDetailView({
                       data-attr-pill
                       href={`/collections/${address}?${params.toString()}`}
                       aria-label={`${attr.trait_type} ${attr.value}`}
-                      className="rounded border border-border/60 bg-muted/30 px-2 py-1.5 hover:border-primary/40 hover:bg-muted/60 transition-colors"
+                      className="rounded-[6px] border border-[color:var(--realm-border-etched)] bg-muted/40 px-2 py-1.5 transition-colors hover:border-[color:var(--realm-border-strong)] hover:bg-muted/70"
                     >
-                      <p className="text-[10px] text-muted-foreground uppercase tracking-wide leading-none mb-0.5">
+                      <p className="mb-0.5 text-[10px] uppercase leading-none text-muted-foreground">
                         {attr.trait_type}
                       </p>
                       <p className="text-xs font-medium text-primary truncate">{attr.value}</p>
@@ -715,7 +715,7 @@ export function TokenDetailView({
         {!effectiveIsOwner ? (
         <Card ref={feeCardRef} className="border-dashed" data-testid="token-fee-card">
           <CardContent className="space-y-2 p-3">
-            <h2 className="text-sm font-medium tracking-widest uppercase text-muted-foreground">
+            <h2 className="realm-kicker text-lg">
               Purchase estimate
             </h2>
             {feeEstimate.status === "loading" ? (
@@ -763,7 +763,7 @@ export function TokenDetailView({
         ) : null}
 
         <div className="flex flex-wrap items-center justify-between gap-2">
-          <h2 className="text-sm font-medium tracking-widest uppercase text-muted-foreground">Listings</h2>
+          <h2 className="realm-kicker text-lg">Listings</h2>
           <div className="flex flex-wrap items-center gap-2">
             <Button
               disabled={!cheapestListing || isOwnCheapest}
@@ -801,7 +801,7 @@ export function TokenDetailView({
         {isConnected && !effectiveIsOwner && !isOwnershipLoading ? (
           <Card className="border-dashed">
             <CardContent className="space-y-3 p-3">
-              <h2 className="text-sm font-medium tracking-widest uppercase text-muted-foreground">Make an offer</h2>
+              <h2 className="realm-kicker text-lg">Make an offer</h2>
               <div className="grid gap-2 sm:grid-cols-2">
                 <div className="flex items-center gap-1">
                   <Input

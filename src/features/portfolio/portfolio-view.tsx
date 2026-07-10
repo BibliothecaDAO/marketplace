@@ -37,17 +37,17 @@ export function PortfolioView({ initialAddress = "" }: PortfolioViewProps) {
 
   return (
     <main
-      className="mx-auto flex min-h-[calc(100vh-3.5rem)] w-full max-w-7xl flex-col gap-4 px-4 py-6 sm:px-6 lg:px-8"
+      className="mx-auto flex min-h-[calc(100vh-4rem)] w-full max-w-7xl flex-col gap-5 px-4 py-6 sm:px-6 lg:px-8"
       data-testid="portfolio-view"
     >
-      <h1 className="text-2xl font-semibold tracking-tight">Portfolio</h1>
+      <h1 className="realm-title text-3xl">Portfolio</h1>
 
       {!activeAddress && (
         <div className="flex flex-col items-center justify-center py-16 text-center">
-          <div className="rounded-full bg-muted p-4 mb-4">
+          <div className="mb-4 rounded-[8px] border border-[color:var(--realm-border-etched)] bg-muted/70 p-4">
             <Wallet className="h-6 w-6 text-muted-foreground" />
           </div>
-          <p className="text-sm font-medium mb-1">Explore any wallet</p>
+          <p className="realm-title mb-1 text-xl">Explore any wallet</p>
           <p className="text-xs text-muted-foreground mb-4">Enter a wallet address to view NFT holdings</p>
         </div>
       )}
@@ -55,7 +55,7 @@ export function PortfolioView({ initialAddress = "" }: PortfolioViewProps) {
       <form className="flex flex-col gap-2 sm:flex-row sm:items-end" onSubmit={handleSubmit}>
         <div className="w-full">
           <label
-            className="mb-1 block text-xs font-medium text-muted-foreground"
+            className="realm-kicker mb-1 block text-sm"
             htmlFor="portfolio-address-input"
           >
             Wallet address
@@ -66,6 +66,7 @@ export function PortfolioView({ initialAddress = "" }: PortfolioViewProps) {
             onChange={(event) => setAddressInput(event.target.value)}
             placeholder="0x..."
             value={addressInput}
+            className="border-[color:var(--realm-border-etched)] bg-[color:var(--realm-surface-iron)]/80 text-foreground placeholder:text-muted-foreground/70"
           />
         </div>
         <Button className="sm:w-auto" type="submit">

@@ -209,10 +209,10 @@ export function WalletProfileView({
     >
       {showHeader ? (
         <div className="space-y-1">
-          <h1 className="text-2xl font-semibold tracking-tight">{title}</h1>
+          <h1 className="realm-title text-3xl">{title}</h1>
           <p className="text-sm text-muted-foreground">{addressLabel}</p>
           <div className="flex items-center gap-2">
-            <code className="block overflow-x-auto rounded-sm border border-border/70 bg-muted/30 px-3 py-2 text-xs sm:text-sm font-mono">
+            <code className="block overflow-x-auto rounded-[6px] border border-[color:var(--realm-border-etched)] bg-muted/40 px-3 py-2 font-mono text-xs sm:text-sm">
               {address.slice(0, 6)}...{address.slice(-4)}
             </code>
             <button
@@ -222,7 +222,7 @@ export function WalletProfileView({
                 setCopied(true);
                 setTimeout(() => setCopied(false), 2000);
               }}
-              className="flex h-8 w-8 shrink-0 items-center justify-center rounded-sm border border-border/70 bg-muted/30 text-muted-foreground hover:text-foreground transition-colors"
+              className="flex h-8 w-8 shrink-0 items-center justify-center rounded-[6px] border border-[color:var(--realm-border-etched)] bg-muted/40 text-muted-foreground transition-colors hover:border-[color:var(--realm-border-strong)] hover:text-foreground"
               aria-label="Copy address"
             >
               {copied ? <Check className="h-3.5 w-3.5" /> : <Copy className="h-3.5 w-3.5" />}

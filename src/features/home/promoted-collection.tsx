@@ -96,7 +96,7 @@ export function PromotedCollection({
   return (
     <div
       ref={containerRef}
-      className="sticky top-20 overflow-hidden rounded-lg border border-primary/20"
+      className="realm-panel sticky top-24 overflow-hidden"
     >
       {/* Image */}
       <div className="relative aspect-[4/3] w-full bg-muted">
@@ -105,16 +105,16 @@ export function PromotedCollection({
           <img
             alt={`${name} promoted`}
             src={imageUrl}
-            className="h-full w-full object-cover"
+            className="h-full w-full object-cover object-center"
           />
         ) : (
-          <div className="h-full w-full bg-gradient-to-br from-primary/35 via-accent to-muted" />
+          <div className="h-full w-full bg-[radial-gradient(circle_at_30%_20%,rgba(231,207,136,0.24),transparent_14rem),linear-gradient(145deg,#161b20,#070b0d_55%,#050709)]" />
         )}
-        <div className="absolute inset-0 bg-gradient-to-t from-background via-background/30 to-transparent" />
+        <div className="absolute inset-0 bg-gradient-to-t from-[color:var(--realm-bg-void)] via-[color:var(--realm-bg-void)]/45 to-transparent" />
 
         {/* Promoted badge */}
         <div className="absolute top-3 left-3">
-          <span className="rounded-full border border-primary/40 bg-background/80 backdrop-blur-sm px-2.5 py-0.5 text-[10px] font-medium uppercase tracking-widest text-primary">
+          <span className="realm-kicker rounded-[6px] border border-[color:var(--realm-border-strong)] bg-[color:var(--realm-bg-void)]/85 px-2.5 py-0.5 text-[11px] backdrop-blur-sm">
             Featured
           </span>
         </div>
@@ -123,7 +123,7 @@ export function PromotedCollection({
       {/* Content */}
       <div className="space-y-3 p-4">
         <div>
-          <h3 className="text-lg font-bold tracking-tight">{name}</h3>
+          <h3 className="realm-title text-2xl">{name}</h3>
         </div>
 
         {/* Stats */}
@@ -133,19 +133,19 @@ export function PromotedCollection({
           ) : (
             <>
               {floorPrice ? (
-                <div className="rounded-md border border-border/50 bg-muted/40 px-2.5 py-1 text-xs">
+                <div className="realm-stat-pill px-2.5 py-1 text-xs">
                   <span className="text-muted-foreground mr-1">Floor</span>
                   <span className="font-medium text-primary">{floorPrice}</span>
                 </div>
               ) : null}
               {totalSupply ? (
-                <div className="rounded-md border border-border/50 bg-muted/40 px-2.5 py-1 text-xs">
+                <div className="realm-stat-pill px-2.5 py-1 text-xs">
                   <span className="text-muted-foreground mr-1">Supply</span>
                   <span className="font-medium">{totalSupply}</span>
                 </div>
               ) : null}
               {listingCount ? (
-                <div className="rounded-md border border-border/50 bg-muted/40 px-2.5 py-1 text-xs">
+                <div className="realm-stat-pill px-2.5 py-1 text-xs">
                   <span className="text-muted-foreground mr-1">Listed</span>
                   <span className="font-medium">{listingCount}</span>
                 </div>

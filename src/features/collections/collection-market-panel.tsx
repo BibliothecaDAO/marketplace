@@ -289,11 +289,11 @@ function ActivityRowItem({
   renderResourcesAsIcons?: boolean;
 }) {
   return (
-    <div data-activity-row className="rounded-md border border-border/60 bg-card px-4 py-3 transition-all duration-200 hover:border-primary/30 hover:shadow-[0_0_12px_oklch(0.75_0.1_75/0.1)]">
+    <div data-activity-row className="realm-panel px-4 py-3 transition-all duration-200 hover:border-[color:var(--realm-border-strong)] hover:shadow-[0_0_18px_rgba(231,207,136,0.12)]">
       <div className="flex items-center justify-between gap-4">
         <div className="flex min-w-0 items-center gap-3">
           {row.tokenImage ? (
-            <div className="flex h-16 w-16 shrink-0 items-center justify-center overflow-hidden rounded-md border border-border/60 bg-muted">
+            <div className="flex h-16 w-16 shrink-0 items-center justify-center overflow-hidden rounded-[6px] border border-[color:var(--realm-border-etched)] bg-muted">
               {/* eslint-disable-next-line @next/next/no-img-element */}
               <img
                 alt={row.tokenId ? `Token #${row.tokenId} preview` : `${row.kind} preview`}
@@ -303,7 +303,7 @@ function ActivityRowItem({
             </div>
           ) : null}
           <div className="min-w-0 space-y-1">
-            <p className="text-sm font-medium">
+            <p className="text-sm font-medium text-[color:var(--realm-title)]">
               {row.tokenId ? `Token #${row.tokenId}` : row.kind}
             </p>
             {row.extraDetails.length > 0 ? (
@@ -314,7 +314,7 @@ function ActivityRowItem({
                   {row.extraDetails.map((detail) => (
                     <span
                       key={`${detail.label ?? "value"}-${detail.value}`}
-                      className="inline-flex items-center rounded-full border border-border/60 bg-muted px-2 py-0.5 text-[11px] font-medium text-foreground/80"
+                      className="inline-flex items-center rounded-[6px] border border-[color:var(--realm-border-etched)] bg-muted/70 px-2 py-0.5 text-[11px] font-medium text-foreground/80"
                     >
                       {detail.label ? `${detail.label} ${detail.value}` : detail.value}
                     </span>

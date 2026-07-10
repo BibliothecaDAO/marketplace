@@ -42,7 +42,7 @@ function SweepThumbnails({ items }: { items: CartItem[] }) {
         {visible.map((item, index) => (
           <div
             key={item.orderId}
-            className="relative h-11 w-11 shrink-0 overflow-hidden rounded border border-border/60 bg-muted shadow-[0_2px_8px_rgba(0,0,0,0.4)] animate-in fade-in slide-in-from-bottom-2 duration-200 fill-mode-backwards hover:-translate-y-1 hover:z-20 hover:shadow-[0_4px_16px_rgba(0,0,0,0.5)] transition-[transform,box-shadow]"
+            className="relative h-11 w-11 shrink-0 overflow-hidden rounded-[6px] border border-[color:var(--realm-border-etched)] bg-muted shadow-[0_2px_8px_rgba(0,0,0,0.4)] animate-in fade-in slide-in-from-bottom-2 duration-200 fill-mode-backwards hover:z-20 hover:shadow-[0_4px_16px_rgba(0,0,0,0.5)] transition-[box-shadow]"
             style={{
               marginLeft: index === 0 ? 0 : -8,
               zIndex: index + 1,
@@ -90,7 +90,7 @@ export function SweepBar({
   const currency = selectedCandidates[0]?.currency ?? candidates[0]?.currency ?? ""
 
   return (
-    <div className="sticky bottom-0 z-30 rounded-md border border-border/60 bg-background/95 backdrop-blur-sm">
+    <div className="realm-panel sticky bottom-3 z-30 backdrop-blur-md">
       <div className="w-full px-4">
         {selectedCount > 0 && (
           <div className="overflow-x-auto pt-2 pb-1">
@@ -99,7 +99,7 @@ export function SweepBar({
         )}
         <div className="flex items-center gap-3 py-2">
           <div className="min-w-20 shrink-0">
-            <p className="text-sm font-medium">Sweep</p>
+            <p className="realm-title text-lg">Sweep</p>
             <p className="text-xs text-muted-foreground">
               {selectedCount > 0 ? (
                 <span className="flex items-center gap-1">

@@ -325,6 +325,9 @@ describe("useHomePageData", () => {
       collections: [
         { address: "0xadv", name: "Adventurers", projectId: "adventurers" },
         { address: "0xbeast", name: "Beasts", projectId: "beasts" },
+        { address: "0xrealm", name: "Realms", projectId: "realms" },
+        { address: "0xloot", name: "Loot Chests", projectId: "loot-chests" },
+        { address: "0xgold", name: "Golden Token", projectId: "golden-token" },
       ],
       warnings: [],
     });
@@ -337,6 +340,9 @@ describe("useHomePageData", () => {
     expect(result.current.sidebarCollections).toEqual([
       expect.objectContaining({ address: "0xadv", imageUrl: "/banners/adventurers.png" }),
       expect.objectContaining({ address: "0xbeast", imageUrl: "/banners/beasts.jpg" }),
+      expect.objectContaining({ address: "0xrealm", imageUrl: "/banners/realms.png" }),
+      expect.objectContaining({ address: "0xloot", imageUrl: "/banners/loot-chests.png" }),
+      expect.objectContaining({ address: "0xgold", imageUrl: "/banners/golden-token.png" }),
     ]);
   });
 });

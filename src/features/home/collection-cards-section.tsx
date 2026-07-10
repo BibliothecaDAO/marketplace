@@ -22,7 +22,7 @@ export function CollectionCardsSection({
 
   return (
     <section data-testid="collection-cards" className="space-y-3">
-      <h2 className="text-sm font-medium tracking-widest uppercase text-muted-foreground">
+      <h2 className="realm-kicker text-lg">
         Collections
       </h2>
 

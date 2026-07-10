@@ -59,17 +59,18 @@ describe("Header", () => {
     });
   });
 
-  it("renders_logo_placeholder", () => {
+  it("renders_realms_logo", () => {
     render(<Header />);
 
-    const logo = screen.getByTestId("logo-placeholder");
+    const logo = screen.getByTestId("realms-logo");
     expect(logo).toBeVisible();
+    expect(logo).toHaveAttribute("src", "/rw-logo.svg");
   });
 
-  it("renders_app_name", () => {
+  it("does_not_render_marketplace_title_in_top_header", () => {
     render(<Header />);
 
-    expect(screen.getByText("Realms.market")).toBeVisible();
+    expect(screen.queryByText(/realms\.market/i)).toBeNull();
   });
 
   it("renders_search_input", () => {
@@ -109,44 +110,53 @@ describe("Header", () => {
     expect(header).toBeVisible();
   });
 
-  it("links_logo_to_home", () => {
+  it("links_logo_to_realms_world_home", () => {
     render(<Header />);
 
-    const homeLink = screen.getByRole("link", { name: /realms\.market home/i });
+    const homeLink = screen.getByRole("link", { name: /realms\.world home/i });
     expect(homeLink).toBeVisible();
-    expect(homeLink).toHaveAttribute("href", "/");
+    expect(homeLink).toHaveAttribute("href", "https://realms.world/");
   });
 
-  it("renders_nav_links", async () => {
-    const user = userEvent.setup();
+  it("renders_centered_ecosystem_nav_links", () => {
     render(<Header />);
 
-    // Nav links are inside the Ecosystem dropdown
-    await user.click(screen.getByRole("button", { name: /ecosystem/i }));
-
-    const stakingItem = screen.getByRole("menuitem", { name: /staking/i });
-    expect(stakingItem.closest("a")).toHaveAttribute("href", "https://account.realms.world");
-
-    const eternumItem = screen.getByRole("menuitem", { name: /eternum/i });
-    expect(eternumItem.closest("a")).toHaveAttribute("href", "https://blitz.realms.world");
+    const nav = screen.getByRole("navigation", { name: /primary ecosystem navigation/i });
+    expect(within(nav).getByRole("link", { name: /^home$/i })).toHaveAttribute(
+      "href",
+      "https://realms.world/",
+    );
+    expect(within(nav).getByRole("link", { name: /^games$/i })).toHaveAttribute(
+      "href",
+      "https://realms.world/games",
+    );
+    expect(within(nav).getByRole("link", { name: /^account$/i })).toHaveAttribute(
+      "href",
+      "https://account.realms.world/velords",
+    );
+    expect(within(nav).getByRole("link", { name: /^marketplace$/i })).toHaveAttribute(
+      "href",
+      "/",
+    );
+    expect(within(nav).getByRole("link", { name: /^scroll$/i })).toHaveAttribute(
+      "href",
+      "https://realms.world/scroll",
+    );
   });
 
-  it("renders_social_icon_links", async () => {
-    const user = userEvent.setup();
+  it("renders_social_icon_links", () => {
     render(<Header />);
 
-    // Social links are inside the Ecosystem dropdown
-    await user.click(screen.getByRole("button", { name: /ecosystem/i }));
+    const twitterLink = screen.getByRole("link", { name: /x \/ twitter/i });
+    expect(twitterLink).toHaveAttribute("href", "https://x.com/LootRealms");
+    expect(within(twitterLink).getByTestId("x-icon")).toBeVisible();
 
-    const twitterItem = screen.getByRole("menuitem", { name: /twitter/i });
-    expect(twitterItem.closest("a")).toHaveAttribute("href", "https://x.com/lootrealms");
-    expect(within(twitterItem).getByTestId("x-icon")).toBeVisible();
+    const discordLink = screen.getByRole("link", { name: /discord/i });
+    expect(discordLink).toHaveAttribute("href", "https://discord.gg/realmsworld");
+    expect(within(discordLink).getByTestId("discord-icon")).toBeVisible();
 
-    const discordItem = screen.getByRole("menuitem", { name: /discord/i });
-    expect(discordItem.closest("a")).toHaveAttribute("href", "https://discord.gg/realmsworld");
-    expect(within(discordItem).getByTestId("discord-icon")).toBeVisible();
-
-    expect(screen.queryByRole("menuitem", { name: /github/i })).toBeNull();
+    const githubLink = screen.getByRole("link", { name: /github/i });
+    expect(githubLink).toHaveAttribute("href", "https://github.com/BibliothecaDAO");
   });
 
   it("shows_login_button_when_disconnected", () => {
@@ -169,55 +179,65 @@ describe("Header", () => {
     expect(portfolioLinks[0]).toHaveAttribute("href", "/portfolio");
   });
 
-  it("desktop_portfolio_and_connect_controls_are_hidden_on_mobile_breakpoints", () => {
+  it("sub_header_contains_retained_marketplace_actions", () => {
     render(<Header />);
 
-    const desktopPortfolioLink = screen
-      .getAllByRole("link", { name: /portfolio/i })
-      .find((link) => link.getAttribute("href") === "/portfolio");
-    expect(desktopPortfolioLink).toBeTruthy();
-    expect(desktopPortfolioLink?.className).toContain("hidden");
-    expect(desktopPortfolioLink?.className).toContain("sm:inline-flex");
-
-    const desktopConnectButton = screen
-      .getAllByRole("button", { name: /connect wallet/i })
-      .find((button) => button.className.includes("sm:inline-flex"));
-    expect(desktopConnectButton).toBeTruthy();
-    expect(desktopConnectButton?.className).toContain("hidden");
+    expect(screen.getByPlaceholderText("Search...")).toBeVisible();
+    expect(screen.getByRole("button", { name: /cart \(0\)/i })).toBeVisible();
+    expect(screen.getByRole("link", { name: /portfolio/i })).toHaveAttribute(
+      "href",
+      "/portfolio",
+    );
+    expect(screen.getByRole("button", { name: /connect wallet/i })).toBeVisible();
   });
 
-  it("mobile_menu_contains_portfolio_and_connect_actions", async () => {
+  it("mobile_menu_contains_ecosystem_navigation", async () => {
     const user = userEvent.setup();
     render(<Header />);
 
-    await user.click(screen.getByRole("button", { name: /open menu/i }));
+    await user.click(screen.getByRole("button", { name: /open navigation menu/i }));
 
     const mobileMenuDialog = await screen.findByRole("dialog");
-    const mobilePortfolioLink = within(mobileMenuDialog).getByRole("link", {
-      name: /portfolio/i,
-    });
-    expect(mobilePortfolioLink).toHaveAttribute("href", "/portfolio");
-
-    expect(
-      within(mobileMenuDialog).getByRole("button", { name: /connect wallet/i }),
-    ).toBeVisible();
+    expect(within(mobileMenuDialog).getByRole("link", { name: /^home$/i })).toHaveAttribute(
+      "href",
+      "https://realms.world/",
+    );
+    expect(within(mobileMenuDialog).getByRole("link", { name: /^games$/i })).toHaveAttribute(
+      "href",
+      "https://realms.world/games",
+    );
+    expect(within(mobileMenuDialog).getByRole("link", { name: /^account$/i })).toHaveAttribute(
+      "href",
+      "https://account.realms.world/velords",
+    );
+    expect(within(mobileMenuDialog).getByRole("link", { name: /^marketplace$/i })).toHaveAttribute(
+      "href",
+      "/",
+    );
+    expect(within(mobileMenuDialog).getByRole("link", { name: /^scroll$/i })).toHaveAttribute(
+      "href",
+      "https://realms.world/scroll",
+    );
   });
 
-  it("mobile_menu_contains_updated_social_links_without_github", async () => {
+  it("mobile_menu_contains_updated_social_links", async () => {
     const user = userEvent.setup();
     render(<Header />);
 
-    await user.click(screen.getByRole("button", { name: /open menu/i }));
+    await user.click(screen.getByRole("button", { name: /open navigation menu/i }));
 
     const mobileMenuDialog = await screen.findByRole("dialog");
-    const twitterLink = within(mobileMenuDialog).getByRole("link", { name: /twitter/i });
+    const twitterLink = within(mobileMenuDialog).getByRole("link", { name: /x \/ twitter/i });
     const discordLink = within(mobileMenuDialog).getByRole("link", { name: /discord/i });
 
-    expect(twitterLink).toHaveAttribute("href", "https://x.com/lootrealms");
+    expect(twitterLink).toHaveAttribute("href", "https://x.com/LootRealms");
     expect(within(twitterLink).getByTestId("x-icon")).toBeVisible();
     expect(discordLink).toHaveAttribute("href", "https://discord.gg/realmsworld");
     expect(within(discordLink).getByTestId("discord-icon")).toBeVisible();
-    expect(within(mobileMenuDialog).queryByRole("link", { name: /github/i })).toBeNull();
+    expect(within(mobileMenuDialog).getByRole("link", { name: /github/i })).toHaveAttribute(
+      "href",
+      "https://github.com/BibliothecaDAO",
+    );
   });
 
   it("login_opens_wallet_modal_with_all_connectors", async () => {
