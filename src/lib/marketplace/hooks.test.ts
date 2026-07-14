@@ -1,39 +1,46 @@
 import { renderHook, waitFor } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { createElement, type ReactNode } from "react";
-import type { CollectionOrdersOptions } from "@cartridge/arcade/marketplace";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-const {
-  mockUseMarketplaceCollection,
-  mockUseMarketplaceCollectionTokens,
-  mockUseMarketplaceCollectionOrders,
-  mockUseMarketplaceCollectionListings,
-  mockUseMarketplaceToken,
-  mockUseMarketplaceTokenBalances,
-  mockGetMarketplaceRuntimeConfig,
-} = vi.hoisted(() => ({
-  mockUseMarketplaceCollection: vi.fn(),
-  mockUseMarketplaceCollectionTokens: vi.fn(),
-  mockUseMarketplaceCollectionOrders: vi.fn(),
-  mockUseMarketplaceCollectionListings: vi.fn(),
-  mockUseMarketplaceToken: vi.fn(),
-  mockUseMarketplaceTokenBalances: vi.fn(),
-  mockGetMarketplaceRuntimeConfig: vi.fn(),
+const { api } = vi.hoisted(() => ({
+  api: {
+    collection: vi.fn(),
+    tokens: vi.fn(),
+    orders: vi.fn(),
+    listings: vi.fn(),
+    token: vi.fn(),
+    activity: vi.fn(),
+    holdings: vi.fn(),
+    traits: vi.fn(),
+  },
 }));
 
-vi.mock("@cartridge/arcade/marketplace/react", () => ({
-  useMarketplaceCollection: mockUseMarketplaceCollection,
-  useMarketplaceCollectionTokens: mockUseMarketplaceCollectionTokens,
-  useMarketplaceCollectionOrders: mockUseMarketplaceCollectionOrders,
-  useMarketplaceCollectionListings: mockUseMarketplaceCollectionListings,
-  useMarketplaceToken: mockUseMarketplaceToken,
-  useMarketplaceTokenBalances: mockUseMarketplaceTokenBalances,
+vi.mock("@/lib/marketplace/api-client", async (importOriginal) => ({
+  ...await importOriginal<typeof import("@/lib/marketplace/api-client")>(),
+  getMarketplaceApiClient: () => api,
 }));
 
 vi.mock("@/lib/marketplace/config", () => ({
-  getMarketplaceRuntimeConfig: mockGetMarketplaceRuntimeConfig,
+  getMarketplaceRuntimeConfig: () => ({
+    isReadSurfaceEnabled: () => true,
+  }),
 }));
+
+const felt = (digit: string) => `0x${digit.repeat(64)}`;
+const meta = {
+  schemaVersion: "1.0.0",
+  chain: "SN_MAIN",
+  chainId: "0x00000000000000000000000000000000000000000000000000534e5f4d41494e",
+  worldAddress: felt("1"),
+  marketplaceAddress: felt("2"),
+  indexedBlock: 100,
+  indexedBlockHash: felt("3"),
+  chainHead: 101,
+  lagBlocks: 1,
+  finality: "accepted_l2",
+  observedAt: "2026-07-14T00:00:00.000Z",
+} as const;
 
 function makeWrapper() {
   const queryClient = new QueryClient({
@@ -42,462 +49,135 @@ function makeWrapper() {
   function QueryWrapper({ children }: { children: ReactNode }) {
     return createElement(QueryClientProvider, { client: queryClient }, children);
   }
-  QueryWrapper.displayName = "QueryWrapper";
   return QueryWrapper;
 }
 
-describe("marketplace hooks", () => {
+describe("owned marketplace hooks", () => {
   beforeEach(() => {
-    mockUseMarketplaceCollection.mockReset();
-    mockUseMarketplaceCollectionTokens.mockReset();
-    mockUseMarketplaceCollectionOrders.mockReset();
-    mockUseMarketplaceCollectionListings.mockReset();
-    mockUseMarketplaceToken.mockReset();
-    mockUseMarketplaceTokenBalances.mockReset();
-    mockGetMarketplaceRuntimeConfig.mockReset();
-    mockGetMarketplaceRuntimeConfig.mockReturnValue({
-      collections: [],
+    Object.values(api).forEach((mock) => mock.mockReset());
+  });
+
+  it("loads and adapts collection and globally-filtered token responses", async () => {
+    api.collection.mockResolvedValue({
+      data: {
+        address: felt("4"), name: "Genesis", standard: "ERC721",
+        deploymentBlock: 1, verified: true, tokenCount: "8", listingCount: "2",
+        floorByCurrency: [],
+      },
+      meta,
     });
-    vi.unstubAllGlobals();
-  });
-
-  it("useCollectionQuery_delegates_to_sdk_hook", async () => {
-    const expected = { status: "success", data: { address: "0xabc" } };
-    mockUseMarketplaceCollection.mockReturnValue(expected);
-
-    const { useCollectionQuery } = await import("@/lib/marketplace/hooks");
-    const { result } = renderHook(
-      () => useCollectionQuery({ address: "0xabc", fetchImages: true }),
+    api.tokens.mockResolvedValue({
+      data: {
+        items: [{
+          collection: felt("4"), tokenId: "42", name: "Mage", description: null,
+          image: null, owner: felt("5"), balance: "1", firstSeenBlock: 10,
+          attributes: [], floorByCurrency: [],
+        }],
+        nextCursor: "next",
+      },
+      meta,
+    });
+    const { useCollectionQuery, useCollectionTokensQuery } = await import("./hooks");
+    const collection = renderHook(
+      () => useCollectionQuery({ address: felt("4") }),
+      { wrapper: makeWrapper() },
     );
-
-    expect(mockUseMarketplaceCollection).toHaveBeenCalledWith(
-      { address: "0xabc", fetchImages: true },
-      { enabled: true },
-    );
-    expect(result.current).toBe(expected);
-  });
-
-  it("useCollectionTokensQuery_calls_fetchCollectionTokens", async () => {
-    const pageData = { page: { tokens: [], nextCursor: null }, error: null };
-    const mockFetchCollectionTokens = vi.fn().mockResolvedValue(pageData);
-
-    vi.doMock("@cartridge/arcade/marketplace", () => ({
-      fetchCollectionTokens: mockFetchCollectionTokens,
-    }));
-
-    const { useCollectionTokensQuery } = await import("@/lib/marketplace/hooks");
-    const { result } = renderHook(
-      () => useCollectionTokensQuery({ address: "0xabc", limit: 12, fetchImages: true }),
+    const tokens = renderHook(
+      () => useCollectionTokensQuery({
+        address: felt("4"), cursor: null, limit: 24, tokenIds: ["0x2a"],
+        sort: "price-desc", currency: felt("6"),
+        attributeFilters: { Power: ["10"] },
+      }),
       { wrapper: makeWrapper() },
     );
 
-    await waitFor(() => expect(result.current.isSuccess).toBe(true));
-    expect(mockFetchCollectionTokens).toHaveBeenCalledWith(
-      expect.objectContaining({ address: "0xabc", limit: 12, fetchImages: true }),
-    );
-    expect(result.current.data).toBe(pageData);
-  });
-
-  it("useCollectionOrdersQuery_delegates_to_sdk_hook", async () => {
-    const expected = { status: "success", data: [] };
-    mockUseMarketplaceCollectionOrders.mockReturnValue(expected);
-
-    const { useCollectionOrdersQuery } = await import("@/lib/marketplace/hooks");
-    const { result } = renderHook(
-      () =>
-        useCollectionOrdersQuery({
-          collection: "0xabc",
-          status: "Placed" as CollectionOrdersOptions["status"],
-        }),
-    );
-
-    expect(mockUseMarketplaceCollectionOrders).toHaveBeenCalledWith(
-      { collection: "0xabc", status: "Placed" },
-      { enabled: true },
-    );
-    expect(result.current).toBe(expected);
-  });
-
-  it("useCollectionListingsQuery_delegates_to_sdk_hook", async () => {
-    const expected = { status: "success", data: [] };
-    mockUseMarketplaceCollectionListings.mockReturnValue(expected);
-
-    const { useCollectionListingsQuery } = await import("@/lib/marketplace/hooks");
-    const { result } = renderHook(
-      () => useCollectionListingsQuery({ collection: "0xabc", projectId: "project-a" }),
-    );
-
-    expect(mockUseMarketplaceCollectionListings).toHaveBeenCalledWith(
-      { collection: "0xabc", projectId: "project-a" },
-      { enabled: true },
-    );
-    expect(result.current).toBe(expected);
-  });
-
-  it("useTokenDetailQuery_delegates_to_sdk_hook", async () => {
-    const expected = { status: "success", data: { token: { token_id: "42" } } };
-    mockUseMarketplaceToken.mockReturnValue(expected);
-
-    const { useTokenDetailQuery } = await import("@/lib/marketplace/hooks");
-    const { result } = renderHook(
-      () => useTokenDetailQuery({ collection: "0xabc", tokenId: "42", fetchImages: true }),
-    );
-
-    expect(mockUseMarketplaceToken).toHaveBeenNthCalledWith(
-      1,
-      { collection: "0xabc", tokenId: "42", fetchImages: true },
-      { enabled: true },
-    );
-    expect(mockUseMarketplaceToken).toHaveBeenNthCalledWith(
-      2,
-      { collection: "0xabc", tokenId: "0x2a", fetchImages: true },
-      { enabled: false },
-    );
-    expect(result.current).toBe(expected);
-  });
-
-  it("useTokenDetailQuery_uses_alternate_token_id_when_primary_has_no_token", async () => {
-    const fallbackResult = {
-      status: "success",
-      data: { token: { token_id: "0x935", metadata: { name: "Loot Chest #2357" } } },
-    };
-    mockUseMarketplaceToken.mockImplementation((options: { tokenId: string }) => {
-      if (options.tokenId === "2357") {
-        return { status: "success", data: null };
-      }
-      if (options.tokenId === "0x935") {
-        return fallbackResult;
-      }
-      return { status: "pending", data: null };
-    });
-
-    const { useTokenDetailQuery } = await import("@/lib/marketplace/hooks");
-    const { result } = renderHook(
-      () => useTokenDetailQuery({ collection: "0xloot", tokenId: "2357", fetchImages: true }),
-    );
-
-    expect(mockUseMarketplaceToken).toHaveBeenNthCalledWith(
-      1,
-      { collection: "0xloot", tokenId: "2357", fetchImages: true },
-      { enabled: true },
-    );
-    expect(mockUseMarketplaceToken).toHaveBeenNthCalledWith(
-      2,
-      { collection: "0xloot", tokenId: "0x935", fetchImages: true },
-      { enabled: true },
-    );
-    expect(result.current).toBe(fallbackResult);
-  });
-
-  it("useTokenDetailQuery_uses_scoped_token_id_when_unscoped_lookup_fails", async () => {
-    const scopedResult = {
-      status: "success",
-      data: { token: { token_id: "1", metadata: { name: "Token #1" } } },
-    };
-
-    mockUseMarketplaceToken.mockImplementation((options: { tokenId: string }) => {
-      if (options.tokenId === "1") {
-        return { status: "success", data: null };
-      }
-      if (options.tokenId === "0x1") {
-        return { status: "success", data: null };
-      }
-      if (options.tokenId === "0xabc:1") {
-        return scopedResult;
-      }
-      if (options.tokenId === "0xabc:0x1") {
-        return { status: "success", data: null };
-      }
-      return { status: "pending", data: null };
-    });
-
-    const { useTokenDetailQuery } = await import("@/lib/marketplace/hooks");
-    const { result } = renderHook(
-      () => useTokenDetailQuery({ collection: "0xabc", tokenId: "1", fetchImages: true }),
-    );
-
-    expect(mockUseMarketplaceToken).toHaveBeenCalledWith(
-      expect.objectContaining({ tokenId: "0xabc:1" }),
-      expect.objectContaining({ enabled: true }),
-    );
-    expect(result.current).toBe(scopedResult);
-  });
-
-  it("useTokenDetailQuery_uses_padded_hex_token_id_when_basic_variants_fail", async () => {
-    const paddedTokenId = "0x000000000000000000000000000000000000000000000000000000000000025e";
-    const paddedResult = {
-      status: "success",
-      data: { token: { token_id: paddedTokenId, metadata: { name: "Token #606" } } },
-    };
-
-    mockUseMarketplaceToken.mockImplementation((options: { tokenId: string }) => {
-      if (options.tokenId === "606") {
-        return { status: "success", data: null };
-      }
-      if (options.tokenId === "0x25e") {
-        return { status: "success", data: null };
-      }
-      if (options.tokenId === paddedTokenId) {
-        return paddedResult;
-      }
-      return { status: "pending", data: null };
-    });
-
-    const { useTokenDetailQuery } = await import("@/lib/marketplace/hooks");
-    const { result } = renderHook(
-      () => useTokenDetailQuery({ collection: "0xabc", tokenId: "606", fetchImages: true }),
-    );
-
-    expect(mockUseMarketplaceToken).toHaveBeenCalledWith(
-      expect.objectContaining({ tokenId: paddedTokenId }),
-      expect.objectContaining({ enabled: true }),
-    );
-    expect(result.current).toBe(paddedResult);
-  });
-
-  it("useTokenOwnershipQuery_passes_alt_token_ids", async () => {
-    mockUseMarketplaceTokenBalances.mockReturnValue({ status: "success", data: { page: { balances: [] } } });
-
-    const { useTokenOwnershipQuery } = await import("@/lib/marketplace/hooks");
-    renderHook(
-      () => useTokenOwnershipQuery({ collection: "0xcol", tokenId: "2648", accountAddress: "0xabc" }),
-    );
-
-    expect(mockUseMarketplaceTokenBalances).toHaveBeenCalledWith(
-      expect.objectContaining({
-        contractAddresses: ["0xcol"],
-        accountAddresses: ["0xabc"],
-        tokenIds: expect.arrayContaining(["2648", "0xa58"]),
-      }),
-      expect.objectContaining({ enabled: true }),
-    );
-  });
-
-  it("useTokenHolderQuery_passes_alt_token_ids", async () => {
-    mockUseMarketplaceTokenBalances.mockReturnValue({ status: "success", data: { page: { balances: [] } } });
-
-    const { useTokenHolderQuery } = await import("@/lib/marketplace/hooks");
-    renderHook(
-      () => useTokenHolderQuery({ collection: "0xcol", tokenId: "0xa58" }),
-    );
-
-    expect(mockUseMarketplaceTokenBalances).toHaveBeenCalledWith(
-      expect.objectContaining({
-        contractAddresses: ["0xcol"],
-        tokenIds: expect.arrayContaining(["0xa58", "2648"]),
-      }),
-      expect.objectContaining({ enabled: true }),
-    );
-  });
-
-  it("useWalletPortfolioQuery_fetches_all_balance_pages", async () => {
-    const mockFetchTokenBalances = vi
-      .fn()
-      .mockResolvedValueOnce({
-        page: {
-          balances: [{ contract_address: "0xcol1", token_id: "1", balance: "1" }],
-          nextCursor: "cursor-2",
-        },
-        error: null,
-      })
-      .mockResolvedValueOnce({
-        page: {
-          balances: [{ contract_address: "0xcol2", token_id: "2", balance: "1" }],
-          nextCursor: null,
-        },
-        error: null,
-      });
-
-    vi.doMock("@cartridge/arcade/marketplace", () => ({
-      fetchTokenBalances: mockFetchTokenBalances,
+    await waitFor(() => expect(collection.result.current.isSuccess).toBe(true));
+    await waitFor(() => expect(tokens.result.current.isSuccess).toBe(true));
+    expect(collection.result.current.data?.metadata).toEqual({ name: "Genesis" });
+    expect(api.tokens).toHaveBeenCalledWith(felt("4"), expect.objectContaining({
+      tokenIds: ["0x2a"], sort: "price-desc", currency: felt("6"),
+      traits: [{ name: "Power", values: ["10"] }],
     }));
+    expect(tokens.result.current.data?.page?.tokens[0]?.token_id).toBe("42");
+    expect(tokens.result.current.data?.page?.nextCursor).toBe("next");
+  });
 
-    const { useWalletPortfolioQuery } = await import("@/lib/marketplace/hooks");
-    const { result } = renderHook(() => useWalletPortfolioQuery("0xwallet"), {
+  it("loads token detail, orders, listings, and activity from owned routes", async () => {
+    const token = {
+      collection: felt("4"), tokenId: "42", name: "Mage", description: null,
+      image: null, owner: felt("5"), balance: "1", firstSeenBlock: 10,
+      attributes: [], floorByCurrency: [],
+    };
+    api.token.mockResolvedValue({ data: token, meta });
+    api.orders.mockResolvedValue({ data: { items: [], nextCursor: null }, meta });
+    api.listings.mockResolvedValue({ data: { items: [], nextCursor: null }, meta });
+    api.activity.mockResolvedValue({ data: { items: [], nextCursor: null }, meta });
+    const { useTokenDetailQuery } = await import("./hooks");
+    const { result } = renderHook(
+      () => useTokenDetailQuery({ collection: felt("4"), tokenId: "0x2a" }),
+      { wrapper: makeWrapper() },
+    );
+    await waitFor(() => expect(result.current.isSuccess).toBe(true));
+    expect(api.token).toHaveBeenCalledWith(felt("4"), "42", undefined);
+    expect(result.current.data).toEqual(expect.objectContaining({
+      token: expect.objectContaining({ token_id: "42" }),
+      orders: [], listings: [], activity: [],
+    }));
+  });
+
+  it("paginates all holdings and exposes the existing balance boundary", async () => {
+    const holding = {
+      account: felt("7"), collection: felt("4"), tokenId: "42", balance: "1",
+      token: {
+        collection: felt("4"), tokenId: "42", name: "Mage", description: null,
+        image: null, owner: felt("7"), balance: "1", firstSeenBlock: 10,
+        attributes: [], floorByCurrency: [],
+      },
+    };
+    api.holdings
+      .mockResolvedValueOnce({ data: { items: [holding], nextCursor: "two" }, meta })
+      .mockResolvedValueOnce({ data: { items: [], nextCursor: null }, meta });
+    const { useWalletPortfolioQuery } = await import("./hooks");
+    const { result } = renderHook(() => useWalletPortfolioQuery(felt("7")), {
       wrapper: makeWrapper(),
     });
-
     await waitFor(() => expect(result.current.isSuccess).toBe(true));
-
-    expect(mockFetchTokenBalances).toHaveBeenNthCalledWith(1, {
-      accountAddresses: ["0xwallet"],
-      cursor: null,
-      limit: 200,
+    expect(api.holdings).toHaveBeenNthCalledWith(2, felt("7"), {
+      cursor: "two", limit: 200,
     });
-    expect(mockFetchTokenBalances).toHaveBeenNthCalledWith(2, {
-      accountAddresses: ["0xwallet"],
-      cursor: "cursor-2",
-      limit: 200,
-    });
-    expect(result.current.data).toEqual({
-      page: {
-        balances: [
-          { contract_address: "0xcol1", token_id: "1", balance: "1" },
-          { contract_address: "0xcol2", token_id: "2", balance: "1" },
-        ],
-        nextCursor: null,
-      },
-      error: null,
-    });
+    expect(result.current.data?.page?.balances).toEqual([
+      expect.objectContaining({ contract_address: felt("4"), token_id: "42" }),
+    ]);
   });
 
-  it("useWalletPortfolioQuery_does_not_scope_balances_to_configured_marketplace_collections", async () => {
-    mockGetMarketplaceRuntimeConfig.mockReturnValue({
-      collections: [
-        { address: "0xcol1", name: "Collection One" },
-        { address: "0xcol2", name: "Collection Two" },
-      ],
+  it("adapts trait facets and sends cross-trait filters", async () => {
+    api.traits.mockResolvedValue({
+      data: [{ name: "Background", kind: "string", values: [
+        { value: "Blue", count: "5" }, { value: "Red", count: "3" },
+      ] }],
+      meta,
     });
-
-    const mockFetchTokenBalances = vi.fn().mockResolvedValue({
-      page: {
-        balances: [],
-        nextCursor: null,
-      },
-      error: null,
-    });
-
-    vi.doMock("@cartridge/arcade/marketplace", () => ({
-      fetchTokenBalances: mockFetchTokenBalances,
-    }));
-
-    const { useWalletPortfolioQuery } = await import("@/lib/marketplace/hooks");
-    const { result } = renderHook(() => useWalletPortfolioQuery("0xwallet"), {
-      wrapper: makeWrapper(),
-    });
-
-    await waitFor(() => expect(result.current.isSuccess).toBe(true));
-
-    expect(mockFetchTokenBalances).toHaveBeenCalledWith({
-      accountAddresses: ["0xwallet"],
-      cursor: null,
-      limit: 200,
-    });
-  });
-
-  describe("useTraitNamesSummaryQuery", () => {
-    it("fetches_and_aggregates_trait_names_via_sdk", async () => {
-      const mockFetchTraitNamesSummary = vi.fn().mockResolvedValue({
-        pages: [
-          {
-            projectId: "project-a",
-            traits: [
-              { traitName: "Background", valueCount: 2 },
-              { traitName: "Eyes", valueCount: 3 },
-            ],
-          },
-        ],
-        errors: [],
-      });
-
-      vi.doMock("@cartridge/arcade/marketplace", () => ({
-        fetchTraitNamesSummary: mockFetchTraitNamesSummary,
-      }));
-
-      const { useTraitNamesSummaryQuery } = await import("@/lib/marketplace/hooks");
-      const { result } = renderHook(
-        () => useTraitNamesSummaryQuery({ address: "0xabc", projectId: "project-a" }),
-        { wrapper: makeWrapper() },
-      );
-
-      await waitFor(() => expect(result.current.isSuccess).toBe(true));
-      expect(mockFetchTraitNamesSummary).toHaveBeenCalledWith(
-        expect.objectContaining({ address: "0xabc", defaultProjectId: "project-a" }),
-      );
-      expect(result.current.data).toEqual([
-        { traitName: "Background", valueCount: 2 },
-        { traitName: "Eyes", valueCount: 3 },
-      ]);
-    });
-
-    it("disabled_when_address_is_empty", async () => {
-      const { useTraitNamesSummaryQuery } = await import("@/lib/marketplace/hooks");
-      const { result } = renderHook(
-        () => useTraitNamesSummaryQuery({ address: "" }),
-        { wrapper: makeWrapper() },
-      );
-
-      expect(result.current.fetchStatus).toBe("idle");
-    });
-  });
-
-  describe("useTraitValuesQuery", () => {
-    it("fetches_values_when_trait_name_provided", async () => {
-      const mockFetchTraitValues = vi.fn().mockResolvedValue({
-        pages: [
-          {
-            projectId: "project-a",
-            values: [
-              { traitValue: "Blue", count: 5 },
-              { traitValue: "Red", count: 3 },
-            ],
-          },
-        ],
-        errors: [],
-      });
-
-      vi.doMock("@cartridge/arcade/marketplace", () => ({
-        fetchTraitValues: mockFetchTraitValues,
-      }));
-
-      const { useTraitValuesQuery } = await import("@/lib/marketplace/hooks");
-      const { result } = renderHook(
-        () => useTraitValuesQuery({ address: "0xabc", traitName: "Background", projectId: "project-a" }),
-        { wrapper: makeWrapper() },
-      );
-
-      await waitFor(() => expect(result.current.isSuccess).toBe(true));
-      expect(mockFetchTraitValues).toHaveBeenCalledWith(
-        expect.objectContaining({
-          address: "0xabc",
-          traitName: "Background",
-          defaultProjectId: "project-a",
-        }),
-      );
-      expect(result.current.data).toEqual([
-        { traitValue: "Blue", count: 5 },
-        { traitValue: "Red", count: 3 },
-      ]);
-    });
-
-    it("disabled_when_trait_name_is_null", async () => {
-      const { useTraitValuesQuery } = await import("@/lib/marketplace/hooks");
-      const { result } = renderHook(
-        () => useTraitValuesQuery({ address: "0xabc", traitName: null }),
-        { wrapper: makeWrapper() },
-      );
-
-      expect(result.current.fetchStatus).toBe("idle");
-    });
-
-    it("forwards_other_trait_filters_to_sdk", async () => {
-      const mockFetchTraitValues = vi.fn().mockResolvedValue({
-        pages: [{ projectId: "project-a", values: [{ traitValue: "Big", count: 2 }] }],
-        errors: [],
-      });
-
-      vi.doMock("@cartridge/arcade/marketplace", () => ({
-        fetchTraitValues: mockFetchTraitValues,
-      }));
-
-      const { useTraitValuesQuery } = await import("@/lib/marketplace/hooks");
-      const { result } = renderHook(
-        () =>
-          useTraitValuesQuery({
-            address: "0xabc",
-            traitName: "Eyes",
-            otherTraitFilters: [{ name: "Background", value: "Blue" }],
-            projectId: "project-a",
-          }),
-        { wrapper: makeWrapper() },
-      );
-
-      await waitFor(() => expect(result.current.isSuccess).toBe(true));
-      expect(mockFetchTraitValues).toHaveBeenCalledWith(
-        expect.objectContaining({
-          otherTraitFilters: [{ name: "Background", value: "Blue" }],
-        }),
-      );
+    const { useTraitNamesSummaryQuery, useTraitValuesQuery } = await import("./hooks");
+    const names = renderHook(
+      () => useTraitNamesSummaryQuery({ address: felt("4") }),
+      { wrapper: makeWrapper() },
+    );
+    const values = renderHook(
+      () => useTraitValuesQuery({
+        address: felt("4"), traitName: "Background",
+        otherTraitFilters: [{ name: "Eyes", value: "Big" }],
+      }),
+      { wrapper: makeWrapper() },
+    );
+    await waitFor(() => expect(names.result.current.isSuccess).toBe(true));
+    await waitFor(() => expect(values.result.current.isSuccess).toBe(true));
+    expect(names.result.current.data).toEqual([{ traitName: "Background", valueCount: 2 }]);
+    expect(values.result.current.data).toEqual([
+      { traitValue: "Blue", count: 5 }, { traitValue: "Red", count: 3 },
+    ]);
+    expect(api.traits).toHaveBeenCalledWith(felt("4"), {
+      traitName: "Background",
+      otherTraits: [{ name: "Eyes", values: ["Big"] }],
     });
   });
 });

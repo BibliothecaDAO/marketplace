@@ -57,6 +57,7 @@ vi.mock("@/features/collections/collection-route-view", () => ({
         | "resource-count-asc"
         | "resource-count-desc"
     ) => void;
+    onCursorChange?: (cursor: string | null) => void;
   }) => {
     mockCollectionRouteView(props);
 
@@ -77,6 +78,9 @@ vi.mock("@/features/collections/collection-route-view", () => ({
           type="button"
         >
           sort-power-desc
+        </button>
+        <button onClick={() => props.onCursorChange?.("next-page")} type="button">
+          advance-cursor
         </button>
       </div>
     );
@@ -154,5 +158,16 @@ describe("collection route container url sync", () => {
 
     expect(mockPush).not.toHaveBeenCalled();
     expect(mockReplace).toHaveBeenCalledTimes(1);
+  });
+
+  it("writes the advanced opaque cursor to the canonical URL", async () => {
+    const user = userEvent.setup();
+    render(<CollectionRouteContainer address="0xabc" cursor="page-2" />);
+
+    await user.click(screen.getByRole("button", { name: /advance-cursor/i }));
+
+    expect(mockReplace).toHaveBeenLastCalledWith(
+      "/collections/0xabc?cursor=next-page&foo=bar&trait=Eyes%3ABig&sort=price-asc",
+    );
   });
 });

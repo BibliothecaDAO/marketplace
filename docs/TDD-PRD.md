@@ -1,13 +1,17 @@
 # Biblio Marketplace TDD PRD
 
-Version: 2.0  
-Date: February 19, 2026  
-Status: Draft for execution  
-Primary focus: Usability, discoverability, ease of purchase
+Version: 3.0
+
+Date: July 14, 2026
+
+Status: Active; owned-read migration in staged rollout
+
+Primary focus: Usability, discoverability, safe purchase, and owned-read reliability
 
 ## 1. Product Intent
 
-Build a production-grade NFT marketplace for multiple collections on Arcade SDK with:
+Build a production-grade NFT marketplace for multiple collections with an
+owned Torii/Fastify read plane and retained Arcade contracts for writes:
 - Fast discovery from home to token detail.
 - Frictionless and trustworthy purchase flow.
 - Clean, minimal UX using only `shadcn/ui` + Tailwind tokens.
@@ -50,7 +54,7 @@ This PRD defines a phased, test-first path from current state to production-read
 2. No release with failing unit, integration, or e2e checks.
 3. Zero critical regressions in cart transaction path.
 
-## 4. Current Baseline (As of February 19, 2026)
+## 4. Current Baseline (As of July 14, 2026)
 
 Implemented:
 1. Home collection rows with horizontal token discovery and add-to-cart.
@@ -58,13 +62,20 @@ Implemented:
 3. Token detail with listings, ownership-aware action forms, add-to-cart.
 4. Persisted cart store (single currency, 25 max items, stale listing validation, atomic checkout).
 5. Wallet profile route and client ops route.
+6. Shared TypeBox API contract, registry-generated configuration, and owned
+   Fastify read service.
+7. Pinned/hardened Torii build, AWS Terraform, replay qualification, backup,
+   restore, and reconciliation tooling.
+8. Owned API adapters for browse, traits, token detail, activity, portfolio,
+   SEO, Book state, cart lookup, and diagnostics.
 
-Gaps to close:
-1. Fee-inclusive checkout totals are not implemented with real fee data.
-2. Add-to-cart rejection feedback can be missed.
-3. Discoverability features are incomplete (global search/sort and URL-canonical state).
-4. Trust and provenance surfaces are limited.
-5. End-to-end tests do not fully cover funnel-critical scenarios.
+Operational gates still to close:
+1. Qualify QuickNode and Alchemy using real credentials on both chains.
+2. Complete two fresh deterministic replays and the seven-day lag soak.
+3. Run restore/failover/chaos/load drills and record release evidence.
+4. Execute the live Sepolia list-to-purchase lifecycle against a configured
+   collection.
+5. Advance each read rollout stage only after its observation window passes.
 
 ## 5. Scope
 
@@ -77,13 +88,19 @@ Gaps to close:
    - `/portfolio` (new)
    - `/ops` diagnostics improvements
 2. Full TDD delivery for each behavior.
-3. SDK-based fee/royalty visibility in evaluation and checkout.
+3. Owned-API Book/fee visibility plus direct-contract royalty and validity
+   checks during evaluation and checkout.
 4. Discoverability and purchase funnel analytics instrumentation.
+5. The owned marketplace indexer, public read API, metadata pipeline,
+   infrastructure, observability, replay qualification, and restore tooling.
 
 ## 5.2 Out of Scope
-1. New protocol mechanics outside SDK support.
+1. Contract upgrades, migrations, relisting, renewed approvals, or changed fee
+   and royalty semantics.
 2. Custom design system beyond shadcn primitives and Tailwind tokens.
-3. Custom backend indexing pipeline.
+3. Wallet-provider replacement or a self-hosted Starknet full node.
+4. Removing offers; the retained buy-order executor risk is accepted and must
+   remain visibly disclosed.
 
 ## 6. Users and Core Jobs
 
@@ -581,4 +598,3 @@ Required properties:
    - `src/features/profile/*` (existing), plus new `src/features/portfolio/*`
 6. Ops:
    - `src/features/ops/*`
-

@@ -1,56 +1,77 @@
 "use client";
 
 import { useQuery } from "@tanstack/react-query";
+import type { CollectionSortMode } from "@/features/collections/collection-query-params";
+import {
+  collectionFromApi,
+  holdingBalanceFromApi,
+  orderFromApi,
+  tokenFromApi,
+} from "@/lib/marketplace/api-adapter";
+import { getMarketplaceApiClient } from "@/lib/marketplace/api-client";
+import { getMarketplaceRuntimeConfig } from "@/lib/marketplace/config";
 import type {
   CollectionListingsOptions,
   CollectionOrdersOptions,
   CollectionSummaryOptions,
-  FetchTokenBalancesOptions,
-  FetchTokenBalancesResult,
   FetchCollectionTokensOptions,
-  TokenDetails,
   TokenDetailsOptions,
-} from "@cartridge/arcade/marketplace";
-import {
-  useMarketplaceCollection,
-  useMarketplaceCollectionListings,
-  useMarketplaceCollectionOrders,
-  useMarketplaceToken,
-  useMarketplaceTokenBalances,
-} from "@cartridge/arcade/marketplace/react";
-import {
-  alternateTokenId,
-  canonicalizeTokenId,
-  expandTokenIdVariants,
-} from "@/lib/marketplace/token-id";
-import { normalizeMarketplaceAddress } from "@/lib/marketplace/address";
+} from "@/lib/marketplace/types";
 import type { TraitSelection } from "@/lib/marketplace/traits";
-import { aggregateTraitValuePages } from "@/lib/marketplace/traits";
-import { traitNamesSummaryQueryOptions } from "@/lib/marketplace/trait-summary-query";
 
-function hasUsableToken(data: TokenDetails | null | undefined): data is TokenDetails {
-  return data !== null && data !== undefined && data.token !== null && data.token !== undefined;
+function decimalTokenId(value: string | number | bigint): string {
+  return BigInt(value).toString();
 }
 
-function collectionScopedTokenIdCandidates(collection: string, tokenId: string) {
-  const normalizedCollection = normalizeMarketplaceAddress(collection);
-  if (!normalizedCollection) {
-    return [];
+function exactTraits(
+  filters: FetchCollectionTokensOptions["attributeFilters"],
+): Array<{ name: string; values: Array<string | number | boolean> }> {
+  if (!filters) return [];
+  if (Array.isArray(filters)) {
+    const grouped = new Map<string, Array<string | number | boolean>>();
+    for (const filter of filters) {
+      const name = filter.traitName ?? filter.name;
+      const value = filter.traitValue ?? filter.value;
+      if (!name || value === undefined) continue;
+      grouped.set(name, [...(grouped.get(name) ?? []), value]);
+    }
+    return [...grouped].map(([name, values]) => ({ name, values }));
   }
+  return Object.entries(filters).map(([name, values]) => ({ name, values }));
+}
 
-  const candidates = new Set<string>();
-  const alternate = alternateTokenId(tokenId);
-  candidates.add(`${normalizedCollection}:${tokenId}`);
-  if (alternate && alternate !== tokenId) {
-    candidates.add(`${normalizedCollection}:${alternate}`);
+function normalizedCategory(
+  value: string | undefined,
+): "buy" | "sell" | "buy_any" | undefined {
+  const normalized = value?.toLowerCase();
+  if (normalized === "buy" || normalized === "sell" || normalized === "buy_any") {
+    return normalized;
   }
+  return undefined;
+}
 
-  return Array.from(candidates);
+function normalizedStatus(
+  value: string | undefined,
+): "none" | "placed" | "cancelled" | "executed" | undefined {
+  const normalized = value?.toLowerCase();
+  if (normalized === "canceled") return "cancelled" as const;
+  if (
+    normalized === "none" || normalized === "placed" ||
+    normalized === "cancelled" || normalized === "executed"
+  ) {
+    return normalized;
+  }
+  return undefined;
 }
 
 export function useCollectionQuery(options: CollectionSummaryOptions) {
-  return useMarketplaceCollection(options, {
+  return useQuery({
+    queryKey: ["owned-marketplace", "collection", options.address] as const,
+    queryFn: async () => collectionFromApi(
+      (await getMarketplaceApiClient().collection(options.address)).data,
+    ),
     enabled: !!options.address,
+    staleTime: 60_000,
   });
 }
 
@@ -61,175 +82,119 @@ export function useCollectionTokensQuery(
   const enabled = (queryOptions?.enabled ?? true) && !!options.address;
   return useQuery({
     queryKey: [
-      "collection-tokens",
-      options.address,
-      options.project,
-      options.cursor,
-      options.tokenIds,
-      options.attributeFilters,
-      options.limit,
+      "owned-marketplace", "collection-tokens", options.address, options.cursor,
+      options.tokenIds, options.attributeFilters, options.limit, options.sort,
+      options.currency,
+      options.rangeFilters,
     ] as const,
     queryFn: async () => {
-      const { fetchCollectionTokens } = await import(
-        "@cartridge/arcade/marketplace"
-      );
-      return fetchCollectionTokens(options);
+      const response = await getMarketplaceApiClient().tokens(options.address, {
+        cursor: options.cursor,
+        limit: Math.min(options.limit ?? 24, 100),
+        sort: options.sort as CollectionSortMode | undefined,
+        currency: options.currency,
+        tokenIds: options.tokenIds,
+        traits: exactTraits(options.attributeFilters),
+        ranges: options.rangeFilters,
+      });
+      return {
+        page: {
+          tokens: response.data.items.map(tokenFromApi),
+          nextCursor: response.data.nextCursor,
+        },
+        error: null,
+        meta: response.meta,
+      };
     },
     enabled,
-    staleTime: queryOptions?.staleTime,
+    staleTime: queryOptions?.staleTime ?? 60_000,
   });
 }
 
+function orderQuery(options: CollectionOrdersOptions) {
+  return {
+    cursor: options.cursor,
+    limit: Math.min(options.limit ?? 24, 100),
+    currency: options.currency,
+    tokenId: options.tokenId ? decimalTokenId(options.tokenId) : undefined,
+    category: normalizedCategory(options.category),
+    status: normalizedStatus(options.status),
+  };
+}
+
 export function useCollectionOrdersQuery(options: CollectionOrdersOptions) {
-  return useMarketplaceCollectionOrders(options, {
+  return useQuery({
+    queryKey: ["owned-marketplace", "orders", options] as const,
+    queryFn: async () => {
+      const response = await getMarketplaceApiClient().orders(
+        options.collection,
+        orderQuery(options),
+      );
+      return response.data.items.map(orderFromApi);
+    },
     enabled: !!options.collection,
+    staleTime: 2_000,
   });
 }
 
 export function useCollectionListingsQuery(options: CollectionListingsOptions) {
-  return useMarketplaceCollectionListings(options, {
+  return useQuery({
+    queryKey: ["owned-marketplace", "listings", options] as const,
+    queryFn: async () => {
+      const response = await getMarketplaceApiClient().listings(
+        options.collection,
+        orderQuery(options),
+      );
+      return response.data.items.map(orderFromApi);
+    },
     enabled: !!options.collection,
+    staleTime: 2_000,
   });
 }
 
 export function useTokenDetailQuery(options: TokenDetailsOptions) {
-  const tokenId = String(options.tokenId);
-  const enabled = !!options.collection && !!tokenId;
-  const altTokenId = alternateTokenId(tokenId);
-  const canonicalTokenId = canonicalizeTokenId(tokenId);
-  const paddedTokenId = canonicalTokenId
-    ? `0x${canonicalTokenId.value.toString(16).padStart(64, "0")}`
-    : null;
-  const hasAlternateTokenId = !!altTokenId && altTokenId !== tokenId;
-  const hasPaddedTokenId =
-    !!paddedTokenId &&
-    paddedTokenId !== tokenId &&
-    paddedTokenId !== altTokenId;
-  const scopedTokenIdCandidates = collectionScopedTokenIdCandidates(
-    options.collection,
-    tokenId,
-  );
-  const scopedPrimaryTokenId = scopedTokenIdCandidates[0] ?? tokenId;
-  const scopedSecondaryTokenId = scopedTokenIdCandidates[1] ?? scopedPrimaryTokenId;
-  const hasScopedPrimaryTokenId = scopedPrimaryTokenId !== tokenId;
-  const hasScopedSecondaryTokenId =
-    scopedSecondaryTokenId !== scopedPrimaryTokenId &&
-    scopedSecondaryTokenId !== tokenId &&
-    scopedSecondaryTokenId !== altTokenId;
-
-  const primaryQuery = useMarketplaceToken(options, {
-    enabled,
+  const tokenId = decimalTokenId(options.tokenId);
+  return useQuery({
+    queryKey: [
+      "owned-marketplace", "token-detail", options.collection, tokenId, options.currency,
+    ] as const,
+    queryFn: async () => {
+      const client = getMarketplaceApiClient();
+      const token = await client.token(options.collection, tokenId, options.currency);
+      const ordersEnabled = getMarketplaceRuntimeConfig().isReadSurfaceEnabled("orders");
+      const [orders, listings, activity] = ordersEnabled
+        ? await Promise.all([
+            client.orders(options.collection, { tokenId, currency: options.currency, limit: 100 }),
+            client.listings(options.collection, { tokenId, currency: options.currency, limit: 100 }),
+            client.activity(options.collection, tokenId, { limit: 100 }),
+          ])
+        : [null, null, null];
+      return {
+        token: tokenFromApi(token.data),
+        orders: orders?.data.items.map(orderFromApi) ?? [],
+        listings: listings?.data.items.map(orderFromApi) ?? [],
+        activity: activity?.data.items ?? [],
+        meta: token.meta,
+      };
+    },
+    enabled: !!options.collection && !!tokenId,
+    staleTime: 10_000,
   });
+}
 
-  const shouldEnableAlternateQuery =
-    enabled
-    && hasAlternateTokenId
-    && primaryQuery.status !== "pending"
-    && (primaryQuery.status === "error" || !hasUsableToken(primaryQuery.data));
-
-  const alternateQuery = useMarketplaceToken(
-    {
-      ...options,
-      tokenId: hasAlternateTokenId ? altTokenId : tokenId,
-    },
-    {
-      enabled: shouldEnableAlternateQuery,
-    },
-  );
-
-  const shouldEnablePaddedQuery =
-    enabled &&
-    hasPaddedTokenId &&
-    primaryQuery.status !== "pending" &&
-    (primaryQuery.status === "error" || !hasUsableToken(primaryQuery.data)) &&
-    (!hasAlternateTokenId ||
-      (alternateQuery.status !== "pending" &&
-        (alternateQuery.status === "error" || !hasUsableToken(alternateQuery.data))));
-
-  const paddedQuery = useMarketplaceToken(
-    {
-      ...options,
-      tokenId: hasPaddedTokenId ? paddedTokenId : tokenId,
-    },
-    {
-      enabled: shouldEnablePaddedQuery,
-    },
-  );
-
-  const shouldEnableScopedPrimaryQuery =
-    enabled &&
-    hasScopedPrimaryTokenId &&
-    primaryQuery.status !== "pending" &&
-    (primaryQuery.status === "error" || !hasUsableToken(primaryQuery.data)) &&
-    (!hasAlternateTokenId ||
-      (alternateQuery.status !== "pending" &&
-        (alternateQuery.status === "error" || !hasUsableToken(alternateQuery.data))));
-
-  const scopedPrimaryQuery = useMarketplaceToken(
-    {
-      ...options,
-      tokenId: scopedPrimaryTokenId,
-    },
-    {
-      enabled: shouldEnableScopedPrimaryQuery,
-    },
-  );
-
-  const shouldEnableScopedSecondaryQuery =
-    shouldEnableScopedPrimaryQuery &&
-    hasScopedSecondaryTokenId &&
-    scopedPrimaryQuery.status !== "pending" &&
-    (scopedPrimaryQuery.status === "error" || !hasUsableToken(scopedPrimaryQuery.data));
-
-  const scopedSecondaryQuery = useMarketplaceToken(
-    {
-      ...options,
-      tokenId: scopedSecondaryTokenId,
-    },
-    {
-      enabled: shouldEnableScopedSecondaryQuery,
-    },
-  );
-
-  if (hasUsableToken(primaryQuery.data)) {
-    return primaryQuery;
-  }
-
-  if (shouldEnableAlternateQuery) {
-    if (hasUsableToken(alternateQuery.data)) {
-      return alternateQuery;
-    }
-  }
-
-  if (shouldEnablePaddedQuery) {
-    if (hasUsableToken(paddedQuery.data)) {
-      return paddedQuery;
-    }
-  }
-
-  if (shouldEnableScopedPrimaryQuery) {
-    if (hasUsableToken(scopedPrimaryQuery.data)) {
-      return scopedPrimaryQuery;
-    }
-  }
-
-  if (shouldEnableScopedSecondaryQuery) {
-    return scopedSecondaryQuery;
-  }
-
-  if (shouldEnableScopedPrimaryQuery) {
-    return scopedPrimaryQuery;
-  }
-
-  if (shouldEnablePaddedQuery) {
-    return paddedQuery;
-  }
-
-  if (shouldEnableAlternateQuery) {
-    return alternateQuery;
-  }
-
-  return primaryQuery;
+async function allHoldings(account: string, collection?: string) {
+  const balances = [];
+  let cursor: string | null = null;
+  do {
+    const response = await getMarketplaceApiClient().holdings(account, {
+      cursor,
+      limit: 200,
+      collection,
+    });
+    balances.push(...response.data.items.map(holdingBalanceFromApi));
+    cursor = response.data.nextCursor;
+  } while (cursor);
+  return balances;
 }
 
 export function useTokenOwnershipQuery(options: {
@@ -237,28 +202,78 @@ export function useTokenOwnershipQuery(options: {
   tokenId: string;
   accountAddress?: string;
 }) {
-  const tokenIds = expandTokenIdVariants([options.tokenId]);
-  return useMarketplaceTokenBalances(
-    {
-      contractAddresses: [options.collection],
-      accountAddresses: options.accountAddress ? [options.accountAddress] : [],
-      tokenIds,
-      limit: 1,
+  return useQuery({
+    queryKey: [
+      "owned-marketplace", "token-ownership", options.collection,
+      options.tokenId, options.accountAddress,
+    ] as const,
+    queryFn: async () => {
+      const balances = (await allHoldings(options.accountAddress!, options.collection))
+        .filter((balance) => balance.token_id === decimalTokenId(options.tokenId));
+      return { page: { balances, nextCursor: null }, error: null };
     },
-    {
-      enabled: !!options.accountAddress && !!options.collection && !!options.tokenId,
-    },
-  );
+    enabled: !!options.accountAddress && !!options.collection && !!options.tokenId,
+    staleTime: 10_000,
+  });
 }
 
-export function useTraitNamesSummaryQuery(options: {
-  address: string;
-  projectId?: string;
-}) {
+export function useTokenHolderQuery(options: { collection: string; tokenId: string }) {
   return useQuery({
-    ...traitNamesSummaryQueryOptions(options),
-    enabled: !!options.address,
+    queryKey: ["owned-marketplace", "token-holder", options.collection, options.tokenId] as const,
+    queryFn: async () => {
+      const token = (await getMarketplaceApiClient().token(
+        options.collection,
+        decimalTokenId(options.tokenId),
+      )).data;
+      const balances = token.owner
+        ? [{
+            account_address: token.owner,
+            contract_address: token.collection,
+            token_id: token.tokenId,
+            balance: token.balance,
+          }]
+        : [];
+      return { page: { balances, nextCursor: null }, error: null };
+    },
+    enabled: !!options.collection && !!options.tokenId,
+    staleTime: 10_000,
   });
+}
+
+export function useWalletPortfolioQuery(walletAddress: string | undefined) {
+  return useQuery({
+    queryKey: ["owned-marketplace", "wallet-portfolio", walletAddress] as const,
+    queryFn: async () => ({
+      page: { balances: await allHoldings(walletAddress!), nextCursor: null },
+      error: null,
+    }),
+    enabled: !!walletAddress,
+    retry: false,
+    staleTime: 60_000,
+  });
+}
+
+export function useTraitNamesSummaryQuery(options: { address: string; projectId?: string }) {
+  return useQuery({
+    queryKey: ["owned-marketplace", "trait-names", options.address] as const,
+    queryFn: async () => {
+      const response = await getMarketplaceApiClient().traits(options.address);
+      return response.data.map((facet) => ({
+        traitName: facet.name,
+        valueCount: facet.values.length,
+      }));
+    },
+    enabled: !!options.address,
+    staleTime: 60_000,
+  });
+}
+
+function groupTraitSelections(filters: TraitSelection[] | undefined) {
+  const grouped = new Map<string, Array<string | number | boolean>>();
+  for (const filter of filters ?? []) {
+    grouped.set(filter.name, [...(grouped.get(filter.name) ?? []), filter.value]);
+  }
+  return [...grouped].map(([name, values]) => ({ name, values }));
 }
 
 export function useTraitValuesQuery(options: {
@@ -269,90 +284,30 @@ export function useTraitValuesQuery(options: {
 }) {
   return useQuery({
     queryKey: [
-      "trait-values",
-      options.address,
-      options.traitName,
-      options.otherTraitFilters,
-      options.projectId,
+      "owned-marketplace", "trait-values", options.address,
+      options.traitName, options.otherTraitFilters,
     ] as const,
     queryFn: async () => {
-      if (!options.traitName) return [];
-      const { fetchTraitValues } = await import(
-        "@cartridge/arcade/marketplace"
-      );
-      const result = await fetchTraitValues({
-        address: options.address,
-        traitName: options.traitName,
-        otherTraitFilters: options.otherTraitFilters,
-        defaultProjectId: options.projectId,
+      const response = await getMarketplaceApiClient().traits(options.address, {
+        traitName: options.traitName!,
+        otherTraits: groupTraitSelections(options.otherTraitFilters),
       });
-      return aggregateTraitValuePages(result.pages);
+      const facet = response.data.find((candidate) => candidate.name === options.traitName);
+      return (facet?.values ?? []).map((value) => ({
+        traitValue: String(value.value),
+        count: Number(value.count),
+      }));
     },
     enabled: !!options.address && !!options.traitName,
+    staleTime: 60_000,
   });
 }
 
-export function useTokenHolderQuery(options: {
-  collection: string;
-  tokenId: string;
-}) {
-  const tokenIds = expandTokenIdVariants([options.tokenId]);
-  return useMarketplaceTokenBalances(
-    {
-      contractAddresses: [options.collection],
-      tokenIds,
-      limit: 1,
-    },
-    {
-      enabled: !!options.collection && !!options.tokenId,
-    },
-  );
-}
-
-async function fetchAllTokenBalancePages(
-  options: FetchTokenBalancesOptions,
-): Promise<FetchTokenBalancesResult> {
-  const { fetchTokenBalances } = await import("@cartridge/arcade/marketplace");
-  const balances: NonNullable<FetchTokenBalancesResult["page"]>["balances"] = [];
-  let cursor = options.cursor ?? null;
-
-  while (true) {
-    const result = await fetchTokenBalances({
-      ...options,
-      cursor,
-    });
-
-    if (result.error || !result.page) {
-      return result;
-    }
-
-    balances.push(...result.page.balances);
-
-    if (!result.page.nextCursor) {
-      return {
-        page: {
-          balances,
-          nextCursor: null,
-        },
-        error: null,
-      };
-    }
-
-    cursor = result.page.nextCursor;
-  }
-}
-
-export function useWalletPortfolioQuery(walletAddress: string | undefined) {
+export function useIndexerStatusQuery() {
   return useQuery({
-    queryKey: ["wallet-portfolio", walletAddress] as const,
-    queryFn: async () =>
-      fetchAllTokenBalancePages({
-        accountAddresses: walletAddress ? [walletAddress] : [],
-        cursor: null,
-        limit: 200,
-      }),
-    enabled: !!walletAddress,
-    retry: false,
-    staleTime: 60_000,
+    queryKey: ["owned-marketplace", "indexer-status"] as const,
+    queryFn: () => getMarketplaceApiClient().indexerStatus(),
+    refetchInterval: 15_000,
+    staleTime: 5_000,
   });
 }

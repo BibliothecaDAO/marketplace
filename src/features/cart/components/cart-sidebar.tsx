@@ -1,8 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import { ArcadeProvider, NAMESPACE } from "@cartridge/arcade";
-import { useMarketplaceClient } from "@cartridge/arcade/marketplace/react";
+import { useMarketplaceClient } from "@/lib/marketplace/read-client";
 import { useAccount, useBalance } from "@starknet-react/core";
 import Link from "next/link";
 import { ShoppingCart, X } from "lucide-react";
@@ -27,9 +26,15 @@ import {
   SheetTitle,
 } from "@/components/ui/sheet";
 import { getMarketplaceRuntimeConfig } from "@/lib/marketplace/config";
-import { CART_LISTING_VALIDATION_LIMIT } from "@/lib/marketplace/query-limits";
 import { useCartStore } from "@/features/cart/store/cart-store";
 import { useListAnimation } from "@/lib/animation";
+import {
+  createMarketplaceWriteAdapter,
+  type MarketplaceContractCaller,
+} from "@/lib/marketplace/write-adapter";
+import { evaluateCheckoutPreflight } from "@/features/cart/checkout-preflight";
+import { marketplaceOrderIdentityKey } from "@/lib/marketplace/order-identity";
+import { waitForIndexedBlock } from "@/lib/marketplace/index-confirmation";
 
 const CLIENT_FEE_BPS = 500;
 const CLIENT_FEE_DENOMINATOR = 10_000;
@@ -51,8 +56,6 @@ const CHECKOUT_LOG_PREFIX = "[cart-checkout]";
 
 type CheckoutDiagnosticsConfig = {
   debugEnabled: boolean;
-  strictOnChainValidation: boolean;
-  bypassCheckoutValidation: boolean;
 };
 
 function parseBooleanEnvFlag(value: string | undefined, fallback: boolean) {
@@ -77,14 +80,6 @@ function getCheckoutDiagnosticsConfig(): CheckoutDiagnosticsConfig {
       process.env.NEXT_PUBLIC_MARKETPLACE_CHECKOUT_DEBUG,
       false,
     ),
-    strictOnChainValidation: parseBooleanEnvFlag(
-      process.env.NEXT_PUBLIC_MARKETPLACE_STRICT_ONCHAIN_VALIDATION,
-      true,
-    ),
-    bypassCheckoutValidation: parseBooleanEnvFlag(
-      process.env.NEXT_PUBLIC_MARKETPLACE_BYPASS_CHECKOUT_VALIDATION,
-      false,
-    ),
   };
 }
 
@@ -104,344 +99,6 @@ function asRecord(value: unknown) {
   return value && typeof value === "object"
     ? (value as Record<string, unknown>)
     : null;
-}
-
-function formatNumberish(value: unknown) {
-  if (typeof value === "bigint") {
-    return value.toString();
-  }
-
-  if (typeof value === "number" && Number.isFinite(value)) {
-    return Math.trunc(value).toLocaleString("fullwide", { useGrouping: false });
-  }
-
-  if (typeof value === "string") {
-    const trimmed = value.trim();
-    if (!trimmed) return null;
-    if (/^0x[0-9a-fA-F]+$/.test(trimmed)) {
-      return BigInt(trimmed).toString();
-    }
-    return trimmed;
-  }
-
-  return null;
-}
-
-function firstNumberish(
-  sources: Array<Record<string, unknown> | null>,
-  keys: string[],
-) {
-  for (const source of sources) {
-    if (!source) continue;
-    for (const key of keys) {
-      const formatted = formatNumberish(source[key]);
-      if (formatted) {
-        return formatted;
-      }
-    }
-  }
-
-  return null;
-}
-
-function firstString(
-  sources: Array<Record<string, unknown> | null>,
-  keys: string[],
-) {
-  for (const source of sources) {
-    if (!source) continue;
-    for (const key of keys) {
-      const value = source[key];
-      if (typeof value === "string" && value.trim().length > 0) {
-        return value;
-      }
-    }
-  }
-
-  return null;
-}
-
-function normalizeStatus(value: unknown): string | null {
-  if (typeof value === "string" && value.trim().length > 0) {
-    return value.trim().toLowerCase();
-  }
-
-  if (typeof value === "number" && Number.isFinite(value)) {
-    if (value === 1) return "placed";
-    if (value === 2) return "canceled";
-    if (value === 3) return "executed";
-    if (value === 0) return "none";
-    return null;
-  }
-
-  if (typeof value === "bigint") {
-    if (value === BigInt(1)) return "placed";
-    if (value === BigInt(2)) return "canceled";
-    if (value === BigInt(3)) return "executed";
-    if (value === BigInt(0)) return "none";
-    return null;
-  }
-
-  const record = asRecord(value);
-  if (!record) {
-    return null;
-  }
-
-  return normalizeStatus(record.value ?? record.status ?? record.state);
-}
-
-function parseBoolLike(value: unknown): boolean | null {
-  if (typeof value === "boolean") {
-    return value;
-  }
-
-  if (typeof value === "number" && Number.isFinite(value)) {
-    if (value === 0) return false;
-    if (value === 1) return true;
-  }
-
-  if (typeof value === "bigint") {
-    if (value === BigInt(0)) return false;
-    if (value === BigInt(1)) return true;
-  }
-
-  if (typeof value === "string") {
-    const normalized = value.trim().toLowerCase();
-    if (normalized === "0" || normalized === "0x0" || normalized === "false") {
-      return false;
-    }
-    if (normalized === "1" || normalized === "0x1" || normalized === "true") {
-      return true;
-    }
-  }
-
-  return null;
-}
-
-function extractValidityFlag(value: unknown): boolean | null {
-  const direct = parseBoolLike(value);
-  if (direct !== null) {
-    return direct;
-  }
-
-  if (Array.isArray(value) && value.length > 0) {
-    return parseBoolLike(value[0]);
-  }
-
-  const record = asRecord(value);
-  if (!record) {
-    return null;
-  }
-
-  const keyed =
-    parseBoolLike(record.valid) ??
-    parseBoolLike(record.isValid) ??
-    parseBoolLike(record.is_valid) ??
-    parseBoolLike(record.value) ??
-    parseBoolLike(record.result) ??
-    parseBoolLike(record["0"]);
-  if (keyed !== null) {
-    return keyed;
-  }
-
-  for (const candidate of Object.values(record)) {
-    const parsed = parseBoolLike(candidate);
-    if (parsed !== null) {
-      return parsed;
-    }
-    if (Array.isArray(candidate) && candidate.length > 0) {
-      const nested = parseBoolLike(candidate[0]);
-      if (nested !== null) {
-        return nested;
-      }
-    }
-  }
-
-  return null;
-}
-
-function listingMatchesCartItem(
-  listing: unknown,
-  item: {
-    orderId: string;
-    tokenId: string;
-    price: string;
-    quantity: string;
-    currency: string;
-  },
-) {
-  const fields = asRecord(listing);
-  if (!fields) return false;
-
-  const nestedOrder = asRecord(fields.order);
-  const orderId = firstNumberish([fields, nestedOrder], ["id", "orderId", "order_id"]);
-  const tokenId = firstNumberish([fields, nestedOrder], ["tokenId", "token_id"]);
-  const price = firstNumberish([fields, nestedOrder], ["price", "listingPrice", "listing_price"]);
-  const quantity = firstNumberish([fields, nestedOrder], ["quantity", "qty"]) ?? "1";
-  const expiration = firstNumberish([fields, nestedOrder], [
-    "expiration",
-    "expiresAt",
-    "expires_at",
-  ]);
-  const currency = firstString([fields, nestedOrder], ["currency"]);
-  const status =
-    normalizeStatus(fields.status) ??
-    normalizeStatus(fields.state) ??
-    normalizeStatus(nestedOrder?.status) ??
-    normalizeStatus(nestedOrder?.state);
-  if (!orderId || !tokenId || !price || !currency) {
-    return false;
-  }
-  if (status && status !== "placed") {
-    return false;
-  }
-  if (expiration) {
-    try {
-      const expiry = BigInt(expiration);
-      if (expiry > BigInt(0) && expiry <= BigInt(Math.floor(Date.now() / 1000))) {
-        return false;
-      }
-    } catch {
-      // Ignore malformed expiration values.
-    }
-  }
-
-  return (
-    orderId === item.orderId &&
-    tokenId === item.tokenId &&
-    price === item.price &&
-    quantity === item.quantity &&
-    currency.toLowerCase() === item.currency.toLowerCase()
-  );
-}
-
-function listingOwnerAddress(listing: unknown): string | null {
-  const fields = asRecord(listing);
-  if (!fields) {
-    return null;
-  }
-
-  const nestedOrder = asRecord(fields.order);
-  const nestedListing = asRecord(fields.listing);
-  return firstString([fields, nestedOrder, nestedListing], [
-    "owner",
-    "seller",
-    "maker",
-    "account",
-    "from",
-  ]);
-}
-
-type ProviderManifest = {
-  abis?: unknown[];
-  contracts?: Array<{
-    tag?: string;
-    address?: string;
-    abi?: unknown[];
-  }>;
-};
-
-const U128_MASK = (BigInt(1) << BigInt(128)) - BigInt(1);
-
-function toUint256Calldata(amount: bigint): [string, string] {
-  const low = (amount & U128_MASK).toString();
-  const high = (amount >> BigInt(128)).toString();
-  return [low, high];
-}
-
-function resolveMarketplaceContractAddress(
-  provider: ArcadeProvider,
-) {
-  const manifest = (provider as unknown as { manifest?: ProviderManifest })
-    .manifest;
-  if (!manifest?.contracts || manifest.contracts.length === 0) {
-    return null;
-  }
-
-  const exactMarketplace = manifest.contracts.find((contract) => {
-    if (typeof contract.address !== "string") {
-      return false;
-    }
-    if (typeof contract.tag !== "string") {
-      return false;
-    }
-    const normalizedTag = contract.tag.trim().toLowerCase();
-    return (
-      normalizedTag === "marketplace" ||
-      normalizedTag.endsWith("-marketplace") ||
-      normalizedTag.endsWith("::marketplace")
-    );
-  });
-  if (exactMarketplace?.address) {
-    return exactMarketplace.address;
-  }
-
-  const tagged = manifest.contracts.find((contract) =>
-    typeof contract.address === "string" &&
-    typeof contract.tag === "string" &&
-    contract.tag.toLowerCase().includes("marketplace"),
-  );
-  if (tagged?.address) {
-    return tagged.address;
-  }
-
-  const firstWithAddress = manifest.contracts.find(
-    (contract) => typeof contract.address === "string",
-  );
-  return firstWithAddress?.address ?? null;
-}
-
-function resolveDojoCallContractAddress(
-  provider: ArcadeProvider,
-  call: unknown,
-) {
-  const record = asRecord(call);
-  if (!record) {
-    return null;
-  }
-
-  const contractAddress = firstString([record], ["contractAddress", "address"]);
-  if (contractAddress) {
-    return contractAddress;
-  }
-
-  const contractName = firstString([record], ["contractName", "name"]);
-  if (!contractName || contractName.trim().toLowerCase() !== "marketplace") {
-    return null;
-  }
-
-  return resolveMarketplaceContractAddress(provider);
-}
-
-function resolveWorldAddress(provider: ArcadeProvider) {
-  const manifest = (provider as unknown as {
-    manifest?: { world?: { address?: string } };
-  }).manifest;
-  return manifest?.world?.address ?? null;
-}
-
-function normalizeAddressKey(address: string): string {
-  try {
-    return `0x${BigInt(address).toString(16)}`.toLowerCase();
-  } catch {
-    return address.trim().toLowerCase();
-  }
-}
-
-function hydrateContractAbis(
-  provider: ArcadeProvider,
-) {
-  const manifest = (provider as unknown as { manifest?: ProviderManifest })
-    .manifest;
-  if (!manifest?.contracts || !manifest.abis) {
-    return;
-  }
-
-  manifest.contracts.forEach((contract) => {
-    if (!contract.abi) {
-      contract.abi = manifest.abis;
-    }
-  });
 }
 
 function normalizeExecuteQuantity(quantity: string): string {
@@ -477,13 +134,16 @@ export function CartSidebar() {
     token: cartCurrency as `0x${string}` | undefined,
     enabled: !!account?.address && !!cartCurrency && isConnected,
   });
-  const { client } = useMarketplaceClient();
-  const { sdkConfig, chainLabel } = getMarketplaceRuntimeConfig();
+  const { client } = useMarketplaceClient(account);
+  const runtimeConfig = getMarketplaceRuntimeConfig();
   const {
-    debugEnabled,
-    strictOnChainValidation,
-    bypassCheckoutValidation,
-  } = useMemo(
+    chainId,
+    chainLabel,
+    marketplaceAddress,
+    worldAddress,
+  } = runtimeConfig;
+  const checkoutRolloutEnabled = runtimeConfig.isReadSurfaceEnabled?.("checkout") ?? true;
+  const { debugEnabled } = useMemo(
     () => getCheckoutDiagnosticsConfig(),
     [],
   );
@@ -500,6 +160,10 @@ export function CartSidebar() {
     message: string;
     txHash?: string;
   }>({ kind: "idle", tone: "idle", message: "" });
+  const [checkoutSafety, setCheckoutSafety] = useState<{
+    safe: boolean;
+    message: string;
+  }>({ safe: false, message: "Checking marketplace safety..." });
 
   const effectiveFeeConfig = useMemo(
     () => ({
@@ -525,9 +189,12 @@ export function CartSidebar() {
     !isBalanceLoading &&
     walletBalance < total;
 
-  const arcadeProvider = useMemo(
-    () => new ArcadeProvider(sdkConfig.chainId),
-    [sdkConfig.chainId],
+  const writeAdapter = useMemo(
+    () => createMarketplaceWriteAdapter(chainId, {
+      marketplaceAddress,
+      contractCaller: account as unknown as MarketplaceContractCaller | null,
+    }),
+    [account, chainId, marketplaceAddress],
   );
 
   useEffect(() => {
@@ -569,8 +236,50 @@ export function CartSidebar() {
     };
   }, [client]);
 
+  useEffect(() => {
+    let disposed = false;
+    async function refreshCheckoutSafety() {
+      if (!checkoutRolloutEnabled) {
+        setCheckoutSafety({
+          safe: false,
+          message: "Checkout has not reached the owned-read rollout stage.",
+        });
+        return;
+      }
+      try {
+        const [book, indexer] = await Promise.all([
+          client.book(),
+          client.indexerStatus(),
+        ]);
+        if (disposed) return;
+        const identityMatches =
+          BigInt(indexer.meta.worldAddress) === BigInt(worldAddress) &&
+          BigInt(indexer.meta.marketplaceAddress) === BigInt(marketplaceAddress);
+        if (!identityMatches) {
+          setCheckoutSafety({ safe: false, message: "Marketplace contract identity mismatch." });
+        } else if (book.data.paused) {
+          setCheckoutSafety({ safe: false, message: "Marketplace Book is paused." });
+        } else if (indexer.data.lagBlocks > 2 || !indexer.data.safeForCheckout) {
+          setCheckoutSafety({ safe: false, message: "Marketplace indexer is outside the checkout safety window." });
+        } else {
+          setCheckoutSafety({ safe: true, message: "" });
+        }
+      } catch {
+        if (!disposed) {
+          setCheckoutSafety({ safe: false, message: "Marketplace read API is unavailable." });
+        }
+      }
+    }
+    void refreshCheckoutSafety();
+    const intervalId = window.setInterval(() => { void refreshCheckoutSafety(); }, 15_000);
+    return () => {
+      disposed = true;
+      window.clearInterval(intervalId);
+    };
+  }, [checkoutRolloutEnabled, client, marketplaceAddress, worldAddress]);
+
   const itemsKey = useMemo(
-    () => items.map((i) => `${i.orderId}:${i.price}`).join(","),
+    () => items.map((item) => `${marketplaceOrderIdentityKey(item)}:${item.price}`).join(","),
     [items],
   );
 
@@ -627,8 +336,6 @@ export function CartSidebar() {
   const handleCheckout = async () => {
     logCheckoutDiagnostics(debugEnabled, "checkout.start", {
       itemCount: items.length,
-      strictOnChainValidation,
-      bypassCheckoutValidation,
       hasClient: !!client,
       isConnected,
       walletAddress: account?.address ?? null,
@@ -642,6 +349,15 @@ export function CartSidebar() {
       });
       logCheckoutDiagnostics(debugEnabled, "checkout.blocked.wallet", {
         reason: "Wallet is not connected.",
+      });
+      return;
+    }
+
+    if (!checkoutSafety.safe) {
+      setCheckoutStatus({
+        kind: "error",
+        tone: "error",
+        message: checkoutSafety.message,
       });
       return;
     }
@@ -663,6 +379,58 @@ export function CartSidebar() {
     setCheckoutStatus({ kind: "idle", tone: "idle", message: "" });
 
     try {
+      const [lookupResponse, bookResponse, indexerResponse] = await Promise.all([
+        client.lookupOrders(items.map((item) => ({
+          id: item.orderId,
+          collection: item.collection,
+          tokenId: item.tokenId,
+        }))),
+        client.book(),
+        client.indexerStatus(),
+      ]);
+      const preflight = evaluateCheckoutPreflight({
+        items,
+        lookup: lookupResponse.data.orders,
+        lookupMeta: lookupResponse.meta,
+        book: bookResponse.data,
+        indexer: indexerResponse.data,
+        expectedWorldAddress: worldAddress,
+        expectedMarketplaceAddress: marketplaceAddress,
+        accountAddress: account.address,
+      });
+      if (!preflight.safe) {
+        items.forEach((item) => {
+          const message = preflight.rowErrors[marketplaceOrderIdentityKey(item)];
+          if (message) setItemError(item, message);
+        });
+        const hasOwnListingError = Object.values(preflight.rowErrors).some(
+          (message) => message === OWN_LISTING_ERROR,
+        );
+        setCheckoutStatus({
+          kind: hasOwnListingError
+            ? "error"
+            : Object.keys(preflight.rowErrors).length > 0
+              ? "stale"
+              : "error",
+          tone: "error",
+          message: preflight.globalError ?? (hasOwnListingError
+            ? "Checkout blocked: cart contains your own listing. Remove it, then retry checkout."
+            : "Checkout blocked due to stale listings. Remove stale rows or refresh them, then retry checkout."),
+        });
+        return;
+      }
+
+      const lookupByKey = new Map(
+        lookupResponse.data.orders.map((result) => [
+          marketplaceOrderIdentityKey({
+            orderId: result.key.id,
+            collection: result.key.collection,
+            tokenId: result.key.tokenId,
+          }),
+          result.order,
+        ]),
+      );
+
       const validateOnChainValidity = async (item: (typeof items)[number]) => {
         logCheckoutDiagnostics(debugEnabled, "validate.onchain.request", {
           orderId: item.orderId,
@@ -670,18 +438,20 @@ export function CartSidebar() {
           tokenId: item.tokenId,
         });
         try {
-          const validityResult = await arcadeProvider.marketplace.getValidity(
-            item.orderId,
-            item.collection,
-            item.tokenId,
-          );
-          const parsedValidity = extractValidityFlag(validityResult);
-          const isValid = parsedValidity === true;
+          const owner = lookupByKey.get(marketplaceOrderIdentityKey(item))?.owner;
+          const isValid = owner
+            ? await writeAdapter.isSellOrderExecutable({
+                key: {
+                  id: item.orderId,
+                  collection: item.collection,
+                  tokenId: item.tokenId,
+                },
+                owner,
+              })
+            : false;
           logCheckoutDiagnostics(debugEnabled, "validate.onchain.response", {
             orderId: item.orderId,
-            parsedValidity,
             isValid,
-            rawResult: validityResult,
           });
           return isValid;
         } catch (error) {
@@ -693,94 +463,32 @@ export function CartSidebar() {
         }
       };
 
-      type ValidationReason = "stale" | "ownListing";
       type ValidationResult = {
         item: (typeof items)[number];
         isValid: boolean;
-        reason?: ValidationReason;
       };
 
       const validateItem = async (
         item: (typeof items)[number],
       ): Promise<ValidationResult> => {
         try {
-          logCheckoutDiagnostics(debugEnabled, "validate.item.listings.request", {
-            orderId: item.orderId,
-            collection: item.collection,
-            tokenId: item.tokenId,
-            projectId: item.projectId ?? null,
-            limit: CART_LISTING_VALIDATION_LIMIT,
-            verifyOwnership: true,
-          });
-          const listings = await client.listCollectionListings({
-            collection: item.collection,
-            tokenId: item.tokenId,
-            projectId: item.projectId,
-            limit: CART_LISTING_VALIDATION_LIMIT,
-            verifyOwnership: true,
-          });
-          logCheckoutDiagnostics(debugEnabled, "validate.item.listings.response", {
-            orderId: item.orderId,
-            listingCount: listings.length,
-          });
-          const matchingListing =
-            listings.find((listing) => listingMatchesCartItem(listing, item)) ??
-            null;
-          const hasMatchingListing = !!matchingListing;
-          logCheckoutDiagnostics(debugEnabled, "validate.item.listings.match", {
-            orderId: item.orderId,
-            hasMatchingListing,
-          });
-          if (!hasMatchingListing) {
-            return { item, isValid: false, reason: "stale" };
-          }
-
-          const listingOwner = listingOwnerAddress(matchingListing);
-          if (
-            listingOwner &&
-            normalizeAddressKey(listingOwner) ===
-              normalizeAddressKey(account.address)
-          ) {
-            logCheckoutDiagnostics(debugEnabled, "validate.item.own_listing", {
-              orderId: item.orderId,
-              owner: listingOwner,
-              walletAddress: account.address,
-            });
-            return { item, isValid: false, reason: "ownListing" };
-          }
-
-          if (!strictOnChainValidation) {
-            logCheckoutDiagnostics(debugEnabled, "validate.item.skip_onchain", {
-              orderId: item.orderId,
-              reason: "Strict on-chain precheck disabled by env flag.",
-            });
-            return { item, isValid: true };
-          }
-
           const isOnChainValid = await validateOnChainValidity(item);
           return {
             item,
             isValid: isOnChainValid,
-            reason: isOnChainValid ? undefined : "stale",
           };
         } catch (error) {
           logCheckoutDiagnostics(debugEnabled, "validate.item.error", {
             orderId: item.orderId,
             message: error instanceof Error ? error.message : "Unknown error",
           });
-          return { item, isValid: false, reason: "stale" };
+          return { item, isValid: false };
         }
       };
 
-      const validations: ValidationResult[] = bypassCheckoutValidation
-        ? items.map((item) => ({ item, isValid: true }))
-        : await Promise.all(items.map((item) => validateItem(item)));
-
-      if (bypassCheckoutValidation) {
-        logCheckoutDiagnostics(debugEnabled, "checkout.validation.bypassed", {
-          itemCount: items.length,
-        });
-      }
+      const validations: ValidationResult[] = await Promise.all(
+        items.map((item) => validateItem(item)),
+      );
 
       const invalidRows = validations.filter((entry) => !entry.isValid);
       logCheckoutDiagnostics(debugEnabled, "checkout.validation.summary", {
@@ -791,33 +499,24 @@ export function CartSidebar() {
         })),
       });
       if (invalidRows.length > 0) {
-        const hasOwnListingError = invalidRows.some(
-          ({ reason }) => reason === "ownListing",
-        );
         logCheckoutDiagnostics(debugEnabled, "checkout.blocked.stale", {
-          invalidRows: invalidRows.map(({ item, reason }) => ({
+          invalidRows: invalidRows.map(({ item }) => ({
             orderId: item.orderId,
-            reason: reason ?? "stale",
+            reason: "stale",
           })),
         });
-        invalidRows.forEach(({ item, reason }) => {
-          setItemError(
-            item.orderId,
-            reason === "ownListing" ? OWN_LISTING_ERROR : STALE_LISTING_ERROR,
-          );
+        invalidRows.forEach(({ item }) => {
+          setItemError(item, STALE_LISTING_ERROR);
         });
         setCheckoutStatus({
-          kind: hasOwnListingError ? "error" : "stale",
+          kind: "stale",
           tone: "error",
-          message: hasOwnListingError
-            ? "Checkout blocked: cart contains your own listing. Remove it, then retry checkout."
-            : "Checkout blocked due to stale listings. Remove stale rows or refresh them, then retry checkout.",
+          message: "Checkout blocked due to stale listings. Remove stale rows or refresh them, then retry checkout.",
         });
         return;
       }
 
-      const marketplaceContractAddress =
-        resolveMarketplaceContractAddress(arcadeProvider);
+      const marketplaceContractAddress = marketplaceAddress;
       if (!marketplaceContractAddress) {
         setCheckoutStatus({
           kind: "error",
@@ -856,22 +555,16 @@ export function CartSidebar() {
           clientFee: effectiveFeeConfig.feeNum,
           clientReceiver,
         });
-        const tokenIdBigInt = BigInt(item.tokenId);
-        const [tokenIdLow, tokenIdHigh] = toUint256Calldata(tokenIdBigInt);
-        return {
-          contractAddress: marketplaceContractAddress,
-          entrypoint: "execute",
-          calldata: [
-            item.orderId,
-            item.collection,
-            tokenIdLow, tokenIdHigh,
-            tokenIdLow, tokenIdHigh,
-            executeQuantity,
-            "1",
-            effectiveFeeConfig.feeNum.toString(),
-            clientReceiver,
-          ],
-        };
+        return writeAdapter.buildExecuteCall({
+          orderId: item.orderId,
+          collection: item.collection,
+          tokenId: item.tokenId,
+          assetId: item.tokenId,
+          quantity: executeQuantity,
+          royalties: true,
+          clientFee: effectiveFeeConfig.feeNum.toString(),
+          clientReceiver,
+        });
       });
       const approvalSpenderAddress = marketplaceContractAddress;
 
@@ -881,8 +574,15 @@ export function CartSidebar() {
         calldata: string[];
       }> = [];
       const approvalAmount = total;
-      if (approvalAmount > BigInt(0)) {
-        const [amountLow, amountHigh] = toUint256Calldata(approvalAmount);
+      const currentAllowance = approvalAmount > BigInt(0)
+        ? await writeAdapter.getAllowance(cartCurrency, account.address)
+        : BigInt(0);
+      if (approvalAmount > BigInt(0) && currentAllowance < approvalAmount) {
+        const approvalCall = writeAdapter.buildErc20ApprovalCall(
+          cartCurrency,
+          approvalAmount,
+        );
+        const [, amountLow, amountHigh] = approvalCall.calldata;
         logCheckoutDiagnostics(debugEnabled, "checkout.approve.calldata", {
           currency: cartCurrency,
           spender: approvalSpenderAddress,
@@ -895,11 +595,7 @@ export function CartSidebar() {
           amountHigh,
           mode: "set",
         });
-        approveCalls.push({
-          contractAddress: cartCurrency,
-          entrypoint: "approve",
-          calldata: [approvalSpenderAddress, amountLow, amountHigh],
-        });
+        approveCalls.push(approvalCall);
       }
 
       const txCalls = [...approveCalls, ...executeCalls];
@@ -919,11 +615,54 @@ export function CartSidebar() {
         txHash: result.transaction_hash,
         callCount: txCalls.length,
       });
+      const waitForTransaction = (account as unknown as {
+        waitForTransaction?: (transactionHash: string) => Promise<unknown>;
+      }).waitForTransaction?.bind(account);
+      if (!waitForTransaction) {
+        setCheckoutStatus({
+          kind: "success",
+          tone: "success",
+          message: "Transaction submitted; waiting for onchain confirmation.",
+          txHash: result.transaction_hash,
+        });
+        return;
+      }
+      let receipt: unknown;
+      try {
+        receipt = await waitForTransaction(result.transaction_hash);
+      } catch {
+        setCheckoutStatus({
+          kind: "success",
+          tone: "success",
+          message: "Transaction submitted; confirmation is still pending.",
+          txHash: result.transaction_hash,
+        });
+        return;
+      }
+      const receiptRecord = asRecord(receipt);
+      const receiptBlock = Number(
+        receiptRecord?.block_number ?? receiptRecord?.blockNumber,
+      );
       clearCart();
+      if (Number.isSafeInteger(receiptBlock) && receiptBlock >= 0) {
+        const confirmation = await waitForIndexedBlock({
+          receiptBlock,
+          getIndexedBlock: async () => (await client.indexerStatus()).data.indexedBlock,
+        });
+        setCheckoutStatus({
+          kind: "success",
+          tone: "success",
+          message: confirmation.indexed
+            ? "Purchase confirmed and indexed."
+            : "Confirmed onchain, still indexing.",
+          txHash: result.transaction_hash,
+        });
+        return;
+      }
       setCheckoutStatus({
         kind: "success",
         tone: "success",
-        message: "Purchase complete!",
+        message: "Purchase confirmed onchain.",
         txHash: result.transaction_hash,
       });
     } catch (error) {
@@ -952,66 +691,52 @@ export function CartSidebar() {
       return;
     }
 
-    setRefreshingRows((state) => ({ ...state, [item.orderId]: true }));
+    const itemKey = marketplaceOrderIdentityKey(item);
+    setRefreshingRows((state) => ({ ...state, [itemKey]: true }));
     try {
-      logCheckoutDiagnostics(debugEnabled, "refresh.listings.request", {
-        orderId: item.orderId,
-        collection: item.collection,
-        tokenId: item.tokenId,
-        limit: CART_LISTING_VALIDATION_LIMIT,
-        verifyOwnership: true,
+      const [lookupResponse, bookResponse, indexerResponse] = await Promise.all([
+        client.lookupOrders([{ id: item.orderId, collection: item.collection, tokenId: item.tokenId }]),
+        client.book(),
+        client.indexerStatus(),
+      ]);
+      const preflight = evaluateCheckoutPreflight({
+        items: [item],
+        lookup: lookupResponse.data.orders,
+        lookupMeta: lookupResponse.meta,
+        book: bookResponse.data,
+        indexer: indexerResponse.data,
+        expectedWorldAddress: worldAddress,
+        expectedMarketplaceAddress: marketplaceAddress,
+        accountAddress: account?.address ?? "0x0",
       });
-      const listings = await client.listCollectionListings({
-        collection: item.collection,
-        tokenId: item.tokenId,
-        projectId: item.projectId,
-        limit: CART_LISTING_VALIDATION_LIMIT,
-        verifyOwnership: true,
-      });
-      logCheckoutDiagnostics(debugEnabled, "refresh.listings.response", {
-        orderId: item.orderId,
-        listingCount: listings.length,
-      });
-      const matchingListing =
-        listings.find((listing) => listingMatchesCartItem(listing, item)) ??
-        null;
-      const hasMatchingListing = !!matchingListing;
-      const listingOwner = matchingListing
-        ? listingOwnerAddress(matchingListing)
-        : null;
-      const isOwnListing = !!(
-        listingOwner &&
-        account?.address &&
-        normalizeAddressKey(listingOwner) ===
-          normalizeAddressKey(account.address)
-      );
+      const rowError = preflight.rowErrors[itemKey];
+      const isOwnListing = rowError === OWN_LISTING_ERROR;
+      const hasMatchingListing = preflight.safe;
       let isOnChainValid = false;
-      if (hasMatchingListing && !isOwnListing && strictOnChainValidation) {
+      if (hasMatchingListing && !isOwnListing) {
         try {
-          const validityResult = await arcadeProvider.marketplace.getValidity(
-            item.orderId,
-            item.collection,
-            item.tokenId,
-          );
-          isOnChainValid = extractValidityFlag(validityResult) === true;
+          const owner = lookupResponse.data.orders[0]?.order?.owner;
+          isOnChainValid = owner
+            ? await writeAdapter.isSellOrderExecutable({
+                key: {
+                  id: item.orderId,
+                  collection: item.collection,
+                  tokenId: item.tokenId,
+                },
+                owner,
+              })
+            : false;
           logCheckoutDiagnostics(debugEnabled, "refresh.onchain.response", {
             orderId: item.orderId,
             isOnChainValid,
-            rawResult: validityResult,
           });
         } catch {
           isOnChainValid = false;
         }
-      } else if (hasMatchingListing && !isOwnListing && !strictOnChainValidation) {
-        isOnChainValid = true;
-        logCheckoutDiagnostics(debugEnabled, "refresh.skip_onchain", {
-          orderId: item.orderId,
-          reason: "Strict on-chain precheck disabled by env flag.",
-        });
       }
-      const isValid = hasMatchingListing && !isOwnListing && isOnChainValid;
+      const isValid = hasMatchingListing && isOnChainValid;
       if (isValid) {
-        clearItemError(item.orderId);
+        clearItemError(item);
         setCheckoutStatus({
           kind: "success",
           tone: "success",
@@ -1021,18 +746,19 @@ export function CartSidebar() {
       }
 
       setItemError(
-        item.orderId,
-        isOwnListing ? OWN_LISTING_ERROR : STALE_LISTING_ERROR,
+        item,
+        rowError ?? preflight.globalError ?? STALE_LISTING_ERROR,
       );
       setCheckoutStatus({
         kind: isOwnListing ? "error" : "stale",
         tone: "error",
         message: isOwnListing
           ? "This row is your own listing and cannot be purchased. Remove it, then retry checkout."
-          : "Listing is still stale or unavailable. Remove stale rows or refresh them, then retry checkout.",
+          : preflight.globalError ??
+            "Listing is still stale or unavailable. Remove stale rows or refresh them, then retry checkout.",
       });
     } catch {
-      setItemError(item.orderId, STALE_LISTING_ERROR);
+      setItemError(item, STALE_LISTING_ERROR);
       setCheckoutStatus({
         kind: "error",
         tone: "error",
@@ -1040,12 +766,12 @@ export function CartSidebar() {
       });
     } finally {
       setRefreshingRows((state) => {
-        if (!(item.orderId in state)) {
+        if (!(itemKey in state)) {
           return state;
         }
 
         const next = { ...state };
-        delete next[item.orderId];
+        delete next[itemKey];
         return next;
       });
     }
@@ -1136,11 +862,12 @@ export function CartSidebar() {
             ) : (
               <div ref={itemsRef} className="space-y-3">
               {items.map((item) => {
-                const hasError = !!inlineErrors[item.orderId];
+                const itemKey = marketplaceOrderIdentityKey(item);
+                const hasError = !!inlineErrors[itemKey];
                 const detailHref = `/collections/${item.collection}/${item.tokenId}`;
                 return (
                   <div
-                    key={item.orderId}
+                    key={itemKey}
                     className="group/item rounded-lg border border-border/50 p-2"
                     data-testid={`cart-item-${item.orderId}`}
                   >
@@ -1188,7 +915,7 @@ export function CartSidebar() {
                         className={hasError
                           ? "shrink-0 text-destructive hover:text-destructive"
                           : "shrink-0 opacity-0 transition-opacity group-hover/item:opacity-100"}
-                        onClick={() => removeItem(item.orderId)}
+                        onClick={() => removeItem(item)}
                         size="icon-xs"
                         type="button"
                         variant="ghost"
@@ -1200,12 +927,12 @@ export function CartSidebar() {
                     {hasError ? (
                       <div className="mt-1.5 flex items-center gap-2 rounded-md bg-destructive/10 px-2 py-1.5">
                         <p className="flex-1 text-xs text-destructive">
-                          {inlineErrors[item.orderId]}
+                          {inlineErrors[itemKey]}
                         </p>
                         <Button
                           className="h-6 px-2 text-[11px]"
                           disabled={
-                            isSubmitting || refreshingRows[item.orderId] === true
+                            isSubmitting || refreshingRows[itemKey] === true
                           }
                           onClick={() => {
                             void handleRefreshListing(item);
@@ -1214,7 +941,7 @@ export function CartSidebar() {
                           type="button"
                           variant="outline"
                         >
-                          {refreshingRows[item.orderId] ? "Refreshing..." : "Refresh"}
+                          {refreshingRows[itemKey] ? "Refreshing..." : "Refresh"}
                         </Button>
                       </div>
                     ) : null}
@@ -1264,6 +991,11 @@ export function CartSidebar() {
                 Insufficient {cartCurrency ? getTokenSymbol(cartCurrency) : ""} balance
               </p>
             ) : null}
+            {!checkoutSafety.safe && items.length > 0 ? (
+              <p className="text-xs text-destructive text-center" data-testid="cart-checkout-safety">
+                {checkoutSafety.message}
+              </p>
+            ) : null}
             <div className="flex w-full gap-2">
               <Button
                 disabled={items.length === 0}
@@ -1274,7 +1006,12 @@ export function CartSidebar() {
                   Clear
                 </Button>
               <Button
-                disabled={items.length === 0 || isSubmitting || hasInsufficientBalance}
+                disabled={
+                  items.length === 0 ||
+                  isSubmitting ||
+                  hasInsufficientBalance ||
+                  !checkoutSafety.safe
+                }
                 onClick={() => {
                   void handleCheckout();
                 }}

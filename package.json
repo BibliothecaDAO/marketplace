@@ -16,9 +16,11 @@
     "test:e2e:screenshots": "playwright test tests/e2e/feature-screenshots.spec.ts",
     "test:e2e:ui": "playwright test --ui",
     "test:e2e:install": "playwright install chromium",
-    "ci:feature-routes": "node scripts/ci/feature-screenshot-routes.mjs"
+    "ci:feature-routes": "node scripts/ci/feature-screenshot-routes.mjs",
+    "ci:arcade-imports": "node scripts/ci/check-arcade-imports.mjs"
   },
   "dependencies": {
+    "@biblio/marketplace-api-contract": "workspace:*",
     "@cartridge/arcade": "0.3.14-preview.1",
     "@cartridge/connector": "^0.13.9",
     "@cartridge/controller": "^0.13.9",
@@ -26,6 +28,7 @@
     "@opentelemetry/semantic-conventions": ">=1.33.0 <2.0.0-0",
     "@starknet-react/chains": "^5.0.3",
     "@starknet-react/core": "^5.0.3",
+    "@sinclair/typebox": "^0.34.41",
     "@tanstack/react-query": "^5.90.21",
     "animejs": "^4.3.6",
     "class-variance-authority": "^0.7.1",

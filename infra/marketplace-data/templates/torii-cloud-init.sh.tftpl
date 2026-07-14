@@ -1,0 +1,138 @@
+#!/bin/bash
+set -euo pipefail
+
+exec > >(tee -a /var/log/marketplace-torii-bootstrap.log | logger -t marketplace-torii -s 2>/dev/console) 2>&1
+
+dnf install -y docker jq nvme-cli amazon-cloudwatch-agent
+systemctl enable --now docker
+
+volume_id='${volume_id}'
+device=""
+for attempt in $(seq 1 120); do
+  device=$(nvme list -o json | jq -r --arg serial "$(printf '%s' "$volume_id" | tr -d '-')" '.Devices[] | select(.SerialNumber == $serial) | .DevicePath' | head -n 1)
+  if [ -n "$device" ] && [ -b "$device" ]; then break; fi
+  sleep 1
+done
+if [ -z "$device" ] || [ ! -b "$device" ]; then
+  echo "Attached Torii EBS volume was not found" >&2
+  exit 1
+fi
+
+if ! blkid "$device" >/dev/null 2>&1; then mkfs.xfs "$device"; fi
+mkdir -p /data
+uuid=$(blkid -s UUID -o value "$device")
+if ! grep -q "$uuid" /etc/fstab; then echo "UUID=$uuid /data xfs defaults,nofail 0 2" >> /etc/fstab; fi
+mount /data
+mkdir -p /data/torii /etc/marketplace
+chown -R 10001:10001 /data/torii
+
+aws ecr get-login-password --region '${aws_region}' | docker login --username AWS --password-stdin '${ecr_registry}'
+docker pull '${torii_image}'
+docker pull '${litestream_image}'
+
+cat >/etc/marketplace/litestream.yml <<'EOF'
+dbs:
+  - path: /data/torii/torii.db
+    replicas:
+      - type: s3
+        bucket: ${backup_bucket}
+        path: litestream/${chain}/${color}
+        region: ${aws_region}
+        sync-interval: 60s
+EOF
+chmod 600 /etc/marketplace/litestream.yml
+
+docker run --rm \
+  --volume /data/torii:/data \
+  '${litestream_image}' \
+  restore -if-db-not-exists -o /data/torii/torii.db \
+  's3://${backup_bucket}/litestream/${chain}/${restore_color}' || true
+chown -R 10001:10001 /data/torii
+
+docker run --detach --name marketplace-torii --restart unless-stopped \
+  --publish 8080:8080 \
+  --read-only \
+  --tmpfs /run/torii:rw,noexec,nosuid,size=8m,uid=10001,gid=10001 \
+  --cap-drop ALL \
+  --security-opt no-new-privileges \
+  --env TORII_CHAIN='${chain}' \
+  --env TORII_RPC_URL='${rpc_url}' \
+  --env TORII_DB_DIR=/data/torii \
+  --env TORII_METADATA_CONCURRENCY='${metadata_concurrency}' \
+  --volume /data/torii:/data/torii \
+  --log-driver awslogs \
+  --log-opt awslogs-region='${aws_region}' \
+  --log-opt awslogs-group='${log_group}' \
+  --log-opt awslogs-stream='${color}' \
+  '${torii_image}'
+
+docker run --detach --name marketplace-litestream --restart unless-stopped \
+  --network host \
+  --cap-drop ALL \
+  --security-opt no-new-privileges \
+  --volume /data/torii:/data/torii \
+  --volume /etc/marketplace/litestream.yml:/etc/litestream.yml:ro \
+  --log-driver awslogs \
+  --log-opt awslogs-region='${aws_region}' \
+  --log-opt awslogs-group='${log_group}' \
+  --log-opt awslogs-stream='litestream-${color}' \
+  '${litestream_image}' replicate -config /etc/litestream.yml
+
+cat >/opt/aws/amazon-cloudwatch-agent/etc/amazon-cloudwatch-agent.json <<'EOF'
+{
+  "agent": { "metrics_collection_interval": 60 },
+  "metrics": {
+    "namespace": "MarketplaceData",
+    "append_dimensions": { "InstanceId": "$${aws:InstanceId}" },
+    "metrics_collected": {
+      "disk": { "measurement": ["used_percent", "free"], "resources": ["/data"] },
+      "mem": { "measurement": ["mem_used_percent"] }
+    }
+  }
+}
+EOF
+/opt/aws/amazon-cloudwatch-agent/bin/amazon-cloudwatch-agent-ctl \
+  -a fetch-config -m ec2 -s \
+  -c file:/opt/aws/amazon-cloudwatch-agent/etc/amazon-cloudwatch-agent.json
+
+cat >/usr/local/bin/marketplace-torii-metrics <<'EOF'
+#!/bin/bash
+set -euo pipefail
+indexed=$(curl --fail --silent --request POST --data 'SELECT MAX(head) AS indexed_block FROM contracts' http://127.0.0.1:8080/sql | jq -er 'if type == "array" then .[0].indexed_block else .data[0].indexed_block end')
+head=$(curl --fail --silent --request POST --header 'content-type: application/json' --data '{"jsonrpc":"2.0","id":1,"method":"starknet_blockNumber","params":[]}' '${rpc_url}' | jq -er '.result')
+failures=$(curl --fail --silent --request POST --data 'SELECT COUNT(*) AS failures FROM marketplace_metadata_failures WHERE resolved_at IS NULL' http://127.0.0.1:8080/sql | jq -er 'if type == "array" then .[0].failures else .data[0].failures end')
+last_backup=$(aws s3api list-objects-v2 --bucket '${backup_bucket}' --prefix 'litestream/${chain}/${color}/' --query 'sort_by(Contents,&LastModified)[-1].LastModified' --output text)
+backup_age=999999
+if [ "$last_backup" != "None" ]; then backup_age=$(( $(date +%s) - $(date -d "$last_backup" +%s) )); fi
+dimensions="Chain=${chain},Color=${color}"
+aws cloudwatch put-metric-data --namespace MarketplaceData --metric-name IndexerLagBlocks --dimensions "$dimensions" --value $((head-indexed)) --unit Count
+aws cloudwatch put-metric-data --namespace MarketplaceData --metric-name IndexedBlock --dimensions "$dimensions" --value "$indexed" --unit Count
+aws cloudwatch put-metric-data --namespace MarketplaceData --metric-name MetadataFailures --dimensions "$dimensions" --value "$failures" --unit Count
+aws cloudwatch put-metric-data --namespace MarketplaceData --metric-name BackupAgeSeconds --dimensions "$dimensions" --value "$backup_age" --unit Seconds
+EOF
+chmod 755 /usr/local/bin/marketplace-torii-metrics
+
+cat >/etc/systemd/system/marketplace-torii-metrics.service <<'EOF'
+[Unit]
+Description=Publish marketplace Torii health metrics
+After=docker.service network-online.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/bin/marketplace-torii-metrics
+EOF
+
+cat >/etc/systemd/system/marketplace-torii-metrics.timer <<'EOF'
+[Unit]
+Description=Publish marketplace Torii health metrics every minute
+
+[Timer]
+OnBootSec=2min
+OnUnitActiveSec=1min
+AccuracySec=10s
+
+[Install]
+WantedBy=timers.target
+EOF
+systemctl daemon-reload
+systemctl enable --now marketplace-torii-metrics.timer

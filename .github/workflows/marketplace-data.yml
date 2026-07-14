@@ -1,0 +1,183 @@
+name: Marketplace data plane
+
+on:
+  pull_request:
+    paths:
+      - ".github/workflows/marketplace-data.yml"
+      - ".github/workflows/marketplace-data-deploy.yml"
+      - "config/marketplace/**"
+      - "docker/torii/**"
+      - "infra/marketplace-data/**"
+      - "packages/marketplace-api-contract/**"
+      - "packages/marketplace-ops/**"
+      - "packages/marketplace-registry/**"
+      - "services/marketplace-api/**"
+      - "pnpm-lock.yaml"
+      - "pnpm-workspace.yaml"
+      - "scripts/ci/check-arcade-imports.mjs"
+  push:
+    branches: [main]
+    paths:
+      - "config/marketplace/**"
+      - "docker/torii/**"
+      - "infra/marketplace-data/**"
+      - "packages/marketplace-api-contract/**"
+      - "packages/marketplace-ops/**"
+      - "packages/marketplace-registry/**"
+      - "services/marketplace-api/**"
+      - "scripts/ci/check-arcade-imports.mjs"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: marketplace-data-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  node-contracts:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with: { version: 10.8.1 }
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+          cache-dependency-path: pnpm-lock.yaml
+      - name: Install SQLite fixture runtime
+        run: sudo apt-get update && sudo apt-get install --yes sqlite3
+      - run: pnpm install --frozen-lockfile
+      - name: Verify generated registry artifacts
+        run: |
+          pnpm --filter @biblio/marketplace-registry generate
+          git diff --exit-code -- docker/torii/config src/lib/marketplace/generated-registry.json
+      - name: Test and typecheck owned read plane
+        run: |
+          pnpm ci:arcade-imports
+          pnpm --filter @biblio/marketplace-registry test
+          pnpm --filter @biblio/marketplace-api-contract test
+          pnpm --filter @biblio/marketplace-ops test
+          pnpm --filter @biblio/marketplace-api test
+          pnpm --filter @biblio/marketplace-registry typecheck
+          pnpm --filter @biblio/marketplace-api-contract typecheck
+          pnpm --filter @biblio/marketplace-ops typecheck
+          pnpm --filter @biblio/marketplace-api typecheck
+          pnpm --filter @biblio/marketplace-api build
+
+  terraform:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: infra/marketplace-data
+    steps:
+      - uses: actions/checkout@v4
+      - uses: hashicorp/setup-terraform@v3
+        with: { terraform_version: 1.13.5 }
+      - uses: terraform-linters/setup-tflint@v6.2.2
+        with: { tflint_version: v0.61.0 }
+      - run: terraform fmt -check -recursive
+      - run: terraform init -backend=false -input=false
+      - run: terraform validate
+      - run: tflint --init
+      - run: tflint --recursive
+      - name: Checkov
+        uses: bridgecrewio/checkov-action@v12.1347.0
+        with:
+          directory: infra/marketplace-data
+          framework: terraform
+          quiet: true
+
+  containers:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/setup-buildx-action@v3
+      - name: Build API image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: services/marketplace-api/Dockerfile
+          platforms: linux/amd64
+          load: true
+          tags: marketplace-api:test
+          cache-from: type=gha,scope=marketplace-api
+          cache-to: type=gha,mode=max,scope=marketplace-api
+      - name: Build hardened Torii image and run Rust security tests
+        uses: docker/build-push-action@v6
+        with:
+          context: docker/torii
+          file: docker/torii/Dockerfile
+          platforms: linux/amd64
+          load: true
+          tags: marketplace-torii:test
+          cache-from: type=gha,scope=marketplace-torii
+          cache-to: type=gha,mode=max,scope=marketplace-torii
+      - name: Scan API image
+        uses: aquasecurity/trivy-action@v0.36.0
+        with:
+          image-ref: marketplace-api:test
+          format: sarif
+          output: api-trivy.sarif
+          severity: HIGH,CRITICAL
+          exit-code: "1"
+      - name: Scan Torii image
+        uses: aquasecurity/trivy-action@v0.36.0
+        with:
+          image-ref: marketplace-torii:test
+          format: sarif
+          output: torii-trivy.sarif
+          severity: HIGH,CRITICAL
+          exit-code: "1"
+      - name: Generate API SBOM
+        uses: anchore/sbom-action@v0.24.0
+        with:
+          image: marketplace-api:test
+          artifact-name: marketplace-api.spdx.json
+          output-file: marketplace-api.spdx.json
+      - name: Generate Torii SBOM
+        uses: anchore/sbom-action@v0.24.0
+        with:
+          image: marketplace-torii:test
+          artifact-name: marketplace-torii.spdx.json
+          output-file: marketplace-torii.spdx.json
+
+  plan:
+    if: github.event_name == 'pull_request' && vars.AWS_MARKETPLACE_PLAN_ROLE_ARN != ''
+    needs: [node-contracts, terraform]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+    defaults:
+      run:
+        working-directory: infra/marketplace-data
+    steps:
+      - uses: actions/checkout@v4
+      - uses: hashicorp/setup-terraform@v3
+        with: { terraform_version: 1.13.5 }
+      - uses: aws-actions/configure-aws-credentials@v5
+        with:
+          role-to-assume: ${{ vars.AWS_MARKETPLACE_PLAN_ROLE_ARN }}
+          aws-region: us-east-1
+      - name: Initialize remote state
+        run: >-
+          terraform init -input=false
+          -backend-config="bucket=${{ vars.AWS_MARKETPLACE_STATE_BUCKET }}"
+          -backend-config="key=marketplace-data/production.tfstate"
+          -backend-config="region=us-east-1"
+          -backend-config="dynamodb_table=${{ vars.AWS_MARKETPLACE_LOCK_TABLE }}"
+          -backend-config="encrypt=true"
+      - name: Production plan with workloads gated off
+        run: >-
+          terraform plan -input=false -lock-timeout=5m
+          -var="domain_name=${{ vars.MARKETPLACE_API_DOMAIN }}"
+          -var="route53_zone_id=${{ vars.MARKETPLACE_ROUTE53_ZONE_ID }}"
+          -var="github_repository=${{ github.repository }}"
+          -var="terraform_state_bucket=${{ vars.AWS_MARKETPLACE_STATE_BUCKET }}"
+          -var="terraform_lock_table=${{ vars.AWS_MARKETPLACE_LOCK_TABLE }}"
+          -var="launch_enabled=false"

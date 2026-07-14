@@ -1,6 +1,10 @@
 import { createStore } from "zustand/vanilla";
 import { create } from "zustand";
 import { createJSONStorage, persist } from "zustand/middleware";
+import {
+  marketplaceOrderIdentityKey,
+  type MarketplaceOrderIdentity,
+} from "@/lib/marketplace/order-identity";
 
 export const CART_STORAGE_KEY = "marketplace-cart-v1";
 export const CART_MAX_ITEMS = 25;
@@ -29,11 +33,11 @@ type CartStoreState = {
   lastActionError: string | null;
   addItem: (item: CartItem) => CartActionResult;
   addCandidates: (candidates: CartItem[]) => CartActionResult;
-  removeItem: (orderId: string) => void;
+  removeItem: (identity: MarketplaceOrderIdentity) => void;
   clearCart: () => void;
   setOpen: (open: boolean) => void;
-  setItemError: (orderId: string, error: string) => void;
-  clearItemError: (orderId: string) => void;
+  setItemError: (identity: MarketplaceOrderIdentity, error: string) => void;
+  clearItemError: (identity: MarketplaceOrderIdentity) => void;
   clearInlineErrors: () => void;
   clearActionError: () => void;
 };
@@ -60,7 +64,8 @@ function applyAddItem(
   state: Pick<CartStoreState, "items">,
   item: CartItem,
 ): CartActionResult {
-  if (state.items.some((entry) => entry.orderId === item.orderId)) {
+  const itemKey = marketplaceOrderIdentityKey(item);
+  if (state.items.some((entry) => marketplaceOrderIdentityKey(entry) === itemKey)) {
     return { ok: false, error: "Already in cart." };
   }
 
@@ -96,7 +101,9 @@ const createState = persist<CartStoreState>(
       }
 
       set((state) => ({
-        items: state.items.some((entry) => entry.orderId === item.orderId)
+        items: state.items.some(
+          (entry) => marketplaceOrderIdentityKey(entry) === marketplaceOrderIdentityKey(item),
+        )
           ? state.items
           : [...state.items, item],
         lastActionError: null,
@@ -119,19 +126,24 @@ const createState = persist<CartStoreState>(
 
       return firstError ? { ok: false, error: firstError } : { ok: true };
     },
-    removeItem: (orderId) => {
+    removeItem: (identity) => {
       set((state) => {
-        if (!(orderId in state.inlineErrors)) {
+        const identityKey = marketplaceOrderIdentityKey(identity);
+        if (!(identityKey in state.inlineErrors)) {
           return {
-            items: state.items.filter((item) => item.orderId !== orderId),
+            items: state.items.filter(
+              (item) => marketplaceOrderIdentityKey(item) !== identityKey,
+            ),
           };
         }
 
         const nextInlineErrors = { ...state.inlineErrors };
-        delete nextInlineErrors[orderId];
+        delete nextInlineErrors[identityKey];
 
         return {
-          items: state.items.filter((item) => item.orderId !== orderId),
+          items: state.items.filter(
+            (item) => marketplaceOrderIdentityKey(item) !== identityKey,
+          ),
           inlineErrors: nextInlineErrors,
         };
       });
@@ -142,22 +154,23 @@ const createState = persist<CartStoreState>(
     setOpen: (open) => {
       set({ isOpen: open });
     },
-    setItemError: (orderId, error) => {
+    setItemError: (identity, error) => {
       set((state) => ({
         inlineErrors: {
           ...state.inlineErrors,
-          [orderId]: error,
+          [marketplaceOrderIdentityKey(identity)]: error,
         },
       }));
     },
-    clearItemError: (orderId) => {
+    clearItemError: (identity) => {
       set((state) => {
-        if (!(orderId in state.inlineErrors)) {
+        const identityKey = marketplaceOrderIdentityKey(identity);
+        if (!(identityKey in state.inlineErrors)) {
           return state;
         }
 
         const nextInlineErrors = { ...state.inlineErrors };
-        delete nextInlineErrors[orderId];
+        delete nextInlineErrors[identityKey];
 
         return { inlineErrors: nextInlineErrors };
       });

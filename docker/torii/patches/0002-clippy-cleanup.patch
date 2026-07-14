@@ -1,0 +1,14 @@
+diff --git a/crates/sqlite/sqlite/src/executor/mod.rs b/crates/sqlite/sqlite/src/executor/mod.rs
+index e8f593f..e291902 100644
+--- a/crates/sqlite/sqlite/src/executor/mod.rs
++++ b/crates/sqlite/sqlite/src/executor/mod.rs
+@@ -495,4 +495,6 @@ impl<P: Provider + Sync + Send + Clone + 'static> Executor<'_, P> {
+-                    let world_addr = world_address.unwrap();
+-
+-                    // Get the namespace from the unique models involved in this transaction
++                    let Some(world_addr) = world_address else {
++                        unreachable!("world address was checked before activity processing")
++                    };
++
++                    // Get the namespace from the unique models involved in this transaction
+                     // Build a query with placeholders for all model IDs

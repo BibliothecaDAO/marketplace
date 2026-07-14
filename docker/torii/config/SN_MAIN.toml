@@ -1,0 +1,44 @@
+world_address = "0x07a079295990e43441a7389fdc3b9ba063c6cd6aee16fb846f598c42a9f04ff7"
+rpc = "${TORII_RPC_URL}"
+db_dir = "${TORII_DB_DIR}"
+
+[server]
+http_addr = "0.0.0.0"
+http_port = 8080
+http_cors_origins = []
+
+[indexing]
+world_block = 2407079
+preconfirmed = false
+transactions = true
+transaction_receipts = true
+controllers = false
+strict_model_reader = true
+external_contracts = true
+namespaces = ["ARCADE"]
+contracts = [
+  "ERC721:0x07ae27a31bb6526e3de9cf02f081f6ce0615ac12a6d7b85ee58b8ad7947a2809:664162",
+  "ERC721:0x060e8836acbebb535dfcd237ff01f20be503aae407b67bb6e3b5869afae97156:1355128",
+  "ERC721:0x0572fe34a769058c62a66f0c4854d08ccfd21fcbb4f0b1685a1868b84c6ee266:1517708",
+  "ERC721:0x01f36515d7d307c9d3e41df48f29e9a6b4bbc445d0fbdbbce944a4678cd52b02:1889136",
+  "ERC721:0x027838dea749f41c6f8a44fcfa791788e6101080c1b3cd646a361f653ad10e2d:2021283",
+  "ERC721:0x046da8955829adf2bda310099a0063451923f02e648cf25a1203aac6335cf0e4:2209828",
+  "ERC721:0x036017e69d21d6d8c13e266eabb73ef1f1d02722d86bdcabe5f168f8e549d3cd:2134592"
+]
+
+[erc]
+max_metadata_tasks = 8
+token_attributes = true
+trait_counts = true
+metadata_updates = true
+metadata_update_whitelist = ["0x07ae27a31bb6526e3de9cf02f081f6ce0615ac12a6d7b85ee58b8ad7947a2809","0x060e8836acbebb535dfcd237ff01f20be503aae407b67bb6e3b5869afae97156","0x0572fe34a769058c62a66f0c4854d08ccfd21fcbb4f0b1685a1868b84c6ee266","0x01f36515d7d307c9d3e41df48f29e9a6b4bbc445d0fbdbbce944a4678cd52b02","0x027838dea749f41c6f8a44fcfa791788e6101080c1b3cd646a361f653ad10e2d","0x046da8955829adf2bda310099a0063451923f02e648cf25a1203aac6335cf0e4","0x036017e69d21d6d8c13e266eabb73ef1f1d02722d86bdcabe5f168f8e549d3cd"]
+metadata_updates_only_at_head = true
+async_metadata_updates = true
+
+[sql]
+historical = ["ARCADE-Order", "ARCADE-Book"]
+migrations = "/etc/torii/migrations"
+hooks = [
+  "model_updated:ARCADE-Order:INSERT OR IGNORE INTO marketplace_order_audit (entity_id, event_id, order_id, collection, token_id, royalties, category, status, expiration, quantity, price, currency, owner) SELECT internal_entity_id, internal_event_id, id, collection, token_id, royalties, category, status, expiration, quantity, price, currency, owner FROM [ARCADE-Order] WHERE internal_entity_id = ?",
+  "model_updated:ARCADE-Book:INSERT OR IGNORE INTO marketplace_book_audit (entity_id, event_id, book_id, version, paused, royalties, counter, fee_num, fee_receiver) SELECT internal_entity_id, internal_event_id, id, version, paused, royalties, counter, fee_num, fee_receiver FROM [ARCADE-Book] WHERE internal_entity_id = ?"
+]

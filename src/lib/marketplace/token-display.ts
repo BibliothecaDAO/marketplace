@@ -1,4 +1,4 @@
-import type { NormalizedToken } from "@cartridge/arcade/marketplace";
+import type { NormalizedToken } from "@/lib/marketplace/types";
 import { normalizeCollectionTokenId } from "@/lib/marketplace/token-id";
 
 function normalizeMetadata(token: NormalizedToken) {
@@ -227,7 +227,7 @@ const KNOWN_TOKEN_SYMBOLS: Record<string, string> = {
 const KNOWN_TOKEN_ICONS: Record<string, string> = {
   "0x04718f5a0fc34cc1af16a1cdee98ffb20c31f5cd61d6ab07201858f4287c938d": "/tokens/strk.svg",
   "0x42dd777885ad2c116be96d4d634abc90a26a790ffb5871e037dd5ae7d2ec86b": "/tokens/survivo.jpg",
-  "0x0124aeb495b947201f5fac96fd1138e326ad86195b98df6dec9009158a533b49": "https://coin-images.coingecko.com/coins/images/22171/small/Frame_1.png?1696521515",
+  "0x0124aeb495b947201f5fac96fd1138e326ad86195b98df6dec9009158a533b49": "/tokens/lords.svg",
 };
 
 function normalizeTokenAddress(address: string): string {

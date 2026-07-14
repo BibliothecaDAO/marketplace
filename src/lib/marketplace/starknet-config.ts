@@ -3,7 +3,7 @@ import { mainnet, sepolia } from "@starknet-react/chains";
 import { braavos, cartridge, jsonRpcProvider, ready } from "@starknet-react/core";
 import type { MarketplaceRuntimeConfig } from "@/lib/marketplace/config";
 
-type MarketplaceChainLabel = MarketplaceRuntimeConfig["chainLabel"];
+type MarketplaceChainLabel = MarketplaceRuntimeConfig["chainLabel"] | "custom";
 
 const CARTRIDGE_RPC_BASE_URL = "https://api.cartridge.gg/x/starknet";
 

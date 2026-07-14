@@ -9,7 +9,10 @@
                                |_|
 ```
 
-A Next.js App Router NFT marketplace for the Realms ecosystem, powered by `@cartridge/arcade`, with a strict `shadcn/ui` + Tailwind token UI approach.
+A Next.js App Router NFT marketplace for the Realms ecosystem. Marketplace
+reads use the owned Torii/Fastify data plane; the retained Arcade contracts and
+wallet transaction flow remain the write authority. UI uses a strict
+`shadcn/ui` + Tailwind token approach.
 
 ## What Is Implemented
 
@@ -37,7 +40,9 @@ This marketplace is multi-currency at the listing, wallet, and checkout executio
 - TypeScript
 - Tailwind CSS v4
 - `shadcn/ui` primitives
-- `@cartridge/arcade` marketplace SDK
+- Owned Fastify marketplace API and shared TypeBox contract
+- Hardened, pinned Torii per chain
+- `@cartridge/arcade` only behind the contract write adapter
 - Zustand (cart persistence)
 - TanStack Query
 - Vitest + React Testing Library + MSW
@@ -55,6 +60,11 @@ This marketplace is multi-currency at the listing, wallet, and checkout executio
 - `src/test/*`: Vitest setup + MSW server/handlers
 - `tests/e2e/*`: Playwright flows and screenshot tests
 - `scripts/ci/*`: feature-route detection and CI helper scripts
+- `services/marketplace-api/*`: public versioned marketplace read API
+- `packages/marketplace-*`: registry, API contract, and operational tooling
+- `config/marketplace/chains.json`: checked-in chain/product source of truth
+- `docker/torii/*`: reproducible hardened Torii build and generated configs
+- `infra/marketplace-data/*`: AWS Terraform
 
 ## Local Setup
 
@@ -74,15 +84,19 @@ Create/update `.env.local`:
 
 ```env
 NEXT_PUBLIC_MARKETPLACE_CHAIN_ID=SN_SEPOLIA
-NEXT_PUBLIC_MARKETPLACE_DEFAULT_PROJECT=
 NEXT_PUBLIC_MARKETPLACE_COLLECTIONS=0x123...|Genesis|project-a,0x456...|Artifacts|project-b
+NEXT_PUBLIC_MARKETPLACE_API_BASE_URL=http://localhost:3001
+MARKETPLACE_READ_ROLLOUT=browse
 NEXT_PUBLIC_SITE_URL=http://localhost:3000
 ```
 
 Notes:
 
-- `NEXT_PUBLIC_MARKETPLACE_COLLECTIONS` format is `address|name|projectId` (comma-separated).
-- `address` and `name` are required; `projectId` is optional.
+- Omit `NEXT_PUBLIC_MARKETPLACE_COLLECTIONS` to use the generated registry.
+- During rollout the legacy `address|name|projectId` format is accepted, but
+  `projectId` is ignored. `address` and `name` remain required.
+- Rollout is exactly `off|browse|portfolio|orders|checkout`; invalid values fail
+  startup and each value includes all preceding stages.
 - Restart dev server after env changes.
 
 Run:
@@ -115,9 +129,29 @@ pnpm test:e2e:install
 pnpm test:e2e
 pnpm test:e2e:screenshots
 pnpm ci:feature-routes
+pnpm ci:arcade-imports
 pnpm build
 pnpm start
+pnpm --filter @biblio/marketplace-ops load:api
+pnpm --filter @biblio/marketplace-ops evaluate:soak
+pnpm --filter @biblio/marketplace-ops evaluate:restore
+pnpm --filter @biblio/marketplace-ops evaluate:chaos
+pnpm --filter @biblio/marketplace-ops evaluate:sepolia-lifecycle
+pnpm --filter @biblio/marketplace-ops prepare:release
 ```
+
+Run the owned API locally with private Torii/RPC endpoints and an explicit
+public origin:
+
+```env
+MARKETPLACE_PUBLIC_BASE_URL=http://127.0.0.1:3001
+TORII_MAIN_URL=http://127.0.0.1:8080
+TORII_SEPOLIA_URL=http://127.0.0.1:8081
+```
+
+Deployed `MARKETPLACE_PUBLIC_BASE_URL` values must use HTTPS. Collection and
+token images are emitted as immutable, versioned owned-API URLs and are served
+from Torii's sanitized private asset cache.
 
 ## Testing and CI
 
@@ -155,3 +189,6 @@ Feature screenshots:
 - Scope: `docs/SCOPE.md`
 - TDD PRD: `docs/TDD-PRD.md`
 - TDD implementation plan: `docs/TDD-IMPLEMENTATION-PLAN.md`
+- Retained-contract ADR: `docs/adr/0001-retain-arcade-contracts.md`
+- Data-plane runbook: `docs/runbooks/marketplace-data-plane.md`
+- Indexer replacement scope: `docs/MARKETPLACE-INDEXER-REPLACEMENT-SCOPE.md`

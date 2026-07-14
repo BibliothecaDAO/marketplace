@@ -2,15 +2,11 @@
 
 import Link from "next/link";
 import { useEffect, useMemo, useReducer, useRef, useState, type ReactNode } from "react";
-import type { NormalizedToken } from "@cartridge/arcade/marketplace";
-import {
-  useCollectionListingsQuery,
-  useCollectionTokensQuery,
-} from "@/lib/marketplace/hooks";
+import type { NormalizedToken } from "@/lib/marketplace/types";
+import { useCollectionTokensQuery } from "@/lib/marketplace/hooks";
 import {
   formatPriceForDisplay,
   displayTokenId,
-  listingPriceByTokenId,
   tokenId,
   tokenName,
   tokenPrice,
@@ -32,13 +28,10 @@ import {
 import { getCollectionFilterConfig } from "@/lib/marketplace/collection-filter-config";
 import {
   exactAttributeFiltersFromActiveFilters,
-  filterTokensByActiveFilters,
-  numericTraitValueByName,
+  decodeRangeFilterValue,
   type ActiveFilters,
 } from "@/lib/marketplace/traits";
-import { COLLECTION_LISTING_SAMPLE_LIMIT } from "@/lib/marketplace/query-limits";
-import { expandTokenIdQueryVariants } from "@/lib/marketplace/token-id";
-import { realmResourceCount, realmResources } from "@/lib/marketplace/token-attributes";
+import { realmResources } from "@/lib/marketplace/token-attributes";
 import { cn } from "@/lib/utils";
 import { useEntrance } from "@/lib/animation";
 import {
@@ -51,6 +44,7 @@ import { getMarketplaceRuntimeConfig } from "@/lib/marketplace/config";
 
 type CollectionTokenGridProps = {
   address: string;
+  currency?: string;
   projectId?: string;
   limit?: number;
   tokenIds?: string[];
@@ -59,6 +53,8 @@ type CollectionTokenGridProps = {
   onTokensChange?: (tokens: NormalizedToken[]) => void;
   sortControls?: ReactNode;
   sweepPreviewTokenIds?: Set<string>;
+  initialCursor?: string | null;
+  onCursorChange?: (cursor: string | null) => void;
 };
 
 type GridDensityMode = "compact" | "dense";
@@ -68,7 +64,6 @@ const GRID_CLASSES_BY_DENSITY: Record<GridDensityMode, string> = {
   compact: "grid-cols-2 sm:grid-cols-3 lg:grid-cols-4",
   dense: "grid-cols-2 sm:grid-cols-3 lg:grid-cols-6",
 };
-const EMPTY_ACTIVE_FILTERS: ActiveFilters = {};
 
 function dedupeTokens(tokens: NormalizedToken[]) {
   const unique = new Map<string, NormalizedToken>();
@@ -166,117 +161,6 @@ function isAliveAdventurer(token: NormalizedToken) {
   return true;
 }
 
-function sortablePrice(
-  token: NormalizedToken,
-  listingPrices: Map<string, { price: string }>,
-  listingPriceMap: Map<string, string>,
-) {
-  const tokenKey = displayTokenId(token);
-  const rawPrice =
-    listingPrices.get(tokenKey)?.price ??
-    listingPriceMap.get(tokenKey) ??
-    tokenPrice(token);
-  if (!rawPrice) {
-    return null;
-  }
-
-  try {
-    return BigInt(rawPrice);
-  } catch {
-    return null;
-  }
-}
-
-function sortTokens(
-  tokens: NormalizedToken[],
-  sortMode: CollectionSortMode,
-  listingPrices: Map<string, { price: string }>,
-  listingPriceMap: Map<string, string>,
-) {
-  if (sortMode === "recent") {
-    return tokens;
-  }
-
-  const traitNameBySortMode: Partial<Record<CollectionSortMode, string>> = {
-    "power-asc": "Power",
-    "power-desc": "Power",
-    "level-asc": "Level",
-    "level-desc": "Level",
-    "health-asc": "Health",
-    "health-desc": "Health",
-    "resource-count-asc": "Resource count",
-    "resource-count-desc": "Resource count",
-  };
-  const ordered = [...tokens];
-  ordered.sort((left, right) => {
-    if (sortMode === "resource-count-asc" || sortMode === "resource-count-desc") {
-      const leftValue = realmResourceCount(left.metadata);
-      const rightValue = realmResourceCount(right.metadata);
-      if (leftValue === rightValue) {
-        return tokenId(left).localeCompare(tokenId(right));
-      }
-
-      const isAscending = sortMode === "resource-count-asc";
-      if (leftValue < rightValue) {
-        return isAscending ? -1 : 1;
-      }
-
-      return isAscending ? 1 : -1;
-    }
-
-    const traitName = traitNameBySortMode[sortMode];
-    if (traitName) {
-      const leftValue = numericTraitValueByName(left.metadata, traitName);
-      const rightValue = numericTraitValueByName(right.metadata, traitName);
-
-      if (leftValue === null && rightValue === null) {
-        return tokenId(left).localeCompare(tokenId(right));
-      }
-      if (leftValue === null) {
-        return 1;
-      }
-      if (rightValue === null) {
-        return -1;
-      }
-      if (leftValue === rightValue) {
-        return tokenId(left).localeCompare(tokenId(right));
-      }
-
-      const isAscending = sortMode.endsWith("-asc");
-      if (leftValue < rightValue) {
-        return isAscending ? -1 : 1;
-      }
-
-      return isAscending ? 1 : -1;
-    }
-
-    const leftPrice = sortablePrice(left, listingPrices, listingPriceMap);
-    const rightPrice = sortablePrice(right, listingPrices, listingPriceMap);
-
-    if (leftPrice === null && rightPrice === null) {
-      return tokenId(left).localeCompare(tokenId(right));
-    }
-    if (leftPrice === null) {
-      return 1;
-    }
-    if (rightPrice === null) {
-      return -1;
-    }
-    if (leftPrice === rightPrice) {
-      return tokenId(left).localeCompare(tokenId(right));
-    }
-
-    const isAscending = sortMode === "price-asc";
-    if (leftPrice < rightPrice) {
-      return isAscending ? -1 : 1;
-    }
-
-    return isAscending ? 1 : -1;
-  });
-
-  return ordered;
-}
-
 type GridPaginationState = {
   cursor: string | null | undefined;
   tokens: NormalizedToken[];
@@ -311,6 +195,7 @@ function gridPaginationReducer(
 
 export function CollectionTokenGrid({
   address,
+  currency,
   projectId,
   limit = 24,
   tokenIds,
@@ -319,6 +204,8 @@ export function CollectionTokenGrid({
   onTokensChange,
   sortControls,
   sweepPreviewTokenIds,
+  initialCursor,
+  onCursorChange,
 }: CollectionTokenGridProps) {
   const { addListingToCart, isRecentlyAdded } = useAddToCartFeedback();
   const collectionFilterConfig = useMemo(
@@ -328,7 +215,6 @@ export function CollectionTokenGrid({
   const showInlineResources = collectionFilterConfig.showInlineResources === true;
   const tokenCardConfig = collectionFilterConfig.tokenCard;
   const [gridMode, setGridMode] = useState<GridLayoutMode>("compact");
-  const [armedListedTokenEnrichmentScopeKey, setArmedListedTokenEnrichmentScopeKey] = useState("");
   const tokenIdsKey = useMemo(() => tokenIds?.join(",") ?? "", [tokenIds]);
   const activeFiltersKey = useMemo(
     () =>
@@ -344,12 +230,17 @@ export function CollectionTokenGrid({
     () => exactAttributeFiltersFromActiveFilters(activeFilters),
     [activeFilters],
   );
-  const listedTokenEnrichmentScopeKey = useMemo(
-    () => [address, projectId ?? "", tokenIdsKey, activeFiltersKey].join("::"),
-    [activeFiltersKey, address, projectId, tokenIdsKey],
+  const rangeFilters = useMemo(
+    () => Object.entries(activeFilters ?? {}).flatMap(([name, values]) =>
+      [...values].flatMap((value) => {
+        const range = decodeRangeFilterValue(value);
+        return range ? [{ name, ...range }] : [];
+      }),
+    ),
+    [activeFilters],
   );
   const [pagination, dispatch] = useReducer(gridPaginationReducer, {
-    cursor: undefined,
+    cursor: initialCursor ?? undefined,
     tokens: [],
   });
 
@@ -361,14 +252,10 @@ export function CollectionTokenGrid({
     cursor: pagination.cursor,
     fetchImages: true,
     attributeFilters,
+    rangeFilters,
+    sort: sortMode,
+    currency,
   });
-  const listingQuery = useCollectionListingsQuery({
-    collection: address,
-    projectId,
-    limit: COLLECTION_LISTING_SAMPLE_LIMIT,
-    verifyOwnership: false,
-  });
-
   const onTokensChangeRef = useRef(onTokensChange);
   const emittedVisibleTokensSignatureRef = useRef("");
   useEffect(() => {
@@ -377,17 +264,7 @@ export function CollectionTokenGrid({
 
   useEffect(() => {
     dispatch({ type: "RESET" });
-  }, [address, projectId, limit, tokenIdsKey, activeFiltersKey]);
-
-  useEffect(() => {
-    const timeoutId = window.setTimeout(() => {
-      setArmedListedTokenEnrichmentScopeKey(listedTokenEnrichmentScopeKey);
-    }, 0);
-
-    return () => {
-      window.clearTimeout(timeoutId);
-    };
-  }, [listedTokenEnrichmentScopeKey]);
+  }, [address, projectId, limit, tokenIdsKey, activeFiltersKey, sortMode, currency]);
 
   useEffect(() => {
     if (!tokenQuery.isSuccess) return;
@@ -395,8 +272,12 @@ export function CollectionTokenGrid({
     dispatch({ type: "APPEND_PAGE", pageTokens });
   }, [tokenQuery.data, tokenQuery.isSuccess]);
 
-  const listingPrices = cheapestListingByTokenId(listingQuery.data);
-  const listingPriceMap = listingPriceByTokenId(listingQuery.data);
+  const tokenListings = useMemo(
+    () => pagination.tokens.flatMap((token) =>
+      token.best_listing ? [token.best_listing] : []),
+    [pagination.tokens],
+  );
+  const listingPrices = cheapestListingByTokenId(tokenListings);
   const isAdventurersCollection = useMemo(
     () =>
       getMarketplaceRuntimeConfig().collections.some(
@@ -407,49 +288,15 @@ export function CollectionTokenGrid({
     [address],
   );
 
-  // Always resolve listed token IDs so listed inventory remains visible even
-  // when the paginated token query does not include those tokens on page 1.
-  const listedQueryTokenIds = useMemo(
-    () => expandTokenIdQueryVariants(listingPriceMap.keys()),
-    [listingPriceMap],
-  );
-  const listedTokensQuery = useCollectionTokensQuery(
-    {
-      address,
-      project: projectId,
-      tokenIds: listedQueryTokenIds.length > 0 ? listedQueryTokenIds : undefined,
-      limit: Math.max(listedQueryTokenIds.length, 1),
-      fetchImages: true,
-      attributeFilters,
-    },
-    {
-      enabled:
-        armedListedTokenEnrichmentScopeKey === listedTokenEnrichmentScopeKey
-        && !tokenIds?.length
-        && listedQueryTokenIds.length > 0,
-    },
-  );
-
   const nextCursor = tokenQuery.data?.page?.nextCursor ?? null;
   const canLoadMore = Boolean(nextCursor);
 
-  // Append explicitly-fetched listed tokens after the current page to preserve
-  // recent ordering while still surfacing listed inventory that lives off-page.
-  const visibleTokens = useMemo(() => {
-    const listedTokens = listedTokensQuery.data?.page?.tokens;
-    if (!listedTokens?.length) return pagination.tokens;
-    return dedupeTokens([...pagination.tokens, ...listedTokens]);
-  }, [pagination.tokens, listedTokensQuery.data?.page?.tokens]);
-  const filteredVisibleTokens = useMemo(
-    () => filterTokensByActiveFilters(visibleTokens, activeFilters ?? EMPTY_ACTIVE_FILTERS),
-    [activeFilters, visibleTokens],
-  );
   const displayTokens = useMemo(
     () =>
       isAdventurersCollection
-        ? filteredVisibleTokens.filter(isAliveAdventurer)
-        : filteredVisibleTokens,
-    [filteredVisibleTokens, isAdventurersCollection],
+        ? pagination.tokens.filter(isAliveAdventurer)
+        : pagination.tokens,
+    [pagination.tokens, isAdventurersCollection],
   );
   const visibleTokensSignature = useMemo(
     () => tokenSignature(displayTokens),
@@ -465,15 +312,12 @@ export function CollectionTokenGrid({
     onTokensChangeRef.current?.(displayTokens);
   }, [displayTokens, visibleTokensSignature]);
 
-  const sortedTokens = useMemo(
-    () => sortTokens(displayTokens, sortMode, listingPrices, listingPriceMap),
-    [displayTokens, listingPriceMap, listingPrices, sortMode],
-  );
+  const sortedTokens = displayTokens;
   const isListMode = gridMode === "list";
   const gridClasses = GRID_CLASSES_BY_DENSITY[isListMode ? "compact" : gridMode];
 
   // Grid entrance stagger animation — re-triggers on filter/sort changes via key
-  const gridAnimationKey = `${activeFiltersKey}-${sortMode}-${gridMode}`;
+  const gridAnimationKey = `${activeFiltersKey}-${sortMode}-${currency ?? ""}-${gridMode}`;
   const gridRef = useEntrance<HTMLDivElement>({
     selector: "[data-token-card]",
     staggerDelay: 30,
@@ -550,11 +394,9 @@ export function CollectionTokenGrid({
           {sortedTokens.map((token) => {
             const tokenKey = displayTokenId(token);
             const cheapestListing = listingPrices.get(tokenKey);
-            const isAdded = isRecentlyAdded(cheapestListing?.orderId);
             const isSweepPreview = sweepPreviewTokenIds?.has(tokenKey) ?? false;
             const price =
               cheapestListing?.price ??
-              listingPriceMap.get(tokenKey) ??
               tokenPrice(token);
             const cardItem = cheapestListing
               ? cartItemFromTokenListing(
@@ -564,6 +406,7 @@ export function CollectionTokenGrid({
                 projectId,
               )
               : null;
+            const isAdded = isRecentlyAdded(cardItem);
 
             return (
               <div key={tokenId(token)} data-token-card>
@@ -627,13 +470,15 @@ export function CollectionTokenGrid({
                 {sortedTokens.map((token) => {
                   const tokenKey = displayTokenId(token);
                   const cheapestListing = listingPrices.get(tokenKey);
-                  const isAdded = isRecentlyAdded(cheapestListing?.orderId);
                   const isSweepPreview = sweepPreviewTokenIds?.has(tokenKey) ?? false;
                   const price =
                     cheapestListing?.price ??
-                    listingPriceMap.get(tokenKey) ??
                     tokenPrice(token);
                   const displayPrice = formatPriceForDisplay(price);
+                  const cartItem = cheapestListing
+                    ? cartItemFromTokenListing(token, address, cheapestListing, projectId)
+                    : null;
+                  const isAdded = isRecentlyAdded(cartItem);
 
                   return (
                     <TableRow key={tokenId(token)} className={cn(isSweepPreview && "bg-muted/60")}>
@@ -671,20 +516,13 @@ export function CollectionTokenGrid({
                       </TableCell>
                       <TableCell className="text-right">
                         <Button
-                          disabled={!cheapestListing || isSweepPreview}
+                          disabled={!cartItem || isSweepPreview}
                           onClick={() => {
-                            if (!cheapestListing) {
+                            if (!cartItem) {
                               return;
                             }
 
-                            addListingToCart(
-                              cartItemFromTokenListing(
-                                token,
-                                address,
-                                cheapestListing,
-                                projectId,
-                              ),
-                            );
+                            addListingToCart(cartItem);
                           }}
                           size="sm"
                           type="button"
@@ -717,6 +555,7 @@ export function CollectionTokenGrid({
           onClick={() => {
             if (nextCursor) {
               dispatch({ type: "ADVANCE_CURSOR", cursor: nextCursor });
+              onCursorChange?.(nextCursor);
             }
           }}
           type="button"

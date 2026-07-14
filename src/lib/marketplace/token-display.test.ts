@@ -525,9 +525,10 @@ describe("getTokenIconUrl", () => {
     expect(getTokenIconUrl("0x42dd777885ad2c116be96d4d634abc90a26a790ffb5871e037dd5ae7d2ec86b")).toBe("/tokens/survivo.jpg");
   });
 
-  it("returns CoinGecko URL for LORDS", () => {
-    const url = getTokenIconUrl("0x0124aeb495b947201f5fac96fd1138e326ad86195b98df6dec9009158a533b49");
-    expect(url).toContain("coingecko.com");
+  it("returns local SVG path for LORDS", () => {
+    expect(
+      getTokenIconUrl("0x0124aeb495b947201f5fac96fd1138e326ad86195b98df6dec9009158a533b49"),
+    ).toBe("/tokens/lords.svg");
   });
 
   it("is case-insensitive", () => {

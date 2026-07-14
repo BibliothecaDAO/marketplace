@@ -43,6 +43,9 @@ jobs:
       - name: Typecheck
         run: pnpm typecheck
 
+      - name: Enforce Arcade write-adapter boundary
+        run: pnpm ci:arcade-imports
+
       - name: Unit tests with coverage
         run: pnpm test:coverage
 

@@ -7,12 +7,10 @@ import { describe, expect, it, vi, beforeEach } from "vitest";
 // ---------------------------------------------------------------------------
 
 const {
-  mockUseMarketplaceClient,
   mockUseMarketplaceCollection,
   mockUseMarketplaceCollectionTokens,
   mockUseMarketplaceCollectionListings,
 } = vi.hoisted(() => ({
-  mockUseMarketplaceClient: vi.fn(),
   mockUseMarketplaceCollection: vi.fn(),
   mockUseMarketplaceCollectionTokens: vi.fn(),
   mockUseMarketplaceCollectionListings: vi.fn(),
@@ -22,11 +20,10 @@ const { mockGetMarketplaceRuntimeConfig } = vi.hoisted(() => ({
   mockGetMarketplaceRuntimeConfig: vi.fn(),
 }));
 
-vi.mock("@cartridge/arcade/marketplace/react", () => ({
-  useMarketplaceClient: mockUseMarketplaceClient,
-  useMarketplaceCollection: mockUseMarketplaceCollection,
-  useMarketplaceCollectionTokens: mockUseMarketplaceCollectionTokens,
-  useMarketplaceCollectionListings: mockUseMarketplaceCollectionListings,
+vi.mock("@/lib/marketplace/hooks", () => ({
+  useCollectionQuery: mockUseMarketplaceCollection,
+  useCollectionTokensQuery: mockUseMarketplaceCollectionTokens,
+  useCollectionListingsQuery: mockUseMarketplaceCollectionListings,
 }));
 
 vi.mock("@/lib/marketplace/config", () => ({
@@ -48,9 +45,12 @@ function makeRuntimeConfig(overrides: Record<string, unknown> = {}) {
 }
 
 function makeQueryResult(overrides: Record<string, unknown> = {}) {
+  const status = typeof overrides.status === "string" ? overrides.status : "pending";
   return {
     data: undefined,
-    status: "pending",
+    status,
+    isError: status === "error",
+    isSuccess: status === "success",
     ...overrides,
   };
 }
@@ -62,7 +62,6 @@ function makeQueryResult(overrides: Record<string, unknown> = {}) {
 beforeEach(() => {
   vi.resetModules();
   mockGetMarketplaceRuntimeConfig.mockReturnValue(makeRuntimeConfig());
-  mockUseMarketplaceClient.mockReturnValue({ status: "success" });
   mockUseMarketplaceCollection.mockReturnValue(
     makeQueryResult({ status: "success" }),
   );
@@ -104,7 +103,7 @@ describe("MarketplaceShell", () => {
     );
     render(<MarketplaceShell />);
 
-    expect(screen.getByText("Client: success")).toBeVisible();
+    expect(screen.getByText("Read API: success")).toBeVisible();
   });
 
   it("renders_collections_count_badge", async () => {

@@ -1,8 +1,8 @@
 import { queryOptions } from "@tanstack/react-query";
 import {
-  aggregateTraitSummaryPages,
   type TraitNameSummary,
 } from "@/lib/marketplace/traits";
+import { getMarketplaceApiClient } from "@/lib/marketplace/api-client";
 
 export const TRAIT_SUMMARY_STALE_TIME_MS = 60_000;
 
@@ -12,19 +12,17 @@ export type TraitNamesSummaryQueryInput = {
 };
 
 export function traitNamesSummaryQueryKey(options: TraitNamesSummaryQueryInput) {
-  return ["trait-names-summary", options.address, options.projectId] as const;
+  return ["trait-names-summary", options.address] as const;
 }
 
 export async function fetchTraitNamesSummaryAggregate(
   options: TraitNamesSummaryQueryInput,
 ): Promise<TraitNameSummary[]> {
-  const { fetchTraitNamesSummary } = await import("@cartridge/arcade/marketplace");
-  const result = await fetchTraitNamesSummary({
-    address: options.address,
-    defaultProjectId: options.projectId,
-  });
-
-  return aggregateTraitSummaryPages(result.pages);
+  const response = await getMarketplaceApiClient().traits(options.address);
+  return response.data.map((facet) => ({
+    traitName: facet.name,
+    valueCount: facet.values.length,
+  }));
 }
 
 export function traitNamesSummaryQueryOptions(options: TraitNamesSummaryQueryInput) {

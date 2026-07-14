@@ -1,76 +1,83 @@
-import type { MarketplaceClientConfig } from "@cartridge/arcade/marketplace";
+import generatedRegistry from "@/lib/marketplace/generated-registry.json";
+import {
+  isOwnedReadEnabled,
+  parseMarketplaceReadRollout,
+  type MarketplaceReadRollout,
+  type MarketplaceReadSurface,
+} from "@/lib/marketplace/rollout";
 
-const CHAIN_IDS = {
-  SN_MAIN: "0x534e5f4d41494e",
-  SN_SEPOLIA: "0x534e5f5345504f4c4941",
-} as const;
-
+const CHAIN_ALIASES = ["SN_MAIN", "SN_SEPOLIA"] as const;
 const DEFAULT_CHAIN_ALIAS = "SN_SEPOLIA";
-const DEFAULT_RUNTIME_MODE: MarketplaceClientConfig["runtime"] = "edge";
+const DEFAULT_API_BASE_URL = "http://localhost:3001";
+
+export type MarketplaceChainAlias = (typeof CHAIN_ALIASES)[number];
 
 export type SeedCollection = {
   address: string;
   name: string;
+  /** Temporary compatibility field. Project routing is intentionally ignored. */
   projectId?: string;
 };
 
-export type MarketplaceFeatureFlags = {
-  enableDeferredMetadataHydration: boolean;
+export type MarketplaceCurrency = {
+  address: string;
+  symbol: string;
+  decimals: number;
+  icon: string;
 };
 
 export type MarketplaceRuntimeConfig = {
-  chainLabel: keyof typeof CHAIN_IDS | "custom";
-  sdkConfig: MarketplaceClientConfig;
-  featureFlags: MarketplaceFeatureFlags;
+  chainLabel: MarketplaceChainAlias;
+  chainId: string;
+  apiBaseUrl: string;
+  readRollout: MarketplaceReadRollout;
+  worldAddress: string;
+  marketplaceAddress: string;
+  schemaVersion: string;
+  currencies: MarketplaceCurrency[];
   collections: SeedCollection[];
   warnings: string[];
+  isReadSurfaceEnabled(surface: MarketplaceReadSurface): boolean;
 };
 
 type MarketplaceEnv = Partial<
   Record<
     | "NEXT_PUBLIC_MARKETPLACE_CHAIN_ID"
-    | "NEXT_PUBLIC_MARKETPLACE_DEFAULT_PROJECT"
     | "NEXT_PUBLIC_MARKETPLACE_COLLECTIONS"
-    | "NEXT_PUBLIC_MARKETPLACE_RUNTIME"
-    | "NEXT_PUBLIC_MARKETPLACE_ENABLE_DEFERRED_METADATA",
+    | "NEXT_PUBLIC_MARKETPLACE_API_BASE_URL"
+    | "NEXT_PUBLIC_MARKETPLACE_READ_ROLLOUT"
+    | "MARKETPLACE_READ_ROLLOUT",
     string | undefined
   >
 >;
 
-function resolveChainId(
-  value: string | undefined,
-  warnings: string[],
-): { chainLabel: MarketplaceRuntimeConfig["chainLabel"]; chainId: string } {
-  if (!value) {
-    return {
-      chainLabel: DEFAULT_CHAIN_ALIAS,
-      chainId: CHAIN_IDS[DEFAULT_CHAIN_ALIAS],
-    };
-  }
+type GeneratedChain = (typeof generatedRegistry.chains)[MarketplaceChainAlias];
 
-  const normalized = value.trim();
-  if (normalized in CHAIN_IDS) {
-    const alias = normalized as keyof typeof CHAIN_IDS;
-    return { chainLabel: alias, chainId: CHAIN_IDS[alias] };
-  }
-
-  if (normalized.startsWith("0x")) {
-    return { chainLabel: "custom", chainId: normalized };
-  }
-
-  warnings.push(
-    `NEXT_PUBLIC_MARKETPLACE_CHAIN_ID "${value}" is invalid. Falling back to ${DEFAULT_CHAIN_ALIAS}.`,
+function resolveChain(value: string | undefined): {
+  chainLabel: MarketplaceChainAlias;
+  chain: GeneratedChain;
+} {
+  const normalized = value?.trim() || DEFAULT_CHAIN_ALIAS;
+  const alias = CHAIN_ALIASES.find(
+    (candidate) =>
+      candidate === normalized ||
+      generatedRegistry.chains[candidate].chainId.toLowerCase() === normalized.toLowerCase(),
   );
-
-  return {
-    chainLabel: DEFAULT_CHAIN_ALIAS,
-    chainId: CHAIN_IDS[DEFAULT_CHAIN_ALIAS],
-  };
+  if (!alias) {
+    throw new Error(
+      `NEXT_PUBLIC_MARKETPLACE_CHAIN_ID must be SN_MAIN, SN_SEPOLIA, or a matching checked-in chain felt; received ${JSON.stringify(value)}.`,
+    );
+  }
+  return { chainLabel: alias, chain: generatedRegistry.chains[alias] };
 }
 
-function parseCollections(value: string | undefined, warnings: string[]) {
-  if (!value) {
-    return [];
+function parseCollections(value: string | undefined, chain: GeneratedChain, warnings: string[]) {
+  if (value === undefined) {
+    return chain.collections.map((collection) => ({
+      address: collection.address,
+      name: collection.name,
+      projectId: undefined,
+    }));
   }
 
   return value
@@ -78,112 +85,80 @@ function parseCollections(value: string | undefined, warnings: string[]) {
     .map((entry) => entry.trim())
     .filter(Boolean)
     .flatMap((entry) => {
-      const [address, name, projectId] = entry.split("|").map((v) => v?.trim());
-
+      const [address, name] = entry.split("|").map((part) => part?.trim());
       if (!address || !name) {
         warnings.push(
-          `Skipping malformed collection entry "${entry}". Expected address|name|projectId.`,
+          `Skipping malformed collection entry ${JSON.stringify(entry)}. Expected address|name|projectId.`,
         );
         return [];
       }
-
       return [{
         address,
         name: name === "Beasts V2.1" ? "Beasts" : name,
-        projectId: projectId || undefined,
+        projectId: undefined,
       }];
     });
 }
 
-function parseRuntimeMode(
-  value: string | undefined,
-  warnings: string[],
-): MarketplaceClientConfig["runtime"] {
-  if (!value) {
-    return DEFAULT_RUNTIME_MODE;
+function parseApiBaseUrl(value: string | undefined): string {
+  const raw = value?.trim() || DEFAULT_API_BASE_URL;
+  let parsed: URL;
+  try {
+    parsed = new URL(raw);
+  } catch {
+    throw new Error("NEXT_PUBLIC_MARKETPLACE_API_BASE_URL must be an absolute HTTP(S) URL.");
   }
-
-  const normalized = value.trim().toLowerCase();
-  if (normalized === "edge" || normalized === "dojo") {
-    return normalized;
+  if (parsed.protocol !== "http:" && parsed.protocol !== "https:") {
+    throw new Error("NEXT_PUBLIC_MARKETPLACE_API_BASE_URL must use HTTP or HTTPS.");
   }
-
-  warnings.push(
-    `NEXT_PUBLIC_MARKETPLACE_RUNTIME "${value}" is invalid. Falling back to ${DEFAULT_RUNTIME_MODE}.`,
-  );
-  return DEFAULT_RUNTIME_MODE;
-}
-
-function parseBooleanFlag(value: string | undefined, fallback: boolean) {
-  if (!value) {
-    return fallback;
-  }
-
-  const normalized = value.trim().toLowerCase();
-  if (normalized === "1" || normalized === "true" || normalized === "yes") {
-    return true;
-  }
-  if (normalized === "0" || normalized === "false" || normalized === "no") {
-    return false;
-  }
-
-  return fallback;
+  return parsed.toString().replace(/\/$/, "");
 }
 
 export function getMarketplaceRuntimeConfigFromEnv(
   env: MarketplaceEnv,
 ): MarketplaceRuntimeConfig {
   const warnings: string[] = [];
-  const { chainLabel, chainId } = resolveChainId(
-    env.NEXT_PUBLIC_MARKETPLACE_CHAIN_ID,
-    warnings,
+  const { chainLabel, chain } = resolveChain(env.NEXT_PUBLIC_MARKETPLACE_CHAIN_ID);
+  const readRollout = parseMarketplaceReadRollout(
+    env.MARKETPLACE_READ_ROLLOUT ?? env.NEXT_PUBLIC_MARKETPLACE_READ_ROLLOUT,
   );
-  const collections = parseCollections(
-    env.NEXT_PUBLIC_MARKETPLACE_COLLECTIONS,
-    warnings,
-  );
-  const defaultProject = env.NEXT_PUBLIC_MARKETPLACE_DEFAULT_PROJECT?.trim() || undefined;
-  const runtime = parseRuntimeMode(env.NEXT_PUBLIC_MARKETPLACE_RUNTIME, warnings);
-  const featureFlags: MarketplaceFeatureFlags = {
-    enableDeferredMetadataHydration: parseBooleanFlag(
-      env.NEXT_PUBLIC_MARKETPLACE_ENABLE_DEFERRED_METADATA,
-      false,
-    ),
-  };
-
   return {
     chainLabel,
-    featureFlags,
-    collections,
+    chainId: chain.chainId,
+    apiBaseUrl: parseApiBaseUrl(env.NEXT_PUBLIC_MARKETPLACE_API_BASE_URL),
+    readRollout,
+    worldAddress: chain.world.address,
+    marketplaceAddress: chain.marketplace.address,
+    schemaVersion: generatedRegistry.schemaVersion,
+    currencies: chain.currencies,
+    collections: parseCollections(
+      env.NEXT_PUBLIC_MARKETPLACE_COLLECTIONS,
+      chain,
+      warnings,
+    ),
     warnings,
-    sdkConfig: {
-      chainId: chainId as MarketplaceClientConfig["chainId"],
-      defaultProject,
-      runtime,
-    },
+    isReadSurfaceEnabled: (surface) => isOwnedReadEnabled(readRollout, surface),
   };
 }
 
-let _cachedConfig: MarketplaceRuntimeConfig | null = null;
+let cachedConfig: MarketplaceRuntimeConfig | null = null;
 
 export function getMarketplaceRuntimeConfig(): MarketplaceRuntimeConfig {
-  if (!_cachedConfig) {
-    _cachedConfig = getMarketplaceRuntimeConfigFromEnv({
+  if (!cachedConfig) {
+    cachedConfig = getMarketplaceRuntimeConfigFromEnv({
       NEXT_PUBLIC_MARKETPLACE_CHAIN_ID: process.env.NEXT_PUBLIC_MARKETPLACE_CHAIN_ID,
       NEXT_PUBLIC_MARKETPLACE_COLLECTIONS:
         process.env.NEXT_PUBLIC_MARKETPLACE_COLLECTIONS,
-      NEXT_PUBLIC_MARKETPLACE_DEFAULT_PROJECT:
-        process.env.NEXT_PUBLIC_MARKETPLACE_DEFAULT_PROJECT,
-      NEXT_PUBLIC_MARKETPLACE_RUNTIME:
-        process.env.NEXT_PUBLIC_MARKETPLACE_RUNTIME,
-      NEXT_PUBLIC_MARKETPLACE_ENABLE_DEFERRED_METADATA:
-        process.env.NEXT_PUBLIC_MARKETPLACE_ENABLE_DEFERRED_METADATA,
+      NEXT_PUBLIC_MARKETPLACE_API_BASE_URL:
+        process.env.NEXT_PUBLIC_MARKETPLACE_API_BASE_URL,
+      NEXT_PUBLIC_MARKETPLACE_READ_ROLLOUT:
+        process.env.NEXT_PUBLIC_MARKETPLACE_READ_ROLLOUT,
     });
   }
-  return _cachedConfig;
+  return cachedConfig;
 }
 
-/** @internal — exposed for test teardown only */
+/** @internal — exposed for tests only. */
 export function _resetConfigCache() {
-  _cachedConfig = null;
+  cachedConfig = null;
 }

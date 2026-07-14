@@ -1,10 +1,10 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
-import type { NormalizedToken } from "@cartridge/arcade/marketplace";
+import type { NormalizedToken } from "@/lib/marketplace/types";
 import {
-  useCollectionListingsQuery,
   useCollectionQuery,
+  useCollectionTokensQuery,
   useTraitNamesSummaryQuery,
   useTraitValuesQuery,
 } from "@/lib/marketplace/hooks";
@@ -15,10 +15,19 @@ import {
 import { TokenSymbol } from "@/components/ui/token-symbol";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import {
   type SeedCollection,
   getMarketplaceRuntimeConfig,
 } from "@/lib/marketplace/config";
 import {
+  decodeRangeFilterValue,
+  exactAttributeFiltersFromActiveFilters,
   flattenExactActiveFilters,
   type ActiveFilters,
   type TraitSelection,
@@ -45,9 +54,12 @@ import {
   cheapestListingByTokenId,
 } from "@/features/cart/listing-utils";
 import { CART_MAX_ITEMS, useCartStore } from "@/features/cart/store/cart-store";
-import { type CollectionSortMode } from "@/features/collections/collection-query-params";
+import { marketplaceOrderIdentityKey } from "@/lib/marketplace/order-identity";
+import {
+  type CollectionSortMode,
+  type MarketplaceCurrencySymbol,
+} from "@/features/collections/collection-query-params";
 import { SweepBar } from "@/features/collections/sweep-bar";
-import { COLLECTION_LISTING_SAMPLE_LIMIT } from "@/lib/marketplace/query-limits";
 
 const EMPTY_ACTIVE_FILTERS: ActiveFilters = {};
 const EMPTY_VISIBLE_TOKENS: NormalizedToken[] = [];
@@ -58,8 +70,11 @@ type CollectionRouteViewProps = {
   collections?: SeedCollection[];
   activeFilters?: ActiveFilters;
   sortMode?: CollectionSortMode;
+  currency?: MarketplaceCurrencySymbol;
   onActiveFiltersChange?: (filters: ActiveFilters) => void;
   onSortModeChange?: (sortMode: CollectionSortMode) => void;
+  onCurrencyChange?: (currency: MarketplaceCurrencySymbol) => void;
+  onCursorChange?: (cursor: string | null) => void;
 };
 
 const DEFAULT_SORT_OPTIONS: CollectionSortOption[] = [
@@ -96,32 +111,6 @@ function collectionHeaderImage(metadata: unknown) {
   }
 
   return null;
-}
-
-function floorFromListings(
-  cheapestListings: Map<string, { price: string; currency: string }>,
-): { price: string; currency: string } | null {
-  let min: bigint | null = null;
-  let currency = "";
-
-  for (const listing of cheapestListings.values()) {
-    try {
-      const val = BigInt(listing.price);
-      if (min === null || val < min) {
-        min = val;
-        currency = listing.currency;
-      }
-    } catch {
-      // skip
-    }
-  }
-
-  if (min === null) {
-    return null;
-  }
-
-  const price = formatPriceForDisplay(min.toString());
-  return price ? { price, currency } : null;
 }
 
 function compareBigIntStrings(left: string, right: string) {
@@ -166,23 +155,32 @@ function sortButtonLabel(
 
 export function CollectionRouteView({
   address,
+  cursor,
   collections,
   activeFilters,
   sortMode = "recent",
+  currency = "STRK",
   onActiveFiltersChange,
   onSortModeChange,
+  onCurrencyChange,
+  onCursorChange,
 }: CollectionRouteViewProps) {
   const cartItems = useCartStore((state) => state.items);
-  const cartOrderIds = useMemo(
-    () => new Set(cartItems.map((item) => item.orderId)),
+  const cartOrderKeys = useMemo(
+    () => new Set(cartItems.map(marketplaceOrderIdentityKey)),
     [cartItems],
   );
   const addCandidates = useCartStore((state) => state.addCandidates);
   const setCartOpen = useCartStore((state) => state.setOpen);
+  const runtimeConfig = getMarketplaceRuntimeConfig();
   const runtimeCollections = useMemo(
-    () => collections ?? getMarketplaceRuntimeConfig().collections,
-    [collections],
+    () => collections ?? runtimeConfig.collections,
+    [collections, runtimeConfig.collections],
   );
+  const currencyOptions = runtimeConfig.currencies;
+  const currencyAddress = currencyOptions.find(
+    (candidate) => candidate.symbol === currency,
+  )?.address ?? currencyOptions.find((candidate) => candidate.symbol === "STRK")?.address;
   const resolvedActiveFilters = activeFilters ?? EMPTY_ACTIVE_FILTERS;
   const selectedCollection = useMemo(
     () =>
@@ -192,7 +190,7 @@ export function CollectionRouteView({
     [address, runtimeCollections],
   );
   const projectId = selectedCollection?.projectId;
-  const sweepScopeKey = `${address}-${projectId ?? "default"}`;
+  const sweepScopeKey = `${address}-${currency}`;
   const [sweepCount, setSweepCount] = useState(0);
   const [visibleTokensByScope, setVisibleTokensByScope] = useState<
     Record<string, NormalizedToken[]>
@@ -215,15 +213,47 @@ export function CollectionRouteView({
     projectId,
   });
 
-  const listingQuery = useCollectionListingsQuery({
-    collection: address,
-    projectId,
-    limit: COLLECTION_LISTING_SAMPLE_LIMIT,
-    verifyOwnership: false,
+  const sweepAttributeFilters = useMemo(
+    () => exactAttributeFiltersFromActiveFilters(resolvedActiveFilters),
+    [resolvedActiveFilters],
+  );
+  const sweepRangeFilters = useMemo(
+    () => Object.entries(resolvedActiveFilters).flatMap(([name, values]) =>
+      [...values].flatMap((value) => {
+        const range = decodeRangeFilterValue(value);
+        return range ? [{ name, ...range }] : [];
+      }),
+    ),
+    [resolvedActiveFilters],
+  );
+  const sweepTokenQuery = useCollectionTokensQuery({
+    address,
+    project: projectId,
+    limit: CART_MAX_ITEMS,
+    currency: currencyAddress,
+    sort: "price-asc",
+    attributeFilters: sweepAttributeFilters,
+    rangeFilters: sweepRangeFilters,
   });
 
-  const cheapestListings = cheapestListingByTokenId(listingQuery.data);
-  const floor = floorFromListings(cheapestListings);
+  const sweepTokens = sweepTokenQuery.data?.page?.tokens ?? EMPTY_VISIBLE_TOKENS;
+  const cheapestListings = cheapestListingByTokenId(
+    sweepTokens.flatMap((token) => token.best_listing ? [token.best_listing] : []),
+  );
+  const floorQuote = collection.data?.floorByCurrency?.find((quote) => {
+    if (!currencyAddress) return false;
+    try {
+      return BigInt(quote.currency) === BigInt(currencyAddress);
+    } catch {
+      return quote.currency.toLowerCase() === currencyAddress.toLowerCase();
+    }
+  });
+  const floor = floorQuote
+    ? {
+        price: formatPriceForDisplay(floorQuote.unitPriceAtomic),
+        currency: floorQuote.currency,
+      }
+    : null;
   const seedName = selectedCollection?.name?.trim() || null;
   const displayName = seedName
     ?? (collection.isSuccess && collection.data
@@ -287,39 +317,28 @@ export function CollectionRouteView({
   }, [activeTab]);
 
   const visibleTokens = visibleTokensByScope[sweepScopeKey] ?? EMPTY_VISIBLE_TOKENS;
-  const hasVisibleTokenSnapshot = Object.prototype.hasOwnProperty.call(
-    visibleTokensByScope,
-    sweepScopeKey,
-  );
-  const visibleListedTokenCount = useMemo(() => {
-    const visibleTokenIds = new Set(visibleTokens.map((token) => displayTokenId(token)));
-    let count = 0;
-
-    for (const listedTokenId of cheapestListings.keys()) {
-      if (visibleTokenIds.has(listedTokenId)) {
-        count += 1;
-      }
+  const listingCountLabel = collection.data?.listingCount ?? "0";
+  const hasListings = (() => {
+    try {
+      return BigInt(listingCountLabel) > BigInt(0);
+    } catch {
+      return false;
     }
-
-    return count;
-  }, [cheapestListings, visibleTokens]);
-  const listingCount = hasVisibleTokenSnapshot
-    ? visibleListedTokenCount
-    : cheapestListings.size;
-  const listingCountLabel =
-    listingCount >= COLLECTION_LISTING_SAMPLE_LIMIT
-      ? `${COLLECTION_LISTING_SAMPLE_LIMIT}+`
-      : String(listingCount);
+  })();
 
   const sweepCandidates = useMemo(() => {
-    if (!visibleTokens.length) return [];
+    if (!sweepTokens.length) return [];
 
     const tokenByDisplayId = new Map(
-      visibleTokens.map((token) => [displayTokenId(token), token] as const),
+      sweepTokens.map((token) => [displayTokenId(token), token] as const),
     );
 
     const candidates = Array.from(cheapestListings.values())
-      .filter((listing) => !cartOrderIds.has(listing.orderId))
+      .filter((listing) => !cartOrderKeys.has(marketplaceOrderIdentityKey({
+        orderId: listing.orderId,
+        collection: address,
+        tokenId: listing.tokenId,
+      })))
       .map((listing) => {
         const token = tokenByDisplayId.get(listing.tokenId);
         if (!token) return null;
@@ -329,15 +348,19 @@ export function CollectionRouteView({
       .sort((left, right) => compareBigIntStrings(left.price, right.price));
 
     return candidates.slice(0, CART_MAX_ITEMS);
-  }, [address, cartOrderIds, cheapestListings, projectId, visibleTokens]);
+  }, [address, cartOrderKeys, cheapestListings, projectId, sweepTokens]);
 
   // Build the preview set directly from cheapestListings (same key format
   // the grid uses for lookup) so highlighting doesn't depend on listedTokensQuery.
   const cheapestByPrice = useMemo(() => {
     return Array.from(cheapestListings.entries())
-      .filter(([, listing]) => !cartOrderIds.has(listing.orderId))
+      .filter(([, listing]) => !cartOrderKeys.has(marketplaceOrderIdentityKey({
+        orderId: listing.orderId,
+        collection: address,
+        tokenId: listing.tokenId,
+      })))
       .sort(([, a], [, b]) => compareBigIntStrings(a.price, b.price));
-  }, [cartOrderIds, cheapestListings]);
+  }, [address, cartOrderKeys, cheapestListings]);
 
   const sweepMaxCount = Math.min(
     cheapestByPrice.length,
@@ -399,6 +422,7 @@ export function CollectionRouteView({
 
   const sortControls = useMemo<ReactNode>(
     () => (
+      <>
       <div
         className="flex flex-wrap items-center gap-2"
         data-testid="collection-sort-controls"
@@ -423,8 +447,27 @@ export function CollectionRouteView({
           );
         })}
       </div>
+
+      <div className="flex justify-end">
+        <Select
+          value={currency}
+          onValueChange={(value) => onCurrencyChange?.(value as MarketplaceCurrencySymbol)}
+        >
+          <SelectTrigger aria-label="Marketplace currency" className="w-36">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            {currencyOptions.map((option) => (
+              <SelectItem key={option.address} value={option.symbol}>
+                {option.symbol}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      </div>
+      </>
     ),
-    [handleSortOptionClick, sortMode, sortOptions],
+    [currency, currencyOptions, handleSortOptionClick, onCurrencyChange, sortMode, sortOptions],
   );
 
   return (
@@ -459,7 +502,7 @@ export function CollectionRouteView({
 
           {/* Stats */}
           <div className="flex flex-wrap items-center gap-2 text-sm">
-            {listingCount > 0 && (
+            {hasListings && (
               <span className="realm-stat-pill px-3 py-1.5 text-[color:var(--realm-text-muted)]">
                 <span className="font-semibold text-[color:var(--realm-title)]">{listingCountLabel}</span>
                 {" "}listed
@@ -518,6 +561,9 @@ export function CollectionRouteView({
                   key={sweepScopeKey}
                   activeFilters={resolvedActiveFilters}
                   address={address}
+                  currency={currencyAddress}
+                  initialCursor={cursor}
+                  onCursorChange={onCursorChange}
                   onTokensChange={handleTokensChange}
                   projectId={projectId}
                   sortControls={sortControls}
@@ -528,7 +574,11 @@ export function CollectionRouteView({
             </TabsContent>
             <TabsContent value="market-activity">
               <div ref={activeTab === "market-activity" ? tabContentRef : undefined} key={`tab-market-${activeTab}`}>
-                <CollectionMarketPanel address={address} projectId={projectId} />
+                <CollectionMarketPanel
+                  address={address}
+                  currency={currencyAddress}
+                  projectId={projectId}
+                />
               </div>
             </TabsContent>
           </Tabs>

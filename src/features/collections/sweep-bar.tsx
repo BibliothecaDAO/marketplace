@@ -5,6 +5,7 @@ import { Slider } from "@/components/ui/slider"
 import { TokenSymbol } from "@/components/ui/token-symbol"
 import type { CartItem } from "@/features/cart/store/cart-store"
 import { formatPriceForDisplay } from "@/lib/marketplace/token-display"
+import { marketplaceOrderIdentityKey } from "@/lib/marketplace/order-identity"
 
 const MAX_VISIBLE_THUMBS = 8
 
@@ -41,7 +42,7 @@ function SweepThumbnails({ items }: { items: CartItem[] }) {
       <div className="flex">
         {visible.map((item, index) => (
           <div
-            key={item.orderId}
+            key={marketplaceOrderIdentityKey(item)}
             className="relative h-11 w-11 shrink-0 overflow-hidden rounded-[6px] border border-[color:var(--realm-border-etched)] bg-muted shadow-[0_2px_8px_rgba(0,0,0,0.4)] animate-in fade-in slide-in-from-bottom-2 duration-200 fill-mode-backwards hover:z-20 hover:shadow-[0_4px_16px_rgba(0,0,0,0.5)] transition-[box-shadow]"
             style={{
               marginLeft: index === 0 ? 0 : -8,

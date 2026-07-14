@@ -2,6 +2,10 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { type CartItem, useCartStore } from "@/features/cart/store/cart-store";
+import {
+  marketplaceOrderIdentityKey,
+  type MarketplaceOrderIdentity,
+} from "@/lib/marketplace/order-identity";
 
 const ADDED_FEEDBACK_DURATION_MS = 1200;
 type AddToCartOptions = {
@@ -14,25 +18,26 @@ export function useAddToCartFeedback() {
   const [recentlyAdded, setRecentlyAdded] = useState<Record<string, boolean>>({});
   const timeoutIds = useRef<Record<string, ReturnType<typeof setTimeout>>>({});
 
-  const markAdded = useCallback((orderId: string) => {
-    setRecentlyAdded((current) => ({ ...current, [orderId]: true }));
+  const markAdded = useCallback((identity: MarketplaceOrderIdentity) => {
+    const identityKey = marketplaceOrderIdentityKey(identity);
+    setRecentlyAdded((current) => ({ ...current, [identityKey]: true }));
 
-    const existingTimeoutId = timeoutIds.current[orderId];
+    const existingTimeoutId = timeoutIds.current[identityKey];
     if (existingTimeoutId) {
       clearTimeout(existingTimeoutId);
     }
 
-    timeoutIds.current[orderId] = setTimeout(() => {
+    timeoutIds.current[identityKey] = setTimeout(() => {
       setRecentlyAdded((current) => {
-        if (!(orderId in current)) {
+        if (!(identityKey in current)) {
           return current;
         }
 
         const next = { ...current };
-        delete next[orderId];
+        delete next[identityKey];
         return next;
       });
-      delete timeoutIds.current[orderId];
+      delete timeoutIds.current[identityKey];
     }, ADDED_FEEDBACK_DURATION_MS);
   }, []);
 
@@ -54,7 +59,7 @@ export function useAddToCartFeedback() {
         if (openCart) {
           setOpen(true);
         }
-        markAdded(item.orderId);
+        markAdded(item);
       } else {
         setOpen(true);
       }
@@ -64,8 +69,8 @@ export function useAddToCartFeedback() {
   );
 
   const isRecentlyAdded = useCallback(
-    (orderId: string | undefined) =>
-      orderId ? recentlyAdded[orderId] === true : false,
+    (identity: MarketplaceOrderIdentity | null | undefined) =>
+      identity ? recentlyAdded[marketplaceOrderIdentityKey(identity)] === true : false,
     [recentlyAdded],
   );
 

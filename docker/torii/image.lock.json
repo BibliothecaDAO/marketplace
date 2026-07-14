@@ -1,0 +1,16 @@
+{
+  "source": {
+    "repository": "https://github.com/dojoengine/torii.git",
+    "commit": "fe3ed0ffa1b0ae2f546d13ff390caf404943df02",
+    "version": "1.8.16"
+  },
+  "patches": {
+    "0001-marketplace-hardening.patch": "sha256:107fac3616ddf0e8c330782292242a132e4d932d8f4d600aa29f5276a230cb53",
+    "0002-clippy-cleanup.patch": "sha256:9125c152f5dd11de100c072dc80d2b08135ac3c983c58031065e6680b89dae5c"
+  },
+  "baseImages": {
+    "build": "docker.io/library/rust:1.90.0-bookworm@sha256:3f6e6f8d8725a65a2db964bb828850f888d430c68784d661f753144e5d787207",
+    "runtime": "docker.io/library/debian:bookworm-slim@sha256:1def178129dfb5f24db43afbf2fcac04530012e3264ba4ff81c71184e17a9ee4"
+  },
+  "publishedImageDigest": null
+}
