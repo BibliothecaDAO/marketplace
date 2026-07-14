@@ -1,13 +1,12 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import type { NormalizedToken } from "@cartridge/arcade/marketplace";
+import type { NormalizedToken } from "@/lib/marketplace/types";
 import {
-  useMarketplaceClient,
-  useMarketplaceCollection,
-  useMarketplaceCollectionListings,
-  useMarketplaceCollectionTokens,
-} from "@cartridge/arcade/marketplace/react";
+  useCollectionListingsQuery,
+  useCollectionQuery,
+  useCollectionTokensQuery,
+} from "@/lib/marketplace/hooks";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -84,16 +83,14 @@ export function MarketplaceShell() {
   const isCollectionSelected = Boolean(selectedCollection?.address);
   const collectionAddress = selectedCollection?.address ?? "0x0";
   const projectId = selectedCollection?.projectId;
-  const client = useMarketplaceClient();
-  const collection = useMarketplaceCollection(
+  const collection = useCollectionQuery(
     {
       address: collectionAddress,
       fetchImages: true,
       projectId,
     },
-    { enabled: isCollectionSelected },
   );
-  const tokens = useMarketplaceCollectionTokens(
+  const tokens = useCollectionTokensQuery(
     {
       address: collectionAddress,
       fetchImages: true,
@@ -102,14 +99,18 @@ export function MarketplaceShell() {
     },
     { enabled: isCollectionSelected },
   );
-  const listings = useMarketplaceCollectionListings(
+  const listings = useCollectionListingsQuery(
     {
       collection: collectionAddress,
       limit: 24,
       projectId,
     },
-    { enabled: isCollectionSelected },
   );
+  const readStatus = collection.isError || tokens.isError || listings.isError
+    ? "error"
+    : collection.isSuccess && tokens.isSuccess && listings.isSuccess
+      ? "success"
+      : "pending";
 
   const tokenRows = tokens.data?.page?.tokens ?? [];
   const filteredTokens = tokenRows.filter((token) =>
@@ -126,12 +127,12 @@ export function MarketplaceShell() {
                 Biblio Marketplace
               </p>
               <CardTitle className="text-2xl leading-tight sm:text-3xl">
-                Shadcn + Tailwind starter powered by Arcade marketplace SDK
+                Marketplace reads served by the owned indexer API
               </CardTitle>
             </div>
             <div className="flex flex-wrap gap-2">
               <Badge variant="secondary">Chain: {runtimeConfig.chainLabel}</Badge>
-              <Badge variant={queryTone(client.status)}>Client: {client.status}</Badge>
+              <Badge variant={queryTone(readStatus)}>Read API: {readStatus}</Badge>
               <Badge variant="outline">
                 Collections: {runtimeConfig.collections.length}
               </Badge>

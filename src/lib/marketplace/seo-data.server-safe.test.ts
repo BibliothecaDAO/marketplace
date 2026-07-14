@@ -1,34 +1,24 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 
-describe("marketplace seo data server-safe imports", () => {
-  beforeEach(() => {
+describe("marketplace SEO server-safe imports", () => {
+  it("does not import the browser-only Arcade read SDK", async () => {
     vi.resetModules();
-  });
-
-  it("returns fallback collection metadata when sdk import fails", async () => {
+    vi.doMock("@cartridge/arcade/marketplace", () => {
+      throw new TypeError("browser-only SDK imported");
+    });
     vi.doMock("@/lib/marketplace/config", () => ({
       getMarketplaceRuntimeConfig: () => ({
-        chainLabel: "SN_SEPOLIA",
-        warnings: [],
-        sdkConfig: {
-          chainId: "0x534e5f5345504f4c4941",
-        },
-        collections: [{ address: "0xabc", name: "Genesis", projectId: "project-a" }],
+        collections: [{ address: "0xabc", name: "Genesis" }],
       }),
     }));
-
-    vi.doMock("@cartridge/arcade/marketplace", () => {
-      throw new TypeError("(0 , g.createContext) is not a function");
-    });
-
-    const { getCollectionSeoData } = await import("@/lib/marketplace/seo-data");
-    const result = await getCollectionSeoData("0xabc");
-
-    expect(result).toEqual({
-      exists: false,
-      name: "Genesis",
-      description: null,
-      image: null,
+    vi.doMock("@/lib/marketplace/api-client", () => ({
+      getMarketplaceApiClient: () => ({
+        collection: async () => { throw new Error("offline"); },
+      }),
+    }));
+    const { getCollectionSeoData } = await import("./seo-data");
+    await expect(getCollectionSeoData("0xabc")).resolves.toEqual({
+      exists: false, name: "Genesis", description: null, image: null,
     });
   });
 });

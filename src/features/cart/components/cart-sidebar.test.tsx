@@ -14,6 +14,9 @@ const {
   mockGetValidity,
   mockGetFees,
   mockGetRoyaltyFee,
+  mockLookupOrders,
+  mockBook,
+  mockIndexerStatus,
   mockManifestWorldAddress,
 } = vi.hoisted(() => ({
   mockUseAccount: vi.fn(),
@@ -25,6 +28,9 @@ const {
   mockGetValidity: vi.fn(),
   mockGetFees: vi.fn(),
   mockGetRoyaltyFee: vi.fn(),
+  mockLookupOrders: vi.fn(),
+  mockBook: vi.fn(),
+  mockIndexerStatus: vi.fn(),
   mockManifestWorldAddress: { current: null as string | null },
 }));
 
@@ -33,7 +39,7 @@ vi.mock("@starknet-react/core", () => ({
   useBalance: mockUseBalance,
 }));
 
-vi.mock("@cartridge/arcade/marketplace/react", () => ({
+vi.mock("@/lib/marketplace/read-client", () => ({
   useMarketplaceClient: mockUseMarketplaceClient,
 }));
 
@@ -58,9 +64,16 @@ vi.mock("@cartridge/arcade", () => ({
 vi.mock("@/lib/marketplace/config", () => ({
   getMarketplaceRuntimeConfig: () => ({
     chainLabel: "SN_SEPOLIA",
-    sdkConfig: { chainId: "0x534e5f5345504f4c4941" },
+    chainId: "0x534e5f5345504f4c4941",
+    apiBaseUrl: "http://marketplace.test",
+    readRollout: "checkout",
+    worldAddress: "0x123",
+    marketplaceAddress: "0x456",
+    schemaVersion: "1.0.0",
+    currencies: [],
     warnings: [],
     collections: [],
+    isReadSurfaceEnabled: () => true,
   }),
 }));
 
@@ -89,6 +102,9 @@ describe("cart sidebar", () => {
     mockGetValidity.mockReset();
     mockGetFees.mockReset();
     mockGetRoyaltyFee.mockReset();
+    mockLookupOrders.mockReset();
+    mockBook.mockReset();
+    mockIndexerStatus.mockReset();
     mockUseAccount.mockReset();
     mockUseBalance.mockReset();
     mockUseMarketplaceClient.mockReset();
@@ -107,6 +123,9 @@ describe("cart sidebar", () => {
         listCollectionListings: mockListCollectionListings,
         getFees: mockGetFees,
         getRoyaltyFee: mockGetRoyaltyFee,
+        lookupOrders: mockLookupOrders,
+        book: mockBook,
+        indexerStatus: mockIndexerStatus,
       },
       status: "ready",
       error: null,
@@ -114,6 +133,118 @@ describe("cart sidebar", () => {
     });
     mockGetFees.mockResolvedValue(null);
     mockGetRoyaltyFee.mockResolvedValue(null);
+    mockBook.mockResolvedValue({
+      data: {
+        paused: false,
+        feeNumerator: "500",
+        feeDenominator: "10000",
+        feeReceiver: "0x789",
+        updatedAtBlock: 100,
+      },
+      meta: {
+        schemaVersion: "1.0.0",
+        chain: "SN_SEPOLIA",
+        chainId: "0x534e5f5345504f4c4941",
+        worldAddress: "0x123",
+        marketplaceAddress: "0x456",
+        indexedBlock: 100,
+        indexedBlockHash: "0x999",
+        chainHead: 101,
+        lagBlocks: 1,
+        finality: "accepted_l2",
+        observedAt: "2026-07-14T00:00:00.000Z",
+      },
+    });
+    mockIndexerStatus.mockResolvedValue({
+      data: {
+        indexedBlock: 100,
+        indexedBlockHash: "0x999",
+        chainHead: 101,
+        lagBlocks: 1,
+        finality: "accepted_l2",
+        syncing: false,
+        safeForCheckout: true,
+        metadataFailures: 0,
+        toriiVersion: "1.8.16-owned.1",
+        apiVersion: "0.1.0",
+      },
+      meta: {
+        schemaVersion: "1.0.0",
+        chain: "SN_SEPOLIA",
+        chainId: "0x534e5f5345504f4c4941",
+        worldAddress: "0x123",
+        marketplaceAddress: "0x456",
+        indexedBlock: 100,
+        indexedBlockHash: "0x999",
+        chainHead: 101,
+        lagBlocks: 1,
+        finality: "accepted_l2",
+        observedAt: "2026-07-14T00:00:00.000Z",
+      },
+    });
+    mockListCollectionListings.mockImplementation(async (options: { tokenId?: string }) => {
+      const item = useCartStore.getState().items.find((entry) => entry.tokenId === options.tokenId);
+      return item
+        ? [{
+            id: Number(item.orderId),
+            tokenId: Number(item.tokenId),
+            price: item.price,
+            currency: item.currency,
+            quantity: item.quantity,
+            owner: "0xseller",
+            expiration: "4102444800",
+            status: { value: "Placed" },
+          }]
+        : [];
+    });
+    mockLookupOrders.mockImplementation(async (keys: Array<{ id: string; collection: string; tokenId: string }>) => {
+      const orders = await Promise.all(keys.map(async (key) => {
+        const listings = await mockListCollectionListings({
+          collection: key.collection,
+          tokenId: key.tokenId,
+          limit: 100,
+          verifyOwnership: true,
+        });
+        const listing = listings?.find((candidate: { id?: number | string }) => String(candidate.id) === key.id);
+        return {
+          key,
+          order: listing ? {
+            id: String(listing.id),
+            collection: key.collection,
+            tokenId: BigInt(key.tokenId).toString(),
+            category: "sell",
+            categoryRaw: "1",
+            status: String(listing.status?.value ?? "Placed").toLowerCase(),
+            statusRaw: "1",
+            owner: listing.owner ?? "0xseller",
+            currency: listing.currency,
+            unitPriceAtomic: String(listing.price),
+            originalQuantity: String(listing.quantity),
+            remainingQuantity: String(listing.quantity),
+            expiration: String(listing.expiration ?? "4102444800"),
+            royaltyTerms: { enabled: true, receiver: null, amountAtomic: null, source: "order" },
+            created: { block: 90, transactionHash: "0x111", transactionIndex: 0, eventIndex: 0, caller: "0xseller" },
+            updated: { block: 90, transactionHash: "0x111", transactionIndex: 0, eventIndex: 0, caller: "0xseller" },
+          } : null,
+        };
+      }));
+      return {
+        data: { orders },
+        meta: {
+          schemaVersion: "1.0.0",
+          chain: "SN_SEPOLIA",
+          chainId: "0x534e5f5345504f4c4941",
+          worldAddress: "0x123",
+          marketplaceAddress: "0x456",
+          indexedBlock: 100,
+          indexedBlockHash: "0x999",
+          chainHead: 101,
+          lagBlocks: 1,
+          finality: "accepted_l2",
+          observedAt: "2026-07-14T00:00:00.000Z",
+        },
+      };
+    });
     mockManifestWorldAddress.current = null;
     mockBuildExecuteCalldata.mockImplementation((orderId: string) => ({
       contractName: "Marketplace",
@@ -350,14 +481,15 @@ describe("cart sidebar", () => {
     expect(executeCalls?.[0]).toMatchObject({
       contractAddress: "0xfee",
       entrypoint: "approve",
-      calldata: ["0xmarket", "157", "0"],
+      calldata: ["0x456", "157", "0"],
     });
     expect(executeCalls?.[1]).toMatchObject({
-      contractAddress: "0xmarket",
+      contractAddress: "0x456",
       entrypoint: "execute",
       calldata: ["7001", "0xabc", "1", "0", "1", "0", "1", "1", "500", "0x049fb4281d13e1f5f488540cd051e1507149e99cc2e22635101041ec5e4e4557"],
     });
-    expect(await screen.findByText(/cart is empty/i)).toBeVisible();
+    expect(await screen.findByText(/transaction submitted; waiting for onchain confirmation/i)).toBeVisible();
+    expect(screen.getByText("Token #1")).toBeVisible();
   });
 
   it("checkout_approves_total_wallet_outflow_including_royalty_estimate", async () => {
@@ -400,10 +532,10 @@ describe("cart sidebar", () => {
       contractAddress: "0xfee",
       entrypoint: "approve",
       // price=100 + fee=5 + royalty=5 => approve 110
-      calldata: ["0xmarket", "110", "0"],
+      calldata: ["0x456", "110", "0"],
     });
     expect(txCalls?.[1]).toMatchObject({
-      contractAddress: "0xmarket",
+      contractAddress: "0x456",
       entrypoint: "execute",
     });
   });
@@ -430,14 +562,9 @@ describe("cart sidebar", () => {
     await waitFor(() => {
       expect(mockAccountExecute).not.toHaveBeenCalled();
     });
-    expect(mockListCollectionListings).toHaveBeenCalledWith(
-      expect.objectContaining({
-        collection: "0xabc",
-        tokenId: "1",
-        limit: 100,
-        verifyOwnership: true,
-      }),
-    );
+    expect(mockLookupOrders).toHaveBeenCalledWith([
+      { id: "7001", collection: "0xabc", tokenId: "1" },
+    ]);
     expect(await screen.findByText(/listing is stale or unavailable/i)).toBeVisible();
     expect(screen.getByRole("button", { name: /remove item/i })).toBeVisible();
     expect(screen.getByRole("button", { name: /refresh/i })).toBeVisible();
@@ -478,7 +605,7 @@ describe("cart sidebar", () => {
     await waitFor(() => {
       expect(mockAccountExecute).not.toHaveBeenCalled();
     });
-    expect(await screen.findByText(/listing is stale or unavailable/i)).toBeVisible();
+    expect(await screen.findByText(/listing is not placed/i)).toBeVisible();
   });
 
   it("checkout_blocks_when_listing_owner_matches_connected_wallet", async () => {
@@ -553,7 +680,7 @@ describe("cart sidebar", () => {
     expect(await screen.findByText(/listing is stale or unavailable/i)).toBeVisible();
   });
 
-  it("checkout_can_skip_on_chain_validity_when_strict_precheck_is_disabled", async () => {
+  it("checkout_ignores_legacy_strict_precheck_override_and_fails_closed", async () => {
     const user = userEvent.setup();
     vi.stubEnv("NEXT_PUBLIC_MARKETPLACE_STRICT_ONCHAIN_VALIDATION", "false");
     mockUseAccount.mockReturnValue({
@@ -584,16 +711,15 @@ describe("cart sidebar", () => {
     await user.click(screen.getByRole("button", { name: /complete purchase/i }));
 
     await waitFor(() => {
-      expect(mockAccountExecute).toHaveBeenCalledTimes(1);
+      expect(mockGetValidity).toHaveBeenCalledWith("7001", "0xabc", "1");
     });
-    expect(mockGetValidity).not.toHaveBeenCalled();
-    expect(await screen.findByText(/purchase complete/i)).toBeVisible();
+    expect(mockAccountExecute).not.toHaveBeenCalled();
+    expect(await screen.findByText(/listing is stale or unavailable/i)).toBeVisible();
   });
 
   it("checkout_logs_validation_diagnostics_when_debug_flag_is_enabled", async () => {
     const user = userEvent.setup();
     vi.stubEnv("NEXT_PUBLIC_MARKETPLACE_CHECKOUT_DEBUG", "true");
-    vi.stubEnv("NEXT_PUBLIC_MARKETPLACE_STRICT_ONCHAIN_VALIDATION", "false");
     mockUseAccount.mockReturnValue({
       account: { address: "0xwallet", execute: mockAccountExecute },
       isConnected: true,
@@ -624,7 +750,7 @@ describe("cart sidebar", () => {
       expect(mockAccountExecute).toHaveBeenCalledTimes(1);
     });
     expect(consoleInfoSpy).toHaveBeenCalledWith(
-      expect.stringContaining("[cart-checkout] validate.item.skip_onchain"),
+      expect.stringContaining("[cart-checkout] validate.onchain.response"),
       expect.objectContaining({
         orderId: "7001",
       }),
@@ -637,7 +763,7 @@ describe("cart sidebar", () => {
     );
   });
 
-  it("checkout_bypasses_all_prechecks_when_bypass_flag_is_enabled", async () => {
+  it("checkout_ignores_legacy_bypass_override_and_fails_closed", async () => {
     const user = userEvent.setup();
     vi.stubEnv("NEXT_PUBLIC_MARKETPLACE_BYPASS_CHECKOUT_VALIDATION", "true");
     mockUseAccount.mockReturnValue({
@@ -659,12 +785,11 @@ describe("cart sidebar", () => {
     await user.click(screen.getByRole("button", { name: /complete purchase/i }));
 
     await waitFor(() => {
-      expect(mockAccountExecute).toHaveBeenCalledTimes(1);
+      expect(mockLookupOrders).toHaveBeenCalledTimes(1);
     });
-    expect(mockListCollectionListings).not.toHaveBeenCalled();
+    expect(mockAccountExecute).not.toHaveBeenCalled();
     expect(mockGetValidity).not.toHaveBeenCalled();
-    expect(screen.queryByText(/listing is stale or unavailable/i)).toBeNull();
-    expect(await screen.findByText(/purchase complete/i)).toBeVisible();
+    expect(await screen.findByText(/listing is stale or unavailable/i)).toBeVisible();
   });
 
   it("checkout_keeps_purchase_execute_call_after_single_approval", async () => {
@@ -703,10 +828,10 @@ describe("cart sidebar", () => {
     expect(txCalls?.[0]).toMatchObject({
       contractAddress: "0xfee",
       entrypoint: "approve",
-      calldata: ["0xmarket", "105", "0"],
+      calldata: ["0x456", "105", "0"],
     });
     expect(txCalls?.[1]).toMatchObject({
-      contractAddress: "0xmarket",
+      contractAddress: "0x456",
       entrypoint: "execute",
     });
   });
@@ -747,11 +872,11 @@ describe("cart sidebar", () => {
     expect(txCalls?.[0]).toMatchObject({
       contractAddress: "0xfee",
       entrypoint: "approve",
-      calldata: ["0xmarket", "105", "0"],
+      calldata: ["0x456", "105", "0"],
     });
   });
 
-  it("checkout_always_approves_marketplace_contract_from_manifest", async () => {
+  it("checkout_always_approves_marketplace_contract_from_registry", async () => {
     const user = userEvent.setup();
     mockUseAccount.mockReturnValue({
       account: { address: "0xwallet", execute: mockAccountExecute },
@@ -786,10 +911,10 @@ describe("cart sidebar", () => {
     expect(txCalls?.[0]).toMatchObject({
       contractAddress: "0xfee",
       entrypoint: "approve",
-      calldata: ["0xmarket", "105", "0"],
+      calldata: ["0x456", "105", "0"],
     });
     expect(txCalls?.[1]).toMatchObject({
-      contractAddress: "0xmarket",
+      contractAddress: "0x456",
       entrypoint: "execute",
     });
   });
@@ -830,7 +955,7 @@ describe("cart sidebar", () => {
     });
     const txCalls = mockAccountExecute.mock.calls[0]?.[0];
     expect(txCalls?.[1]).toMatchObject({
-      contractAddress: "0xmarket",
+      contractAddress: "0x456",
       entrypoint: "execute",
       // u256-encoded tokenId/assetId + quantity=0
       calldata: ["7001", "0xabc", "1", "0", "1", "0", "0", "1", "500", "0x049fb4281d13e1f5f488540cd051e1507149e99cc2e22635101041ec5e4e4557"],
@@ -866,14 +991,9 @@ describe("cart sidebar", () => {
     await waitFor(() => {
       expect(screen.queryByRole("button", { name: /refresh/i })).toBeNull();
     });
-    expect(mockListCollectionListings).toHaveBeenCalledWith(
-      expect.objectContaining({
-        collection: "0xabc",
-        tokenId: "1",
-        limit: 100,
-        verifyOwnership: true,
-      }),
-    );
+    expect(mockLookupOrders).toHaveBeenCalledWith([
+      { id: "7001", collection: "0xabc", tokenId: "1" },
+    ]);
   });
 
   it("retry_checkout_succeeds_after_removing_stale_rows", async () => {
@@ -920,6 +1040,6 @@ describe("cart sidebar", () => {
     await waitFor(() => {
       expect(mockAccountExecute).toHaveBeenCalledTimes(1);
     });
-    expect(await screen.findByText(/purchase complete/i)).toBeVisible();
+    expect(await screen.findByText(/transaction submitted; waiting for onchain confirmation/i)).toBeVisible();
   });
 });

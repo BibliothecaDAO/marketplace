@@ -1,0 +1,17 @@
+{
+  "schemaVersion": "1.0.0",
+  "minimumRpcVersion": "0.9.0",
+  "capturedAt": "2026-07-14T00:00:00Z",
+  "chains": {
+    "SN_MAIN": {
+      "blockNumber": 11819900,
+      "blockHash": "0x0450586772dac6fbab95cccc6183abd4b12ca07bdeec8fdf5e99070c5d52856b",
+      "receiptTransactionHash": "0x02ac6df2e9d74363d83fc95c8057795e5f5d8f5463da98765c8bc288482a4984"
+    },
+    "SN_SEPOLIA": {
+      "blockNumber": 11953500,
+      "blockHash": "0x0420c82d67c07b73bf5dcefc8b358e9cec7ba70c21ded43ee4cabf6f33602123",
+      "receiptTransactionHash": "0x037c81d3c62d67741243b49f475827ecc1c0b09bde5846a464464588e81b4781"
+    }
+  }
+}

@@ -1,10 +1,12 @@
-import { render, screen, waitFor } from "@testing-library/react";
+import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { CollectionTokenGrid } from "@/features/collections/collection-token-grid";
 import { _resetConfigCache } from "@/lib/marketplace/config";
 import { encodeRangeFilterValue } from "@/lib/marketplace/traits";
 import type { ActiveFilters } from "@/lib/marketplace/traits";
+import { cheapestListingByTokenId } from "@/features/cart/listing-utils";
+import { normalizeCollectionTokenId } from "@/lib/marketplace/token-id";
 
 const { mockUseCollectionTokensQuery, mockUseCollectionListingsQuery } = vi.hoisted(() => ({
   mockUseCollectionTokensQuery: vi.fn(),
@@ -26,15 +28,27 @@ vi.mock("@/features/cart/store/cart-store", () => ({
   ) => selector({ addItem: mockCartAddItem, setOpen: mockCartSetOpen }),
 }));
 
+let createdTokens: Array<Record<string, unknown>> = [];
+
 function token(tokenId: string, overrides?: Record<string, unknown>) {
-  return {
+  const value = {
     token_id: tokenId,
     metadata: { name: `Token #${tokenId}` },
     ...overrides,
   };
+  createdTokens.push(value);
+  return value;
 }
 
 function successListingsResult(listings: Array<Record<string, unknown>>) {
+  const cheapest = cheapestListingByTokenId(listings);
+  for (const createdToken of createdTokens) {
+    const rawTokenId = String(createdToken.token_id ?? "");
+    const normalizedTokenId = normalizeCollectionTokenId(rawTokenId);
+    createdToken.best_listing = normalizedTokenId
+      ? cheapest.get(normalizedTokenId) ?? null
+      : null;
+  }
   return {
     data: listings,
     isLoading: false,
@@ -48,6 +62,7 @@ function successListingsResult(listings: Array<Record<string, unknown>>) {
 
 describe("collection token grid", () => {
   beforeEach(() => {
+    createdTokens = [];
     process.env.NEXT_PUBLIC_MARKETPLACE_COLLECTIONS =
       "0x123|Realms|project-realms,0xbea57|Beasts|project-beasts";
     _resetConfigCache();
@@ -193,7 +208,7 @@ describe("collection token grid", () => {
     );
   });
 
-  it("defers_listed_token_enrichment_until_after_initial_render", async () => {
+  it("uses_only_the_server_paginated_token_query", async () => {
     mockUseCollectionTokensQuery.mockReturnValue({
       data: { page: { tokens: [token("1")], nextCursor: null }, error: null },
       isLoading: false,
@@ -211,36 +226,14 @@ describe("collection token grid", () => {
 
     render(<CollectionTokenGrid address="0xabc" projectId="project-a" />);
 
-    expect(mockUseCollectionTokensQuery).toHaveBeenNthCalledWith(
-      1,
-      expect.objectContaining({
-        address: "0xabc",
-        project: "project-a",
-        tokenIds: undefined,
-      }),
-    );
-    expect(mockUseCollectionTokensQuery).toHaveBeenNthCalledWith(
-      2,
-      expect.objectContaining({
-        address: "0xabc",
-        project: "project-a",
-        tokenIds: expect.arrayContaining(["7", "0x7"]),
-      }),
-      expect.objectContaining({ enabled: false }),
-    );
-
     await screen.findByText("Token #1");
-
-    await waitFor(() => {
-      expect(mockUseCollectionTokensQuery).toHaveBeenLastCalledWith(
-        expect.objectContaining({
-          address: "0xabc",
-          project: "project-a",
-          tokenIds: expect.arrayContaining(["7", "0x7"]),
-        }),
-        expect.objectContaining({ enabled: true }),
-      );
-    });
+    expect(mockUseCollectionTokensQuery.mock.calls.every(
+      ([options, queryOptions]) =>
+        options?.address === "0xabc"
+        && options?.project === "project-a"
+        && options?.tokenIds === undefined
+        && queryOptions === undefined,
+    )).toBe(true);
   });
 
   it("token_grid_uses_image_fallback_when_missing", async () => {
@@ -410,7 +403,7 @@ describe("collection token grid", () => {
     );
   });
 
-  it("range_filters_stay_client_side_and_do_not_forward_exact_attribute_filters", async () => {
+  it("forwards_range_filters_to_the_owned_api_without_page_local_filtering", async () => {
     const filters: ActiveFilters = { Level: new Set([encodeRangeFilterValue(10, 20)]) };
     mockUseCollectionTokensQuery.mockReturnValue({
       data: {
@@ -450,10 +443,11 @@ describe("collection token grid", () => {
     );
 
     expect(await screen.findByText("Token #1")).toBeVisible();
-    expect(screen.queryByText("Token #2")).toBeNull();
+    expect(screen.getByText("Token #2")).toBeVisible();
     expect(mockUseCollectionTokensQuery).toHaveBeenCalledWith(
       expect.objectContaining({
         attributeFilters: undefined,
+        rangeFilters: [{ name: "Level", min: 10, max: 20 }],
       }),
     );
   });
@@ -501,7 +495,7 @@ describe("collection token grid", () => {
     expect(card).toHaveClass("py-0", "overflow-hidden");
   });
 
-  it("passes_collection_listing_query_args", () => {
+  it("does_not_issue_a_page_limited_listing_query", () => {
     mockUseCollectionTokensQuery.mockReturnValue({
       data: { page: { tokens: [], nextCursor: null }, error: null },
       isLoading: false,
@@ -514,14 +508,7 @@ describe("collection token grid", () => {
 
     render(<CollectionTokenGrid address="0xabc" projectId="project-a" />);
 
-    expect(mockUseCollectionListingsQuery).toHaveBeenCalledWith(
-      expect.objectContaining({
-        collection: "0xabc",
-        projectId: "project-a",
-        limit: 100,
-        verifyOwnership: false,
-      }),
-    );
+    expect(mockUseCollectionListingsQuery).not.toHaveBeenCalled();
   });
 
   it("token_grid_add_to_cart_resolves_cheapest_listing", async () => {
@@ -952,7 +939,7 @@ describe("collection token grid", () => {
     expect(screen.queryByText(/grep/i)).toBeNull();
   });
 
-  it("applies_price_ascending_sort_when_requested", async () => {
+  it("delegates_price_ascending_sort_to_the_owned_api", async () => {
     mockUseCollectionTokensQuery.mockReturnValue({
       data: {
         page: {
@@ -986,10 +973,13 @@ describe("collection token grid", () => {
     await screen.findByRole("article", { name: "token-2" });
     expect(
       screen.getAllByRole("article").map((card) => card.getAttribute("aria-label")),
-    ).toEqual(["token-2", "token-1", "token-3"]);
+    ).toEqual(["token-1", "token-2", "token-3"]);
+    expect(mockUseCollectionTokensQuery).toHaveBeenCalledWith(
+      expect.objectContaining({ sort: "price-asc" }),
+    );
   });
 
-  it("recent_sort_includes_listed_tokens_not_present_on_first_page", async () => {
+  it("does_not_append_listed_tokens_outside_the_api_keyset_page", async () => {
     mockUseCollectionTokensQuery.mockImplementation((options) => {
       if (Array.isArray(options?.tokenIds)) {
         const includesListedToken = options.tokenIds.includes("99");
@@ -1040,12 +1030,14 @@ describe("collection token grid", () => {
       />,
     );
 
-    expect(
-      await screen.findByRole("article", { name: "token-99" }),
-    ).toBeVisible();
+    expect(await screen.findByRole("article", { name: "token-1" })).toBeVisible();
+    expect(screen.queryByRole("article", { name: "token-99" })).toBeNull();
+    expect(mockUseCollectionTokensQuery.mock.calls.every(
+      ([options]) => !Array.isArray(options?.tokenIds),
+    )).toBe(true);
   });
 
-  it("price_sort_includes_listed_tokens_resolved_by_padded_token_ids", async () => {
+  it("does_not_issue_a_second_padded_token_query_for_price_sort", async () => {
     const padded1120 = `0x${"460".padStart(64, "0")}`;
     mockUseCollectionTokensQuery.mockImplementation((options) => {
       if (Array.isArray(options?.tokenIds)) {
@@ -1099,9 +1091,11 @@ describe("collection token grid", () => {
       />,
     );
 
-    expect(
-      await screen.findByRole("article", { name: "token-1120" }),
-    ).toBeVisible();
+    expect(await screen.findByRole("article", { name: "token-1" })).toBeVisible();
+    expect(screen.queryByRole("article", { name: "token-1120" })).toBeNull();
+    expect(mockUseCollectionTokensQuery.mock.calls.every(
+      ([options]) => !Array.isArray(options?.tokenIds),
+    )).toBe(true);
   });
 
   it("applies_price_descending_sort_when_requested", async () => {
@@ -1141,7 +1135,7 @@ describe("collection token grid", () => {
     ).toEqual(["token-1", "token-2", "token-3"]);
   });
 
-  it("sorts_beasts_by_power_descending_then_token_id", async () => {
+  it("delegates_beast_power_sort_and_preserves_api_order", async () => {
     mockUseCollectionTokensQuery.mockReturnValue({
       data: {
         page: {
@@ -1191,13 +1185,16 @@ describe("collection token grid", () => {
       />,
     );
 
-    await screen.findByRole("article", { name: "token-1" });
+    await screen.findByRole("article", { name: "token-2" });
     expect(
       screen.getAllByRole("article").map((card) => card.getAttribute("aria-label")),
-    ).toEqual(["token-1", "token-2", "token-3", "token-4"]);
+    ).toEqual(["token-2", "token-1", "token-3", "token-4"]);
+    expect(mockUseCollectionTokensQuery).toHaveBeenCalledWith(
+      expect.objectContaining({ sort: "power-desc" }),
+    );
   });
 
-  it("sorts_beasts_by_health_ascending_with_missing_values_last", async () => {
+  it("delegates_beast_health_sort_and_preserves_api_order", async () => {
     mockUseCollectionTokensQuery.mockReturnValue({
       data: {
         page: {
@@ -1241,10 +1238,13 @@ describe("collection token grid", () => {
       />,
     );
 
-    await screen.findByRole("article", { name: "token-2" });
+    await screen.findByRole("article", { name: "token-1" });
     expect(
       screen.getAllByRole("article").map((card) => card.getAttribute("aria-label")),
-    ).toEqual(["token-2", "token-1", "token-3"]);
+    ).toEqual(["token-1", "token-2", "token-3"]);
+    expect(mockUseCollectionTokensQuery).toHaveBeenCalledWith(
+      expect.objectContaining({ sort: "health-asc" }),
+    );
   });
 
   it("renders_inline_resource_icons_on_realms_cards_only", async () => {
@@ -1325,7 +1325,7 @@ describe("collection token grid", () => {
     expect(traitIcons).toHaveTextContent("Wood");
   });
 
-  it("sorts_realms_by_resource_count", async () => {
+  it("delegates_realm_resource_sort_and_preserves_api_order", async () => {
     mockUseCollectionTokensQuery.mockReturnValue({
       data: {
         page: {
@@ -1376,10 +1376,13 @@ describe("collection token grid", () => {
       />,
     );
 
-    await screen.findByRole("article", { name: "token-1" });
+    await screen.findByRole("article", { name: "token-3" });
     expect(
       screen.getAllByRole("article").map((card) => card.getAttribute("aria-label")),
-    ).toEqual(["token-1", "token-2", "token-3"]);
+    ).toEqual(["token-3", "token-1", "token-2"]);
+    expect(mockUseCollectionTokensQuery).toHaveBeenCalledWith(
+      expect.objectContaining({ sort: "resource-count-desc" }),
+    );
   });
 
   it("highlights_sweep_preview_tokens_by_order_id", async () => {

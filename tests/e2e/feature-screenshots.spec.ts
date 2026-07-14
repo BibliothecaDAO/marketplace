@@ -1,6 +1,6 @@
 import fs from "node:fs";
 import path from "node:path";
-import { test } from "@playwright/test";
+import { test } from "./owned-marketplace-test";
 
 function parseRoutes() {
   const jsonValue = process.env.SCREENSHOT_ROUTES_JSON;

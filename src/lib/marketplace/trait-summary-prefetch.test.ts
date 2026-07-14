@@ -1,51 +1,29 @@
 import { QueryClient } from "@tanstack/react-query";
 import { describe, expect, it, vi } from "vitest";
 
-describe("trait summary prefetch", () => {
-  it("prefetches_summary_into_the_expected_query_cache_key", async () => {
-    const mockFetchTraitNamesSummary = vi.fn().mockResolvedValue({
-      pages: [
-        {
-          projectId: "project-a",
-          traits: [
-            { traitName: "Background", valueCount: 2 },
-            { traitName: "Eyes", valueCount: 3 },
-          ],
-        },
-      ],
-      errors: [],
-    });
+const { traits } = vi.hoisted(() => ({ traits: vi.fn() }));
+vi.mock("@/lib/marketplace/api-client", () => ({
+  getMarketplaceApiClient: () => ({ traits }),
+}));
 
-    vi.doMock("@cartridge/arcade/marketplace", () => ({
-      fetchTraitNamesSummary: mockFetchTraitNamesSummary,
-    }));
-
-    const {
-      traitNamesSummaryQueryKey,
-    } = await import("@/lib/marketplace/trait-summary-query");
-    const { prefetchTraitNamesSummary } = await import(
-      "@/lib/marketplace/trait-summary-prefetch"
-    );
-    const queryClient = new QueryClient({
-      defaultOptions: { queries: { retry: false, gcTime: 0 } },
-    });
-
-    await prefetchTraitNamesSummary(queryClient, {
-      address: "0xabc",
-      projectId: "project-a",
-    });
-
-    expect(mockFetchTraitNamesSummary).toHaveBeenCalledWith({
-      address: "0xabc",
-      defaultProjectId: "project-a",
-    });
-    expect(
-      queryClient.getQueryData(
-        traitNamesSummaryQueryKey({ address: "0xabc", projectId: "project-a" }),
-      ),
-    ).toEqual([
+describe("owned trait summary prefetch", () => {
+  it("prefetches facets into the collection-address cache key", async () => {
+    traits.mockResolvedValue({ data: [
+      { name: "Background", kind: "string", values: [
+        { value: "Blue", count: "2" }, { value: "Red", count: "1" },
+      ] },
+      { name: "Eyes", kind: "string", values: [
+        { value: "Big", count: "3" },
+      ] },
+    ] });
+    const { traitNamesSummaryQueryKey } = await import("./trait-summary-query");
+    const { prefetchTraitNamesSummary } = await import("./trait-summary-prefetch");
+    const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    await prefetchTraitNamesSummary(queryClient, { address: "0xabc", projectId: "ignored" });
+    expect(traits).toHaveBeenCalledWith("0xabc");
+    expect(queryClient.getQueryData(traitNamesSummaryQueryKey({ address: "0xabc" }))).toEqual([
       { traitName: "Background", valueCount: 2 },
-      { traitName: "Eyes", valueCount: 3 },
+      { traitName: "Eyes", valueCount: 1 },
     ]);
   });
 });

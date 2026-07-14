@@ -37,7 +37,7 @@ vi.mock("@starknet-react/core", () => ({
   useAccount: mockUseAccount,
 }));
 
-vi.mock("@cartridge/arcade/marketplace/react", () => ({
+vi.mock("@/lib/marketplace/read-client", () => ({
   useMarketplaceClient: mockUseMarketplaceClient,
 }));
 
@@ -53,8 +53,20 @@ vi.mock("@/lib/marketplace/config", () => ({
       { address: "0x123", name: "Realms", projectId: "realms" },
     ],
     chainLabel: "SN_SEPOLIA",
-    sdkConfig: { chainId: "0x534e5f5345504f4c4941" },
+    chainId: "0x534e5f5345504f4c4941",
+    apiBaseUrl: "http://marketplace.test",
+    readRollout: "checkout",
+    worldAddress: "0x123",
+    marketplaceAddress: "0x456",
+    schemaVersion: "1.0.0",
+    currencies: [{
+      address: "0x04718f5a0fc34cc1af16a1cdee98ffb20c31f5cd61d6ab07201858f4287c938d",
+      symbol: "STRK",
+      decimals: 18,
+      icon: "/tokens/strk.svg",
+    }],
     warnings: [],
+    isReadSurfaceEnabled: () => true,
   }),
 }));
 
@@ -223,6 +235,50 @@ describe("token detail view", () => {
     expect(screen.getByText("Blue")).toBeVisible();
     expect(screen.getByText("Eyes")).toBeVisible();
     expect(screen.getByText("Laser")).toBeVisible();
+  });
+
+  it("renders_owned_indexer_activity_with_chain_provenance", () => {
+    mockUseTokenDetailQuery.mockReturnValue(
+      successQuery({
+        token: {
+          token_id: "1",
+          image: null,
+          metadata: { name: "Token #1" },
+        },
+        orders: [],
+        listings: [],
+        activity: [{
+          type: "listing_created",
+          typeRaw: "ARCADE-Listing",
+          collection: "0xabc",
+          tokenId: "1",
+          orderId: "42",
+          from: "0xowner",
+          to: null,
+          currency: "0xstrk",
+          unitPriceAtomic: "1000000000000000000",
+          quantity: "1",
+          provenance: {
+            blockNumber: 123,
+            transactionHash: "0xfeed",
+            transactionIndex: 2,
+            eventIndex: 3,
+            caller: "0xowner",
+          },
+          rawSource: null,
+        }],
+      }),
+    );
+
+    render(<TokenDetailView address="0xabc" tokenId="1" />);
+
+    expect(screen.getByRole("heading", { name: "Activity" })).toBeVisible();
+    expect(screen.getByText("Listing created")).toBeVisible();
+    expect(screen.getByText(/Block 123/)).toBeVisible();
+    expect(screen.getByRole("link", { name: /view transaction/i })).toHaveAttribute(
+      "href",
+      expect.stringContaining("0xfeed"),
+    );
   });
 
   it("shows_loading_skeleton", () => {
@@ -730,8 +786,10 @@ describe("token detail view", () => {
     // calls[0] = set_approval_for_all (approve marketplace for all tokens in collection)
     expect(calls[0].entrypoint).toBe("set_approval_for_all");
     expect(calls[0].contractAddress).toBe("0x123"); // collection address
+    expect(calls[0].calldata[0]).toBe("0x456"); // checked-in marketplace address
     // calls[1] = list
     expect(calls[1].entrypoint).toBe("list");
+    expect(calls[1].contractAddress).toBe("0x456");
     expect(calls[1].calldata[0]).toBe("0x123"); // collection address
   });
 
@@ -802,6 +860,7 @@ describe("token detail view", () => {
     expect(mockAccountExecute).toHaveBeenCalled();
     const [calls] = mockAccountExecute.mock.calls[0] as [Array<{ contractAddress: string; entrypoint: string; calldata: string[] }>];
     expect(calls[0].entrypoint).toBe("offer");
+    expect(calls[0].contractAddress).toBe("0x456");
     expect(calls[0].calldata[0]).toBe("0x123"); // collection address
   });
 
@@ -1278,6 +1337,8 @@ describe("token detail view", () => {
     render(<TokenDetailView address="0x123" tokenId="7" />);
 
     expect(screen.getByText(/make an offer/i)).toBeVisible();
+    expect(screen.getByRole("note")).toHaveTextContent(/fee receiver.*not bound/i);
+    expect(screen.getByRole("combobox", { name: /offer currency/i })).toBeVisible();
   });
 
   // M3: tx status auto-clears — verify setTimeout is registered with 5000ms

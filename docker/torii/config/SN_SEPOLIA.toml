@@ -1,0 +1,38 @@
+world_address = "0x07a079295990e43441a7389fdc3b9ba063c6cd6aee16fb846f598c42a9f04ff7"
+rpc = "${TORII_RPC_URL}"
+db_dir = "${TORII_DB_DIR}"
+
+[server]
+http_addr = "0.0.0.0"
+http_port = 8080
+http_cors_origins = []
+
+[indexing]
+world_block = 2736993
+preconfirmed = false
+transactions = true
+transaction_receipts = true
+controllers = false
+strict_model_reader = true
+external_contracts = true
+namespaces = ["ARCADE"]
+contracts = [
+
+]
+
+[erc]
+max_metadata_tasks = 4
+token_attributes = true
+trait_counts = true
+metadata_updates = false
+metadata_update_whitelist = []
+metadata_updates_only_at_head = true
+async_metadata_updates = true
+
+[sql]
+historical = ["ARCADE-Order", "ARCADE-Book"]
+migrations = "/etc/torii/migrations"
+hooks = [
+  "model_updated:ARCADE-Order:INSERT OR IGNORE INTO marketplace_order_audit (entity_id, event_id, order_id, collection, token_id, royalties, category, status, expiration, quantity, price, currency, owner) SELECT internal_entity_id, internal_event_id, id, collection, token_id, royalties, category, status, expiration, quantity, price, currency, owner FROM [ARCADE-Order] WHERE internal_entity_id = ?",
+  "model_updated:ARCADE-Book:INSERT OR IGNORE INTO marketplace_book_audit (entity_id, event_id, book_id, version, paused, royalties, counter, fee_num, fee_receiver) SELECT internal_entity_id, internal_event_id, id, version, paused, royalties, counter, fee_num, fee_receiver FROM [ARCADE-Book] WHERE internal_entity_id = ?"
+]

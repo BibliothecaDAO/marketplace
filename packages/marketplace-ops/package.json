@@ -1,0 +1,24 @@
+{
+  "name": "@biblio/marketplace-ops",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "proxy:bounded": "tsx src/bounded-rpc.ts",
+    "qualify:rpc": "tsx src/qualify-rpc.ts",
+    "rank:rpc": "tsx src/rank-rpc.ts",
+    "reconcile": "tsx src/reconcile.ts",
+    "verify:replays": "tsx src/verify-replays.ts",
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@biblio/marketplace-registry": "workspace:*"
+  },
+  "devDependencies": {
+    "tsx": "^4.20.6",
+    "typescript": "^5.9.3",
+    "vitest": "^2.1.9"
+  }
+}

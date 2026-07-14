@@ -1,0 +1,1012 @@
+diff --git a/Cargo.lock b/Cargo.lock
+index c68d1d4..1aec0ee 100644
+--- a/Cargo.lock
++++ b/Cargo.lock
+@@ -9336,7 +9336,7 @@ dependencies = [
+  "dojo-world",
+  "futures-util",
+  "hashlink",
+- "ipfs-api-backend-hyper",
++ "ipnet",
+  "metrics",
+  "reqwest 0.11.27",
+  "serde",
+@@ -9352,6 +9352,7 @@ dependencies = [
+  "torii-storage",
+  "torii-task-network",
+  "tracing",
++ "xmltree",
+ ]
+
+ [[package]]
+diff --git a/Cargo.toml b/Cargo.toml
+index e0dfaf3..c82aaad 100644
+--- a/Cargo.toml
++++ b/Cargo.toml
+@@ -101,6 +101,7 @@ metrics = "0.23.0"
+ num-traits = { version = "0.2", default-features = false }
+ parking_lot = "0.12.1"
+ rand = "0.8.5"
++ipnet = "2.10.0"
+ rayon = "1.8.0"
+ regex = "1.10.3"
+ shellexpand = "3.1.1"
+@@ -137,6 +138,7 @@ indicatif = "0.17.9"
+ terminal_size = "0.3.0"
+
+ url = { version = "2.4.0", features = ["serde"] }
++xmltree = "0.10.3"
+ # TODO: see if we still need the git version
+ ipfs-api-backend-hyper = { git = "https://github.com/ferristseng/rust-ipfs-api", rev = "af2c17f7b19ef5b9898f458d97a90055c3605633", features = [
+ 	"with-hyper-rustls",
+diff --git a/crates/migrations/20260714000000_event_provenance.sql b/crates/migrations/20260714000000_event_provenance.sql
+new file mode 100644
+index 0000000..a8b0d4c
+--- /dev/null
++++ b/crates/migrations/20260714000000_event_provenance.sql
+@@ -0,0 +1,22 @@
++ALTER TABLE events ADD COLUMN block_number BIGINT;
++ALTER TABLE events ADD COLUMN event_index BIGINT;
++
++CREATE INDEX IF NOT EXISTS idx_events_provenance
++ON events (block_number DESC, transaction_hash, event_index DESC);
++
++CREATE TABLE IF NOT EXISTS marketplace_metadata_failures (
++    id INTEGER PRIMARY KEY AUTOINCREMENT,
++    collection TEXT NOT NULL,
++    token_id TEXT,
++    uri TEXT NOT NULL,
++    reason TEXT NOT NULL,
++    warning TEXT,
++    attempts INTEGER NOT NULL DEFAULT 0,
++    first_failed_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
++    last_failed_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
++    resolved_at DATETIME
++);
++
++CREATE UNIQUE INDEX IF NOT EXISTS idx_marketplace_metadata_failure_active
++ON marketplace_metadata_failures (collection, token_id)
++WHERE resolved_at IS NULL;
+diff --git a/crates/processors/Cargo.toml b/crates/processors/Cargo.toml
+index 6640e55..810b079 100644
+--- a/crates/processors/Cargo.toml
++++ b/crates/processors/Cargo.toml
+@@ -22,10 +22,10 @@ cainome-cairo-serde.workspace = true
+ cainome-cairo-serde-derive.workspace = true
+ torii-task-network.workspace = true
+ thiserror.workspace = true
+-ipfs-api-backend-hyper.workspace = true
+ hashlink.workspace = true
+ serde.workspace = true
+ reqwest.workspace = true
++ipnet.workspace = true
+ torii-storage.workspace = true
+ torii-cache.workspace = true
+ data-url.workspace = true
+@@ -35,3 +35,4 @@ chrono.workspace = true
+ torii-proto.workspace = true
+ metrics.workspace = true
+ crypto-bigint.workspace = true
++xmltree.workspace = true
+diff --git a/crates/processors/src/constants.rs b/crates/processors/src/constants.rs
+deleted file mode 100644
+index 073d9ad..0000000
+--- a/crates/processors/src/constants.rs
++++ /dev/null
+@@ -1,3 +0,0 @@
+-pub const IPFS_CLIENT_URL: &str = "https://ipfs.infura.io:5001";
+-pub const IPFS_CLIENT_USERNAME: &str = "2EBrzr7ZASQZKH32sl2xWauXPSA";
+-pub const IPFS_CLIENT_PASSWORD: &str = "12290b883db9138a8ae3363b6739d220";
+diff --git a/crates/processors/src/erc.rs b/crates/processors/src/erc.rs
+index 5a64df9..4fae2e9 100644
+--- a/crates/processors/src/erc.rs
++++ b/crates/processors/src/erc.rs
+@@ -18,7 +18,7 @@ use tracing::{debug, warn};
+
+ use crate::{
+     error::{Error, ParseError, TokenMetadataError},
+-    fetch::{fetch_content_from_http, fetch_content_from_ipfs},
++    fetch::{fetch_json_from_http, fetch_json_from_ipfs, validate_data_uri_size, ContentKind},
+ };
+ use torii_proto::TokenId;
+
+@@ -644,7 +644,7 @@ pub async fn fetch_metadata(token_uri: &str) -> Result<serde_json::Value, TokenM
+         uri if uri.starts_with("http") || uri.starts_with("https") => {
+             // Fetch metadata from HTTP/HTTPS URL
+             debug!(token_uri = %token_uri, "Fetching metadata from http/https URL");
+-            let response = fetch_content_from_http(token_uri)
++            let response = fetch_json_from_http(token_uri)
+                 .await
+                 .map_err(TokenMetadataError::Http)?;
+
+@@ -656,9 +656,9 @@ pub async fn fetch_metadata(token_uri: &str) -> Result<serde_json::Value, TokenM
+         uri if uri.starts_with("ipfs") => {
+             let cid = uri.strip_prefix("ipfs://").unwrap();
+             debug!(cid = %cid, "Fetching metadata from IPFS");
+-            let response = fetch_content_from_ipfs(cid)
++            let response = fetch_json_from_ipfs(cid)
+                 .await
+-                .map_err(TokenMetadataError::Ipfs)?;
++                .map_err(TokenMetadataError::Http)?;
+
+             let json: serde_json::Value = serde_json::from_slice(&response)
+                 .map_err(|e| TokenMetadataError::Parse(ParseError::FromJsonStr(e)))?;
+@@ -684,6 +684,8 @@ pub async fn fetch_metadata(token_uri: &str) -> Result<serde_json::Value, TokenM
+             let decoded = data_url
+                 .decode_to_vec()
+                 .map_err(TokenMetadataError::InvalidBase64)?;
++            validate_data_uri_size(&decoded.0, ContentKind::Json)
++                .map_err(TokenMetadataError::Http)?;
+             // HACK: Loot Survior NFT metadata contains control characters which makes the json
+             // DATA invalid so filter them out
+             let decoded_str = String::from_utf8_lossy(&decoded.0)
+diff --git a/crates/processors/src/error.rs b/crates/processors/src/error.rs
+index 308a733..94944d3 100644
+--- a/crates/processors/src/error.rs
++++ b/crates/processors/src/error.rs
+@@ -18,7 +18,7 @@ pub enum Error {
+     #[error("Uri is malformed")]
+     UriMalformed,
+     #[error(transparent)]
+-    IpfsError(#[from] ipfs_api_backend_hyper::Error),
++    HttpError(#[from] HttpError),
+     #[error(transparent)]
+     ParseError(#[from] ParseError),
+     #[error(transparent)]
+@@ -38,8 +38,6 @@ pub enum TokenMetadataError {
+     #[error(transparent)]
+     Parse(#[from] ParseError),
+     #[error(transparent)]
+-    Ipfs(#[from] ipfs_api_backend_hyper::Error),
+-    #[error(transparent)]
+     DataUrl(#[from] data_url::DataUrlError),
+     #[error(transparent)]
+     InvalidBase64(#[from] data_url::forgiving_base64::InvalidBase64),
+@@ -67,6 +65,16 @@ pub enum HttpError {
+     StatusCode(reqwest::StatusCode, String),
+     #[error(transparent)]
+     Reqwest(#[from] reqwest::Error),
++    #[error(transparent)]
++    Io(#[from] std::io::Error),
++    #[error("Metadata fetch policy rejected the request: {0}")]
++    Policy(String),
++    #[error("Response body exceeds the {0} byte limit")]
++    BodyTooLarge(usize),
++    #[error("Response content type is not allowed: {0}")]
++    InvalidMimeType(String),
++    #[error("Metadata fetch exceeded its total timeout")]
++    Timeout,
+ }
+
+ #[derive(Error, Debug)]
+diff --git a/crates/processors/src/fetch.rs b/crates/processors/src/fetch.rs
+index 29c1ba5..062d7ea 100644
+--- a/crates/processors/src/fetch.rs
++++ b/crates/processors/src/fetch.rs
+@@ -1,86 +1,503 @@
++use std::io::Cursor;
++use std::net::{IpAddr, Ipv4Addr, Ipv6Addr, SocketAddr};
+ use std::sync::LazyLock;
+ use std::time::Duration;
+
+-use futures_util::TryStreamExt;
+-use ipfs_api_backend_hyper::{IpfsApi, IpfsClient, TryFromUri};
+-use reqwest::Client;
+-use tokio_util::bytes::Bytes;
+-use tracing::debug;
+-
+-use crate::{
+-    constants::{IPFS_CLIENT_PASSWORD, IPFS_CLIENT_URL, IPFS_CLIENT_USERNAME},
+-    error::HttpError,
+-};
+-
+-// Global clients
+-static HTTP_CLIENT: LazyLock<Client> = LazyLock::new(|| {
+-    Client::builder()
+-        .timeout(Duration::from_secs(10))
+-        .pool_idle_timeout(Duration::from_secs(90))
+-        .build()
+-        .expect("Failed to create HTTP client")
+-});
++use futures_util::StreamExt;
++use ipnet::{Ipv4Net, Ipv6Net};
++use reqwest::header::{CONTENT_LENGTH, CONTENT_TYPE, LOCATION};
++use reqwest::{redirect::Policy, Client, StatusCode, Url};
++use tokio::net::lookup_host;
++use tokio::sync::Semaphore;
++use tokio::time::Instant;
++use tokio_util::bytes::{Bytes, BytesMut};
++use tracing::{debug, warn};
++use xmltree::{Element, XMLNode};
++
++use crate::error::HttpError;
++
++pub const JSON_BODY_LIMIT: usize = 2 * 1024 * 1024;
++pub const IMAGE_BODY_LIMIT: usize = 15 * 1024 * 1024;
++pub const DATA_URI_LIMIT: usize = 2 * 1024 * 1024;
++const REQUEST_TIMEOUT: Duration = Duration::from_secs(10);
++const MAX_REDIRECTS: usize = 3;
++const MAX_STATUS_RETRIES: usize = 3;
+
+-static IPFS_CLIENT: LazyLock<IpfsClient> = LazyLock::new(|| {
+-    IpfsClient::from_str(IPFS_CLIENT_URL)
+-        .expect("Failed to create IPFS client")
+-        .with_credentials(IPFS_CLIENT_USERNAME, IPFS_CLIENT_PASSWORD)
++static FETCH_CONCURRENCY: LazyLock<Semaphore> = LazyLock::new(|| {
++    let permits = std::env::var("TORII_METADATA_CONCURRENCY")
++        .ok()
++        .and_then(|value| value.parse::<usize>().ok())
++        .filter(|value| *value > 0 && *value <= 32)
++        .unwrap_or(4);
++    Semaphore::new(permits)
+ });
+
+-const INITIAL_BACKOFF: Duration = Duration::from_millis(100);
+-const REQ_MAX_RETRIES: u32 = 5;
++#[derive(Clone, Copy, Debug, Eq, PartialEq)]
++pub enum ContentKind {
++    Json,
++    Image,
++}
+
+-/// Fetch content from HTTP URL with retries
+-pub async fn fetch_content_from_http(url: &str) -> Result<Bytes, HttpError> {
+-    let mut retries = 0;
+-    let mut backoff = INITIAL_BACKOFF;
++impl ContentKind {
++    fn limit(self) -> usize {
++        match self {
++            Self::Json => JSON_BODY_LIMIT,
++            Self::Image => IMAGE_BODY_LIMIT,
++        }
++    }
++}
+
+-    loop {
+-        match HTTP_CLIENT.get(url).send().await {
+-            Ok(response) => {
+-                if !response.status().is_success() {
+-                    return Err(HttpError::StatusCode(
+-                        response.status(),
+-                        response.text().await.unwrap_or_default(),
+-                    ));
+-                }
+-                return response.bytes().await.map_err(HttpError::Reqwest);
+-            }
+-            Err(e) => {
+-                if retries >= REQ_MAX_RETRIES {
+-                    return Err(HttpError::Reqwest(e));
+-                }
+-                debug!(error = ?e, retry = retries, "Request failed, retrying after backoff");
+-                tokio::time::sleep(backoff).await;
+-                retries += 1;
+-                backoff *= 2;
+-            }
++fn forbidden_ip(ip: IpAddr) -> bool {
++    match ip {
++        IpAddr::V4(ip) => {
++            let reserved = [
++                Ipv4Net::new(Ipv4Addr::new(0, 0, 0, 0), 8).unwrap(),
++                Ipv4Net::new(Ipv4Addr::new(100, 64, 0, 0), 10).unwrap(),
++                Ipv4Net::new(Ipv4Addr::new(192, 0, 0, 0), 24).unwrap(),
++                Ipv4Net::new(Ipv4Addr::new(198, 18, 0, 0), 15).unwrap(),
++                Ipv4Net::new(Ipv4Addr::new(224, 0, 0, 0), 4).unwrap(),
++                Ipv4Net::new(Ipv4Addr::new(240, 0, 0, 0), 4).unwrap(),
++            ];
++            ip.is_private()
++                || ip.is_loopback()
++                || ip.is_link_local()
++                || ip.is_broadcast()
++                || ip.is_documentation()
++                || ip.is_unspecified()
++                || reserved.iter().any(|network| network.contains(&ip))
++        }
++        IpAddr::V6(ip) => {
++            if let Some(mapped) = ip.to_ipv4_mapped() {
++                return forbidden_ip(IpAddr::V4(mapped));
++            }
++            let reserved = [
++                Ipv6Net::new("::".parse::<Ipv6Addr>().unwrap(), 96).unwrap(),
++                Ipv6Net::new("64:ff9b::".parse::<Ipv6Addr>().unwrap(), 96).unwrap(),
++                Ipv6Net::new("64:ff9b:1::".parse::<Ipv6Addr>().unwrap(), 48).unwrap(),
++                Ipv6Net::new("100::".parse::<Ipv6Addr>().unwrap(), 64).unwrap(),
++                Ipv6Net::new("2001::".parse::<Ipv6Addr>().unwrap(), 23).unwrap(),
++                Ipv6Net::new("2001:db8::".parse::<Ipv6Addr>().unwrap(), 32).unwrap(),
++                Ipv6Net::new("2002::".parse::<Ipv6Addr>().unwrap(), 16).unwrap(),
++                Ipv6Net::new("fec0::".parse::<Ipv6Addr>().unwrap(), 10).unwrap(),
++            ];
++            ip.is_loopback()
++                || ip.is_unspecified()
++                || ip.is_unique_local()
++                || ip.is_unicast_link_local()
++                || ip.is_multicast()
++                || reserved.iter().any(|network| network.contains(&ip))
++        }
++    }
++}
++
++fn validate_scheme(url: &Url) -> Result<(), HttpError> {
++    match url.scheme() {
++        "http" | "https" => Ok(()),
++        scheme => Err(HttpError::Policy(format!(
++            "unsupported URL scheme {scheme}"
++        ))),
++    }
++}
++
++async fn resolve_and_validate(
++    url: &Url,
++    deadline: Instant,
++) -> Result<(String, Vec<SocketAddr>), HttpError> {
++    validate_scheme(url)?;
++    if !url.username().is_empty() || url.password().is_some() {
++        return Err(HttpError::Policy(
++            "URLs containing credentials are not allowed".to_string(),
++        ));
++    }
++    let host = url
++        .host_str()
++        .ok_or_else(|| HttpError::Policy("URL is missing a host".to_string()))?
++        .to_string();
++    let port = url
++        .port_or_known_default()
++        .ok_or_else(|| HttpError::Policy("URL is missing a usable port".to_string()))?;
++    let addresses: Vec<SocketAddr> = match host.parse::<IpAddr>() {
++        Ok(ip) => vec![SocketAddr::new(ip, port)],
++        Err(_) => tokio::time::timeout_at(deadline, lookup_host((host.as_str(), port)))
++            .await
++            .map_err(|_| HttpError::Timeout)??
++            .collect(),
++    };
++    validate_resolved_addresses(&host, &addresses)?;
++    Ok((host, addresses))
++}
++
++fn validate_resolved_addresses(host: &str, addresses: &[SocketAddr]) -> Result<(), HttpError> {
++    if addresses.is_empty() {
++        return Err(HttpError::Policy("host did not resolve".to_string()));
++    }
++    if addresses.iter().any(|address| forbidden_ip(address.ip())) {
++        return Err(HttpError::Policy(format!(
++            "host {host} resolved to a non-public address"
++        )));
++    }
++    Ok(())
++}
++
++fn redirect_target(current: &Url, location: &str, redirects: usize) -> Result<Url, HttpError> {
++    if redirects >= MAX_REDIRECTS {
++        return Err(HttpError::Policy("redirect limit exceeded".to_string()));
++    }
++    current
++        .join(location)
++        .map_err(|error| HttpError::Policy(format!("invalid redirect: {error}")))
++}
++
++fn validate_mime(kind: ContentKind, mime: Option<&str>) -> Result<(), HttpError> {
++    let mime = mime
++        .and_then(|value| value.split(';').next())
++        .map(str::trim)
++        .unwrap_or("")
++        .to_ascii_lowercase();
++    let accepted = match kind {
++        ContentKind::Json => {
++            mime == "application/json"
++                || mime.ends_with("+json")
++                || mime == "text/plain"
++                || mime == "application/octet-stream"
+         }
++        ContentKind::Image => matches!(
++            mime.as_str(),
++            "image/png" | "image/jpeg" | "image/webp" | "image/gif" | "image/svg+xml"
++        ),
++    };
++    if !accepted {
++        return Err(HttpError::InvalidMimeType(if mime.is_empty() {
++            "missing".to_string()
++        } else {
++            mime
++        }));
+     }
++    Ok(())
+ }
++
++fn normalized_mime(mime: Option<&str>) -> String {
++    mime.and_then(|value| value.split(';').next())
++        .map(str::trim)
++        .unwrap_or("")
++        .to_ascii_lowercase()
++}
++
++fn validate_tolerated_json_mime(mime: &str, body: &[u8]) -> Result<(), HttpError> {
++    if !matches!(mime, "text/plain" | "application/octet-stream") {
++        return Ok(());
++    }
++    serde_json::from_slice::<serde_json::Value>(body).map_err(|_| {
++        HttpError::InvalidMimeType(format!(
++            "{mime} is accepted only when the response body is valid JSON"
++        ))
++    })?;
++    warn!(content_type = %mime, "Tolerating non-JSON metadata MIME after parse validation");
++    Ok(())
++}
+
+-/// Fetch content from IPFS with retries
+-pub async fn fetch_content_from_ipfs(cid: &str) -> Result<Bytes, ipfs_api_backend_hyper::Error> {
+-    let mut retries = 0;
+-    let mut backoff = INITIAL_BACKOFF;
++fn transient_status(status: StatusCode) -> bool {
++    status == StatusCode::TOO_MANY_REQUESTS || status.is_server_error()
++}
++
++async fn read_limited(
++    response: reqwest::Response,
++    kind: ContentKind,
++    deadline: Instant,
++) -> Result<Bytes, HttpError> {
++    let limit = kind.limit();
++    if response
++        .headers()
++        .get(CONTENT_LENGTH)
++        .and_then(|value| value.to_str().ok())
++        .and_then(|value| value.parse::<usize>().ok())
++        .is_some_and(|length| length > limit)
++    {
++        return Err(HttpError::BodyTooLarge(limit));
++    }
++    let mime = normalized_mime(
++        response
++            .headers()
++            .get(CONTENT_TYPE)
++            .and_then(|value| value.to_str().ok()),
++    );
++    validate_mime(kind, Some(&mime))?;
++    let mut stream = response.bytes_stream();
++    let mut body = BytesMut::new();
++    while let Some(chunk) = tokio::time::timeout_at(deadline, stream.next())
++        .await
++        .map_err(|_| HttpError::Timeout)?
++    {
++        let chunk = chunk?;
++        if body.len() + chunk.len() > limit {
++            return Err(HttpError::BodyTooLarge(limit));
++        }
++        body.extend_from_slice(&chunk);
++    }
++    let body = body.freeze();
++    if kind == ContentKind::Json {
++        validate_tolerated_json_mime(&mime, &body)?;
++    }
++    Ok(body)
++}
++
++pub async fn fetch_content(url: &str, kind: ContentKind) -> Result<Bytes, HttpError> {
++    let deadline = Instant::now() + REQUEST_TIMEOUT;
++    let _permit = tokio::time::timeout_at(deadline, FETCH_CONCURRENCY.acquire())
++        .await
++        .map_err(|_| HttpError::Timeout)?
++        .map_err(|error| HttpError::Policy(error.to_string()))?;
++    let mut current =
++        Url::parse(url).map_err(|error| HttpError::Policy(format!("invalid URL: {error}")))?;
++    let mut redirects = 0usize;
++    let mut retries = 0usize;
+
+     loop {
+-        match IPFS_CLIENT
+-            .cat(cid)
+-            .map_ok(|chunk| chunk.to_vec())
+-            .try_concat()
+-            .await
+-        {
+-            Ok(stream) => return Ok(Bytes::from(stream)),
+-            Err(e) => {
+-                if retries >= REQ_MAX_RETRIES {
+-                    return Err(e);
+-                }
+-                debug!(error = ?e, retry = retries, "Request failed, retrying after backoff");
+-                tokio::time::sleep(backoff).await;
+-                retries += 1;
+-                backoff *= 2;
+-            }
++        if Instant::now() >= deadline {
++            return Err(HttpError::Timeout);
++        }
++        let (host, addresses) = resolve_and_validate(&current, deadline).await?;
++        // Pin the prevalidated addresses into this one-request client. Redirects are handled
++        // manually so every new target is resolved and validated independently.
++        let client = Client::builder()
++            .redirect(Policy::none())
++            .connect_timeout(Duration::from_secs(3))
++            .timeout(deadline.saturating_duration_since(Instant::now()))
++            .resolve_to_addrs(&host, &addresses)
++            .build()?;
++        let response = client.get(current.clone()).send().await?;
++
++        if response.status().is_redirection() {
++            let location = response
++                .headers()
++                .get(LOCATION)
++                .and_then(|value| value.to_str().ok())
++                .ok_or_else(|| HttpError::Policy("redirect is missing Location".to_string()))?;
++            current = redirect_target(&current, location, redirects)?;
++            redirects += 1;
++            retries = 0;
++            continue;
++        }
++
++        if transient_status(response.status()) && retries < MAX_STATUS_RETRIES {
++            let jitter_ms = 100 + ((retries * 73 + current.as_str().len()) % 200) as u64;
++            debug!(status = %response.status(), retry = retries, "Transient metadata response, retrying");
++            tokio::time::timeout_at(
++                deadline,
++                tokio::time::sleep(Duration::from_millis(jitter_ms)),
++            )
++            .await
++            .map_err(|_| HttpError::Timeout)?;
++            retries += 1;
++            continue;
++        }
++        if !response.status().is_success() {
++            return Err(HttpError::StatusCode(response.status(), String::new()));
++        }
++        return read_limited(response, kind, deadline).await;
++    }
++}
++
++pub async fn fetch_content_from_http(url: &str) -> Result<Bytes, HttpError> {
++    fetch_content(url, ContentKind::Image).await
++}
++
++pub async fn fetch_json_from_http(url: &str) -> Result<Bytes, HttpError> {
++    fetch_content(url, ContentKind::Json).await
++}
++
++fn ipfs_gateway_url(cid: &str) -> Result<String, HttpError> {
++    if cid.is_empty()
++        || cid.len() > 512
++        || cid.contains("..")
++        || cid.split('/').any(|part| {
++            part.is_empty()
++                || !part
++                    .chars()
++                    .all(|ch| ch.is_ascii_alphanumeric() || ch == '-' || ch == '_' || ch == '.')
++        })
++    {
++        return Err(HttpError::Policy("invalid IPFS CID/path".to_string()));
++    }
++    let gateway =
++        std::env::var("TORII_IPFS_GATEWAY").unwrap_or_else(|_| "https://ipfs.io/ipfs/".to_string());
++    let gateway = gateway.trim_end_matches('/');
++    Ok(format!("{gateway}/{cid}"))
++}
++
++pub async fn fetch_content_from_ipfs(cid: &str) -> Result<Bytes, HttpError> {
++    fetch_content(&ipfs_gateway_url(cid)?, ContentKind::Image).await
++}
++
++pub async fn fetch_json_from_ipfs(cid: &str) -> Result<Bytes, HttpError> {
++    fetch_content(&ipfs_gateway_url(cid)?, ContentKind::Json).await
++}
++
++pub fn validate_data_uri_size(bytes: &[u8], kind: ContentKind) -> Result<(), HttpError> {
++    let limit = match kind {
++        ContentKind::Json => DATA_URI_LIMIT,
++        ContentKind::Image => IMAGE_BODY_LIMIT,
++    };
++    if bytes.len() > limit {
++        return Err(HttpError::BodyTooLarge(limit));
++    }
++    Ok(())
++}
++
++fn sanitize_svg_element(element: &mut Element) {
++    element.attributes.retain(|name, value| {
++        let name = name.to_ascii_lowercase();
++        if name.starts_with("on") || name == "style" {
++            return false;
++        }
++        if name == "href" || name.ends_with(":href") {
++            return value.starts_with('#')
++                || value.starts_with("data:image/png;base64,")
++                || value.starts_with("data:image/jpeg;base64,")
++                || value.starts_with("data:image/webp;base64,")
++                || value.starts_with("data:image/gif;base64,");
++        }
++        true
++    });
++    element.children.retain(|child| match child {
++        XMLNode::Element(child) => !matches!(
++            child.name.to_ascii_lowercase().as_str(),
++            "script" | "style" | "foreignobject" | "iframe" | "object" | "embed"
++        ),
++        XMLNode::ProcessingInstruction(..) => false,
++        _ => true,
++    });
++    for child in &mut element.children {
++        if let XMLNode::Element(child) = child {
++            sanitize_svg_element(child);
++        }
++    }
++}
++
++pub fn sanitize_svg(svg: &[u8]) -> Result<Vec<u8>, HttpError> {
++    if svg.len() > IMAGE_BODY_LIMIT {
++        return Err(HttpError::BodyTooLarge(IMAGE_BODY_LIMIT));
++    }
++    let mut root = Element::parse(Cursor::new(svg))
++        .map_err(|error| HttpError::Policy(format!("invalid SVG XML: {error}")))?;
++    if !root.name.eq_ignore_ascii_case("svg") {
++        return Err(HttpError::Policy(
++            "image is not an SVG document".to_string(),
++        ));
++    }
++    sanitize_svg_element(&mut root);
++    let mut output = Vec::new();
++    root.write(&mut output)
++        .map_err(|error| HttpError::Policy(format!("failed to serialize SVG: {error}")))?;
++    Ok(output)
++}
++
++#[cfg(test)]
++mod tests {
++    use super::*;
++
++    #[test]
++    fn rejects_private_reserved_and_cloud_metadata_addresses() {
++        for ip in [
++            "127.0.0.1",
++            "10.0.0.1",
++            "169.254.169.254",
++            "172.16.0.1",
++            "192.168.0.1",
++            "224.0.0.1",
++            "100.64.0.1",
++            "::1",
++            "fc00::1",
++            "fe80::1",
++            "2001:db8::1",
++            "::ffff:127.0.0.1",
++            "::ffff:169.254.169.254",
++            "64:ff9b::7f00:1",
++            "64:ff9b:1::1",
++            "100::1",
++            "2001::1",
++            "2002:7f00:1::",
++            "fec0::1",
++        ] {
++            assert!(forbidden_ip(ip.parse().unwrap()), "{ip} must be rejected");
+         }
++        assert!(!forbidden_ip("1.1.1.1".parse().unwrap()));
++        assert!(!forbidden_ip("2606:4700:4700::1111".parse().unwrap()));
++    }
++
++    #[test]
++    fn enforces_mime_policy_and_body_limits() {
++        assert!(validate_mime(ContentKind::Json, Some("application/json")).is_ok());
++        assert!(validate_mime(ContentKind::Json, Some("application/ld+json")).is_ok());
++        assert!(validate_mime(ContentKind::Json, Some("text/plain; charset=utf-8")).is_ok());
++        assert!(validate_mime(ContentKind::Json, Some("text/html")).is_err());
++        assert!(validate_mime(ContentKind::Image, Some("image/svg+xml")).is_ok());
++        assert!(validate_mime(ContentKind::Image, Some("image/bmp")).is_err());
++        assert!(validate_tolerated_json_mime("text/plain", br#"{"ok":true}"#).is_ok());
++        assert!(validate_tolerated_json_mime("application/octet-stream", b"not-json").is_err());
++        assert!(validate_data_uri_size(&vec![0; DATA_URI_LIMIT + 1], ContentKind::Json).is_err());
++    }
++
++    #[test]
++    fn sanitizes_scripts_handlers_styles_and_remote_embeds_from_svg() {
++        let input = br#"<svg xmlns="http://www.w3.org/2000/svg" onload="alert(1)">
++          <script>alert(1)</script><style>*{background:url(https://evil)}</style>
++          <image href="https://evil.example/pixel.png" style="display:block"/>
++          <image href="data:image/png;base64,AA=="/>
++          <foreignObject><iframe src="https://evil.example"/></foreignObject>
++        </svg>"#;
++        let output = String::from_utf8(sanitize_svg(input).unwrap()).unwrap();
++        assert!(!output.contains("script"));
++        assert!(!output.contains("foreignObject"));
++        assert!(!output.contains("onload"));
++        assert!(!output.contains("https://evil"));
++        assert!(output.contains("data:image/png;base64,AA=="));
++    }
++
++    #[tokio::test]
++    async fn rejects_unsafe_ipfs_paths_and_url_credentials() {
++        assert!(ipfs_gateway_url("../metadata.json").is_err());
++        assert!(ipfs_gateway_url("QmValid/metadata.json").is_ok());
++        let url = Url::parse("https://user:pass@example.com/metadata").unwrap();
++        assert!(matches!(
++            resolve_and_validate(&url, Instant::now() + REQUEST_TIMEOUT).await,
++            Err(HttpError::Policy(_))
++        ));
++    }
++
++    #[tokio::test]
++    async fn rejects_direct_and_redirected_private_targets_before_connecting() {
++        let direct = Url::parse("http://169.254.169.254/latest/meta-data").unwrap();
++        assert!(matches!(
++            resolve_and_validate(&direct, Instant::now() + REQUEST_TIMEOUT).await,
++            Err(HttpError::Policy(_))
++        ));
++
++        let public = Url::parse("https://example.com/metadata.json").unwrap();
++        let redirected = redirect_target(&public, "http://127.0.0.1/secret", 0).unwrap();
++        assert!(matches!(
++            resolve_and_validate(&redirected, Instant::now() + REQUEST_TIMEOUT).await,
++            Err(HttpError::Policy(_))
++        ));
++    }
++
++    #[test]
++    fn rejects_dns_rebinding_sets_and_redirect_loops() {
++        let mixed = [
++            "1.1.1.1:443".parse::<SocketAddr>().unwrap(),
++            "10.0.0.1:443".parse::<SocketAddr>().unwrap(),
++        ];
++        assert!(validate_resolved_addresses("rebind.example", &mixed).is_err());
++
++        let current = Url::parse("https://example.com/a").unwrap();
++        assert!(redirect_target(&current, "/b", MAX_REDIRECTS).is_err());
++    }
++
++    #[test]
++    fn retries_only_rate_limits_and_server_failures() {
++        assert!(transient_status(StatusCode::TOO_MANY_REQUESTS));
++        assert!(transient_status(StatusCode::BAD_GATEWAY));
++        assert!(!transient_status(StatusCode::REQUEST_TIMEOUT));
++        assert!(!transient_status(StatusCode::BAD_REQUEST));
+     }
+ }
+diff --git a/crates/processors/src/lib.rs b/crates/processors/src/lib.rs
+index 1dd0403..ff15c47 100644
+--- a/crates/processors/src/lib.rs
++++ b/crates/processors/src/lib.rs
+@@ -8,7 +8,6 @@ use tokio::sync::Semaphore;
+ use torii_cache::{Cache, ContractClassCache};
+ use torii_storage::Storage;
+
+-mod constants;
+ pub mod erc;
+ pub mod error;
+ pub mod fetch;
+diff --git a/crates/processors/src/processors/metadata_update.rs b/crates/processors/src/processors/metadata_update.rs
+index b17da87..d3fb072 100644
+--- a/crates/processors/src/processors/metadata_update.rs
++++ b/crates/processors/src/processors/metadata_update.rs
+@@ -112,9 +112,7 @@ async fn metadata(
+     let uri = Uri::Ipfs(uri_str);
+     let cid = uri.cid().ok_or(Error::UriMalformed)?;
+
+-    let bytes = fetch_content_from_ipfs(cid)
+-        .await
+-        .map_err(Error::IpfsError)?;
++    let bytes = crate::fetch::fetch_json_from_ipfs(cid).await?;
+     let metadata: WorldMetadata =
+         serde_json::from_str(std::str::from_utf8(&bytes).map_err(ParseError::Utf8Error)?)
+             .map_err(ParseError::FromJsonStr)?;
+diff --git a/crates/server/src/handlers/static.rs b/crates/server/src/handlers/static.rs
+index 2fa9c8f..195c0d9 100644
+--- a/crates/server/src/handlers/static.rs
++++ b/crates/server/src/handlers/static.rs
+@@ -4,21 +4,22 @@ use std::str::FromStr;
+ use std::time::SystemTime;
+
+ use anyhow::{Context, Result};
+-use base64::{engine::general_purpose, Engine as _};
+ use camino::Utf8PathBuf;
+ use chrono;
+ use data_url::mime::Mime;
+ use data_url::DataUrl;
+ use hyper::{Body, Request, Response, StatusCode};
+ use image::{DynamicImage, ImageFormat};
+-use regex::Regex;
+ use serde::{Deserialize, Serialize};
+ use sha2::{Digest, Sha256};
+ use sqlx::{Pool, Sqlite};
+ use tokio::fs;
+ use tokio::fs::File;
+ use tokio::io::{AsyncReadExt, AsyncWriteExt};
+-use torii_processors::fetch::{fetch_content_from_http, fetch_content_from_ipfs};
++use torii_processors::fetch::{
++    fetch_content_from_http, fetch_content_from_ipfs, sanitize_svg, validate_data_uri_size,
++    ContentKind,
++};
+ use torii_sqlite::constants::TOKENS_TABLE;
+ use tracing::{debug, error, trace};
+
+@@ -296,13 +297,23 @@ impl StaticHandler {
+
+                     // Build response with content-based ETag and file-based Last-Modified
+                     let mut response_builder = Response::builder()
+-                        .header("content-type", mime)
++                        .header("content-type", &mime)
+                         .header("etag", etag)
++                        .header("x-content-type-options", "nosniff")
+                         .header(
+                             "cache-control",
+                             "public, max-age=3600, stale-while-revalidate=86400",
+                         );
+
++                    if mime == "image/svg+xml" {
++                        response_builder = response_builder
++                            .header(
++                                "content-security-policy",
++                                "sandbox; default-src 'none'; img-src data:; style-src 'none'",
++                            )
++                            .header("cross-origin-resource-policy", "same-site");
++                    }
++
+                     // Add Last-Modified header from file modification time
+                     if let Some(file_mod_time) = file_last_modified {
+                         response_builder = response_builder
+@@ -468,45 +479,7 @@ impl StaticHandler {
+     }
+
+     async fn patch_svg_images_regex(&self, svg_data: &[u8]) -> anyhow::Result<Vec<u8>> {
+-        let svg_str = std::str::from_utf8(svg_data)?;
+-        // Regex for href and xlink:href in <image ...> tags
+-        let re = Regex::new(r#"(href|xlink:href)\s*=\s*["']([^"']+)["']"#).unwrap();
+-
+-        let mut patched_svg = String::with_capacity(svg_str.len());
+-        let mut last_end = 0;
+-
+-        for cap in re.captures_iter(svg_str) {
+-            let m = cap.get(0).unwrap();
+-            let attr_name = &cap[1];
+-            let href = &cap[2];
+-
+-            patched_svg.push_str(&svg_str[last_end..m.start()]);
+-
+-            // Only patch if not already a data URI
+-            if href.starts_with("data:") {
+-                patched_svg.push_str(m.as_str());
+-            } else {
+-                // Fetch the image bytes using your fetchers
+-                let image_bytes = if href.starts_with("http://") || href.starts_with("https://") {
+-                    fetch_content_from_http(href).await?
+-                } else if href.starts_with("ipfs://") {
+-                    let cid = href.strip_prefix("ipfs://").unwrap();
+-                    fetch_content_from_ipfs(cid).await?
+-                } else {
+-                    // fallback: leave as is
+-                    patched_svg.push_str(m.as_str());
+-                    last_end = m.end();
+-                    continue;
+-                };
+-                let mime = mime_guess::from_path(href).first_or_octet_stream();
+-                let b64 = general_purpose::STANDARD.encode(&image_bytes);
+-                let data_uri = format!("{}=\"data:{};base64,{}\"", attr_name, mime, b64);
+-                patched_svg.push_str(&data_uri);
+-            }
+-            last_end = m.end();
+-        }
+-        patched_svg.push_str(&svg_str[last_end..]);
+-        Ok(patched_svg.into_bytes())
++        sanitize_svg(svg_data).map_err(Into::into)
+     }
+
+     fn set_file_timestamp(
+@@ -676,11 +649,13 @@ impl StaticHandler {
+                     let decoded = data_url
+                         .decode_to_vec()
+                         .context("Failed to decode data URI")?;
++                    validate_data_uri_size(&decoded.0, ContentKind::Image)?;
+                     ErcImageType::Svg(decoded.0)
+                 } else {
+                     let decoded = data_url
+                         .decode_to_vec()
+                         .context("Failed to decode data URI")?;
++                    validate_data_uri_size(&decoded.0, ContentKind::Image)?;
+                     let format = image::guess_format(&decoded.0).with_context(|| {
+                         format!("Unknown file format for token_id: {}", token_id)
+                     })?;
+diff --git a/crates/sqlite/sqlite/src/executor/mod.rs b/crates/sqlite/sqlite/src/executor/mod.rs
+index e8f593f..68c8064 100644
+--- a/crates/sqlite/sqlite/src/executor/mod.rs
++++ b/crates/sqlite/sqlite/src/executor/mod.rs
+@@ -1107,6 +1107,27 @@ impl<P: Provider + Sync + Send + Clone + 'static> Executor<'_, P> {
+
+                 let token = query.fetch_one(&mut **tx).await?;
+
++                if register_nft_token.metadata.trim().is_empty() {
++                    sqlx::query(
++                        "INSERT OR IGNORE INTO marketplace_metadata_failures \
++                         (collection, token_id, uri, reason, attempts) VALUES (?, ?, '', \
++                         'metadata_fetch_failed_or_empty', 0)",
++                    )
++                    .bind(&token.contract_address)
++                    .bind(&token.token_id)
++                    .execute(&mut **tx)
++                    .await?;
++                    sqlx::query(
++                        "UPDATE marketplace_metadata_failures SET attempts = attempts + 1, \
++                         last_failed_at = CURRENT_TIMESTAMP WHERE collection = ? AND token_id = ? \
++                         AND resolved_at IS NULL",
++                    )
++                    .bind(&token.contract_address)
++                    .bind(&token.token_id)
++                    .execute(&mut **tx)
++                    .await?;
++                }
++
+                 // Store individual token attributes for fast filtering
+                 if self.config.token_attributes {
+                     store_token_attributes(&register_nft_token.metadata, &token.id, &mut *tx)
+@@ -1167,6 +1188,36 @@ impl<P: Provider + Sync + Send + Clone + 'static> Executor<'_, P> {
+                 .fetch_one(&mut **tx)
+                 .await?;
+
++                if update_metadata.metadata.trim().is_empty() {
++                    sqlx::query(
++                        "INSERT OR IGNORE INTO marketplace_metadata_failures \
++                         (collection, token_id, uri, reason, attempts) VALUES (?, ?, '', \
++                         'metadata_fetch_failed_or_empty', 0)",
++                    )
++                    .bind(&token.contract_address)
++                    .bind(&token.token_id)
++                    .execute(&mut **tx)
++                    .await?;
++                    sqlx::query(
++                        "UPDATE marketplace_metadata_failures SET attempts = attempts + 1, \
++                         last_failed_at = CURRENT_TIMESTAMP WHERE collection = ? AND token_id = ? \
++                         AND resolved_at IS NULL",
++                    )
++                    .bind(&token.contract_address)
++                    .bind(&token.token_id)
++                    .execute(&mut **tx)
++                    .await?;
++                } else {
++                    sqlx::query(
++                        "UPDATE marketplace_metadata_failures SET resolved_at = CURRENT_TIMESTAMP \
++                         WHERE collection = ? AND token_id = ? AND resolved_at IS NULL",
++                    )
++                    .bind(&token.contract_address)
++                    .bind(&token.token_id)
++                    .execute(&mut **tx)
++                    .await?;
++                }
++
+                 // If this is an individual token (has token_id), update attributes and contract's traits
+                 if update_metadata.token_id.is_nft() {
+                     // Get the old metadata before updating (needed for trait subtraction)
+diff --git a/crates/sqlite/sqlite/src/storage.rs b/crates/sqlite/sqlite/src/storage.rs
+index ecf4bf8..44eb1ab 100644
+--- a/crates/sqlite/sqlite/src/storage.rs
++++ b/crates/sqlite/sqlite/src/storage.rs
+@@ -20,7 +20,10 @@ use torii_proto::{
+     TokenTransferQuery, Transaction, TransactionCall, TransactionQuery,
+ };
+ use torii_sqlite_types::{HookEvent, Model as SQLModel};
+-use torii_storage::{utils::format_world_scoped_id, ReadOnlyStorage, Storage, StorageError};
++use torii_storage::{
++    utils::{format_world_scoped_id, parse_event_id},
++    ReadOnlyStorage, Storage, StorageError,
++};
+ use tracing::warn;
+
+ use crate::{
+@@ -2324,13 +2327,22 @@ impl Storage for Sql {
+         let data = Argument::String(felts_to_sql_string(&event.data));
+         let hash = Argument::FieldElement(transaction_hash);
+         let executed_at = Argument::String(utc_dt_string_from_timestamp(block_timestamp));
++        let (block_number, _, _, event_index) = parse_event_id(event_id);
+
+         self.executor
+             .send(QueryMessage::new(
+-                "INSERT INTO events (id, keys, data, transaction_hash, executed_at) VALUES \
+-             (?, ?, ?, ?, ?) ON CONFLICT DO NOTHING RETURNING *"
++                "INSERT INTO events (id, keys, data, transaction_hash, executed_at, block_number, \
++                 event_index) VALUES (?, ?, ?, ?, ?, ?, ?) ON CONFLICT DO NOTHING RETURNING *"
+                     .to_string(),
+-                vec![id, keys, data, hash, executed_at],
++                vec![
++                    id,
++                    keys,
++                    data,
++                    hash,
++                    executed_at,
++                    Argument::Int(block_number as i64),
++                    Argument::Int(event_index as i64),
++                ],
+                 QueryType::StoreEvent,
+             ))
+             .map_err(|e| {

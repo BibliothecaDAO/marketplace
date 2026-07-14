@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useDeferredValue, useMemo, useState } from "react";
-import type { CollectionOrdersOptions } from "@cartridge/arcade/marketplace";
+import type { CollectionOrdersOptions } from "@/lib/marketplace/types";
 import {
   useCollectionListingsQuery,
   useCollectionOrdersQuery,
@@ -33,6 +33,7 @@ import { useEntrance } from "@/lib/animation";
 
 type CollectionMarketPanelProps = {
   address: string;
+  currency?: string;
   projectId?: string;
 };
 
@@ -371,6 +372,7 @@ function parseListingTokenId(value: string) {
 
 export function CollectionMarketPanel({
   address,
+  currency,
   projectId,
 }: CollectionMarketPanelProps) {
   const collectionConfig = useMemo(() => getCollectionFilterConfig(address), [address]);
@@ -409,11 +411,13 @@ export function CollectionMarketPanel({
     collection: address,
     status: parsedOrderStatus,
     category: parsedOrderCategory,
+    currency,
     limit: 24,
   });
   const listings = useCollectionListingsQuery({
     collection: address,
     tokenId: listingTokenFilter,
+    currency,
     limit: 24,
     verifyOwnership,
     projectId,

@@ -3,6 +3,7 @@ import { activeFiltersFromSearchParams } from "@/lib/marketplace/traits";
 import {
   collectionDiscoveryStateFromSearchParams,
   collectionDiscoveryStateToSearchParams,
+  currencyFromSearchParams,
   sortModeFromSearchParams,
 } from "@/features/collections/collection-query-params";
 
@@ -23,12 +24,14 @@ describe("collection query params", () => {
           Background: new Set(["Blue"]),
         },
         sortMode: "price-desc",
+        currency: "LORDS",
       },
     );
 
     expect(params.get("cursor")).toBeNull();
     expect(params.get("foo")).toBe("bar");
     expect(params.get("sort")).toBe("price-desc");
+    expect(params.get("currency")).toBe("LORDS");
     expect(activeFiltersFromSearchParams(params)).toEqual({
       Background: new Set(["Blue"]),
     });
@@ -40,18 +43,27 @@ describe("collection query params", () => {
       {
         activeFilters: {},
         sortMode: "price-asc",
+        currency: "STRK",
       },
     );
 
     expect(params.get("sort")).toBeNull();
+    expect(params.get("currency")).toBeNull();
   });
 
   it("parses_combined_discovery_state_from_query", () => {
     const state = collectionDiscoveryStateFromSearchParams(
-      new URLSearchParams("trait=Eyes:Big&sort=price-desc"),
+      new URLSearchParams("trait=Eyes:Big&sort=price-desc&currency=SURVIVO"),
     );
 
     expect(Array.from(state.activeFilters.Eyes)).toEqual(["Big"]);
     expect(state.sortMode).toBe("price-desc");
+    expect(state.currency).toBe("SURVIVO");
+  });
+
+  it("defaults currency to STRK and rejects unknown symbols", () => {
+    expect(currencyFromSearchParams(new URLSearchParams())).toBe("STRK");
+    expect(currencyFromSearchParams(new URLSearchParams("currency=lords"))).toBe("LORDS");
+    expect(currencyFromSearchParams(new URLSearchParams("currency=ETH"))).toBe("STRK");
   });
 });

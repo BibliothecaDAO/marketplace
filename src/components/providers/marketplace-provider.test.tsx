@@ -8,14 +8,12 @@ const {
   mockBuildStarknetConfig,
   mockStarknetConfigProps,
   mockQueryClientProviderClient,
-  mockMarketplaceClientProviderConfig,
 } = vi.hoisted(() => ({
   mockGetMarketplaceRuntimeConfig: vi.fn(),
   mockMakeQueryClient: vi.fn(),
   mockBuildStarknetConfig: vi.fn(),
   mockStarknetConfigProps: vi.fn(),
   mockQueryClientProviderClient: vi.fn(),
-  mockMarketplaceClientProviderConfig: vi.fn(),
 }));
 
 vi.mock("@/lib/marketplace/config", () => ({
@@ -56,19 +54,6 @@ vi.mock("@tanstack/react-query", () => ({
   },
 }));
 
-vi.mock("@cartridge/arcade/marketplace/react", () => ({
-  MarketplaceClientProvider: ({
-    config,
-    children,
-  }: {
-    config: unknown;
-    children: React.ReactNode;
-  }) => {
-    mockMarketplaceClientProviderConfig(config);
-    return <>{children}</>;
-  },
-}));
-
 describe("marketplace provider", () => {
   beforeEach(() => {
     mockGetMarketplaceRuntimeConfig.mockReset();
@@ -76,12 +61,10 @@ describe("marketplace provider", () => {
     mockBuildStarknetConfig.mockReset();
     mockStarknetConfigProps.mockReset();
     mockQueryClientProviderClient.mockReset();
-    mockMarketplaceClientProviderConfig.mockReset();
   });
 
-  it("wraps app with starknet, query, and marketplace providers", () => {
+  it("wraps app with Starknet writes and the owned read-query provider", () => {
     const mockQueryClient = { query: "client" };
-    const sdkConfig = { chainId: "0x534e5f4d41494e", runtime: "edge" };
     const starknetConfig = {
       chains: [{ id: "mainnet" }, { id: "sepolia" }],
       provider: vi.fn(),
@@ -91,8 +74,6 @@ describe("marketplace provider", () => {
 
     mockGetMarketplaceRuntimeConfig.mockReturnValue({
       chainLabel: "SN_MAIN",
-      sdkConfig,
-      featureFlags: { enableDeferredMetadataHydration: false },
       warnings: [],
       collections: [],
     });
@@ -109,6 +90,5 @@ describe("marketplace provider", () => {
     expect(mockBuildStarknetConfig).toHaveBeenCalledWith("SN_MAIN");
     expect(mockStarknetConfigProps).toHaveBeenCalledWith(starknetConfig);
     expect(mockQueryClientProviderClient).toHaveBeenCalledWith(mockQueryClient);
-    expect(mockMarketplaceClientProviderConfig).toHaveBeenCalledWith(sdkConfig);
   });
 });

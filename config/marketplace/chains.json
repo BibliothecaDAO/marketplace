@@ -1,0 +1,111 @@
+{
+  "schemaVersion": "1.0.0",
+  "chains": {
+    "SN_MAIN": {
+      "chainId": "0x534e5f4d41494e",
+      "world": {
+        "address": "0x07a079295990e43441a7389fdc3b9ba063c6cd6aee16fb846f598c42a9f04ff7",
+        "classHash": "0x0613551abceb2b37073b1149bb862ea70cf029981ce1ca47e9dd7c7ab97cb65d",
+        "startBlock": 2407079
+      },
+      "marketplace": {
+        "address": "0x06bbf16b6c67b1bef27a187b499b2f3a14af31646c2c90d64f11b9087c3f527c",
+        "classHash": "0x058fcd599b5037e899a479324dc5d09d46db2640d0587a41259ef3db0c95b858",
+        "startBlock": 2407081
+      },
+      "currencies": [
+        {
+          "address": "0x04718f5a0fc34cc1af16a1cdee98ffb20c31f5cd61d6ab07201858f4287c938d",
+          "symbol": "STRK",
+          "decimals": 18,
+          "icon": "/tokens/strk.svg"
+        },
+        {
+          "address": "0x0124aeb495b947201f5fac96fd1138e326ad86195b98df6dec9009158a533b49",
+          "symbol": "LORDS",
+          "decimals": 18,
+          "icon": "/tokens/lords.svg"
+        },
+        {
+          "address": "0x042dd777885ad2c116be96d4d634abc90a26a790ffb5871e037dd5ae7d2ec86b",
+          "symbol": "SURVIVO",
+          "decimals": 18,
+          "icon": "/tokens/survivo.jpg"
+        }
+      ],
+      "collections": [
+        {
+          "address": "0x07ae27a31bb6526e3de9cf02f081f6ce0615ac12a6d7b85ee58b8ad7947a2809",
+          "name": "Realms",
+          "standard": "ERC721",
+          "startBlock": 664162,
+          "metadata": { "enabled": true }
+        },
+        {
+          "address": "0x060e8836acbebb535dfcd237ff01f20be503aae407b67bb6e3b5869afae97156",
+          "name": "Season Pass",
+          "standard": "ERC721",
+          "startBlock": 1355128,
+          "metadata": { "enabled": true }
+        },
+        {
+          "address": "0x0572fe34a769058c62a66f0c4854d08ccfd21fcbb4f0b1685a1868b84c6ee266",
+          "name": "Loot Chests",
+          "standard": "ERC721",
+          "startBlock": 1517708,
+          "metadata": { "enabled": true }
+        },
+        {
+          "address": "0x01f36515d7d307c9d3e41df48f29e9a6b4bbc445d0fbdbbce944a4678cd52b02",
+          "name": "Cosmetics",
+          "standard": "ERC721",
+          "startBlock": 1889136,
+          "metadata": { "enabled": true }
+        },
+        {
+          "address": "0x027838dea749f41c6f8a44fcfa791788e6101080c1b3cd646a361f653ad10e2d",
+          "name": "Golden Token",
+          "standard": "ERC721",
+          "startBlock": 2021283,
+          "metadata": { "enabled": true }
+        },
+        {
+          "address": "0x046da8955829adf2bda310099a0063451923f02e648cf25a1203aac6335cf0e4",
+          "name": "Beasts",
+          "standard": "ERC721",
+          "startBlock": 2209828,
+          "metadata": { "enabled": true }
+        },
+        {
+          "address": "0x036017e69d21d6d8c13e266eabb73ef1f1d02722d86bdcabe5f168f8e549d3cd",
+          "name": "Adventurers",
+          "standard": "ERC721",
+          "startBlock": 2134592,
+          "metadata": { "enabled": true }
+        }
+      ]
+    },
+    "SN_SEPOLIA": {
+      "chainId": "0x534e5f5345504f4c4941",
+      "world": {
+        "address": "0x07a079295990e43441a7389fdc3b9ba063c6cd6aee16fb846f598c42a9f04ff7",
+        "classHash": "0x0613551abceb2b37073b1149bb862ea70cf029981ce1ca47e9dd7c7ab97cb65d",
+        "startBlock": 2736993
+      },
+      "marketplace": {
+        "address": "0x07669aff1a265088243875225d97628bcf69a9f123f44a1987546a99ee5b6e98",
+        "classHash": "0x058fcd599b5037e899a479324dc5d09d46db2640d0587a41259ef3db0c95b858",
+        "startBlock": 2737006
+      },
+      "currencies": [
+        {
+          "address": "0x04718f5a0fc34cc1af16a1cdee98ffb20c31f5cd61d6ab07201858f4287c938d",
+          "symbol": "STRK",
+          "decimals": 18,
+          "icon": "/tokens/strk.svg"
+        }
+      ],
+      "collections": []
+    }
+  }
+}

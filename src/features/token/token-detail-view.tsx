@@ -4,8 +4,9 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { animate } from "animejs";
 import { useAccount } from "@starknet-react/core";
-import type { NormalizedToken } from "@cartridge/arcade/marketplace";
-import { useMarketplaceClient } from "@cartridge/arcade/marketplace/react";
+import type { MarketplaceActivity } from "@biblio/marketplace-api-contract";
+import type { NormalizedToken } from "@/lib/marketplace/types";
+import { useMarketplaceClient } from "@/lib/marketplace/read-client";
 import {
   useCollectionListingsQuery,
   useTokenDetailQuery,
@@ -33,6 +34,7 @@ import {
   getTokenSymbol,
 } from "@/lib/marketplace/token-display";
 import { calculateMarketplaceFee, parseBigInt } from "@/lib/marketplace/fees";
+import { waitForIndexedBlock } from "@/lib/marketplace/index-confirmation";
 import { TOKEN_DETAIL_LISTING_LIMIT } from "@/lib/marketplace/query-limits";
 import type { CheapestListing } from "@/features/cart/listing-utils";
 import {
@@ -163,14 +165,16 @@ function isExpiredListing(listing: ListingRow, nowEpochSeconds: number) {
   return expiration <= nowEpochSeconds;
 }
 
-// Arcade Marketplace contract address (same on SN_MAIN and SN_SEPOLIA per SDK manifest)
-const MARKETPLACE_CONTRACT = "0x6bbf16b6c67b1bef27a187b499b2f3a14af31646c2c90d64f11b9087c3f527c";
-// Supported listing currencies
-const STRK_ADDRESS = "0x04718f5a0fc34cc1af16a1cdee98ffb20c31f5cd61d6ab07201858f4287c938d";
-const LORDS_ADDRESS = "0x0124aeb495b947201f5fac96fd1138e326ad86195b98df6dec9009158a533b49";
-const SURVIVOR_ADDRESS = "0x42dd777885ad2c116be96d4d634abc90a26a790ffb5871e037dd5ae7d2ec86b";
 const DEFAULT_MARKETPLACE_FEE_NUM = 500;
 const DEFAULT_MARKETPLACE_FEE_DENOMINATOR = 10_000;
+
+function activityLabel(type: MarketplaceActivity["type"]) {
+  return type
+    .split("_")
+    .map((part, index) =>
+      index === 0 ? `${part.charAt(0).toUpperCase()}${part.slice(1)}` : part)
+    .join(" ");
+}
 
 export function TokenDetailView({
   address,
@@ -181,15 +185,21 @@ export function TokenDetailView({
   const normalizedTokenId = formatNumberish(tokenId) ?? tokenId;
   const { addListingToCart, isRecentlyAdded } = useAddToCartFeedback();
   const { account, address: walletAddress, isConnected } = useAccount();
-  const { client } = useMarketplaceClient();
-  const { collections, chainLabel } = getMarketplaceRuntimeConfig();
+  const { client } = useMarketplaceClient(account);
+  const runtimeConfig = getMarketplaceRuntimeConfig();
+  const { collections, chainLabel, currencies, marketplaceAddress } = runtimeConfig;
+  const defaultCurrency =
+    currencies.find((currency) => currency.symbol === "STRK") ?? currencies[0];
+  if (!defaultCurrency) {
+    throw new Error(`No marketplace currencies are configured for ${chainLabel}.`);
+  }
   const collectionName =
     collections.find((c) => c.address === address)?.name ??
     truncateAddress(address);
   // Human-readable price in STRK (1 STRK = 1e18 wei)
   const [priceInput, setPriceInput] = useState("1");
   const [quantityInput, setQuantityInput] = useState("1");
-  const [currencyInput, setCurrencyInput] = useState(LORDS_ADDRESS);
+  const [currencyInput, setCurrencyInput] = useState(defaultCurrency.address);
   // Expiration as a preset duration in seconds (default: 24 hours)
   const [expirationPreset, setExpirationPreset] = useState("86400");
   const [txStatus, setTxStatus] = useState<{
@@ -240,6 +250,7 @@ export function TokenDetailView({
   );
 
   const token = detailQuery.data?.token ?? null;
+  const activityRows = detailQuery.data?.activity ?? [];
   const rawListings = useMemo(
     () => listingQuery.data ?? detailQuery.data?.listings ?? [],
     [detailQuery.data?.listings, listingQuery.data],
@@ -247,7 +258,7 @@ export function TokenDetailView({
   const listingRows = useMemo(
     () => {
       const now = Math.floor(Date.now() / 1000);
-      return (rawListings as ListingRow[]).filter(
+      return (rawListings as unknown as ListingRow[]).filter(
         (listing) =>
           !isInactiveListing(listing) &&
           !isExpiredListing(listing, now),
@@ -432,11 +443,41 @@ export function TokenDetailView({
 
     try {
       const result = await executor();
-      setTxStatus({
-        tone: "success",
-        message: `Transaction submitted`,
-        txHash: result.transaction_hash,
-      });
+      const waitForTransaction = (account as unknown as {
+        waitForTransaction?: (transactionHash: string) => Promise<unknown>;
+      }).waitForTransaction?.bind(account);
+      if (!waitForTransaction) {
+        setTxStatus({
+          tone: "success",
+          message: "Transaction submitted; waiting for onchain confirmation.",
+          txHash: result.transaction_hash,
+        });
+        return;
+      }
+      const receipt = await waitForTransaction(result.transaction_hash);
+      const receiptFields = receipt && typeof receipt === "object"
+        ? receipt as Record<string, unknown>
+        : {};
+      const receiptBlock = Number(receiptFields.block_number ?? receiptFields.blockNumber);
+      if (Number.isSafeInteger(receiptBlock) && receiptBlock >= 0) {
+        const confirmation = await waitForIndexedBlock({
+          receiptBlock,
+          getIndexedBlock: async () => (await client.indexerStatus()).data.indexedBlock,
+        });
+        setTxStatus({
+          tone: "success",
+          message: confirmation.indexed
+            ? "Confirmed and indexed."
+            : "Confirmed onchain, still indexing.",
+          txHash: result.transaction_hash,
+        });
+      } else {
+        setTxStatus({
+          tone: "success",
+          message: "Confirmed onchain.",
+          txHash: result.transaction_hash,
+        });
+      }
       await Promise.all([listingQuery.refetch(), detailQuery.refetch()]);
     } catch (error) {
       const message =
@@ -572,7 +613,7 @@ export function TokenDetailView({
                         const low = (big & BigInt("0xffffffffffffffffffffffffffffffff")).toString();
                         const high = (big >> BigInt(128)).toString();
                         return account!.execute([{
-                          contractAddress: MARKETPLACE_CONTRACT,
+                          contractAddress: marketplaceAddress,
                           entrypoint: "cancel",
                           calldata: [String(ownListing.id), address, low, high],
                         }]);
@@ -602,9 +643,11 @@ export function TokenDetailView({
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value={STRK_ADDRESS}>STRK</SelectItem>
-                    <SelectItem value={LORDS_ADDRESS}>LORDS</SelectItem>
-                    <SelectItem value={SURVIVOR_ADDRESS}>SURVIVO</SelectItem>
+                    {currencies.map((currency) => (
+                      <SelectItem key={currency.address} value={currency.address}>
+                        {currency.symbol}
+                      </SelectItem>
+                    ))}
                   </SelectContent>
                 </Select>
               </div>
@@ -632,10 +675,10 @@ export function TokenDetailView({
                         // Approve marketplace to transfer all tokens in this collection
                         contractAddress: address,
                         entrypoint: "set_approval_for_all",
-                        calldata: [MARKETPLACE_CONTRACT, "1"],
+                        calldata: [marketplaceAddress, "1"],
                       },
                       {
-                        contractAddress: MARKETPLACE_CONTRACT,
+                        contractAddress: marketplaceAddress,
                         entrypoint: "list",
                         // ERC721: quantity must be 0 (contract checks value==0 for ERC721 validity)
                         // price is u128 (1 felt), token_id is u256 (2 felts), royalties is bool
@@ -802,6 +845,9 @@ export function TokenDetailView({
           <Card className="border-dashed">
             <CardContent className="space-y-3 p-3">
               <h2 className="realm-kicker text-lg">Make an offer</h2>
+              <p className="text-xs text-destructive" role="note">
+                Offer execution can select a client-fee receiver that is not bound by the buy order. Review the final wallet calldata before signing.
+              </p>
               <div className="grid gap-2 sm:grid-cols-2">
                 <div className="flex items-center gap-1">
                   <Input
@@ -821,6 +867,18 @@ export function TokenDetailView({
                   placeholder="Quantity"
                   value={quantityInput}
                 />
+                <Select onValueChange={setCurrencyInput} value={currencyInput}>
+                  <SelectTrigger aria-label="Offer currency">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {currencies.map((currency) => (
+                      <SelectItem key={currency.address} value={currency.address}>
+                        {currency.symbol}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
                 <div className="flex flex-col gap-1">
                   <label className="text-xs text-muted-foreground" htmlFor="offer-expiration-preset">Expires in</label>
                   <Select onValueChange={setExpirationPreset} value={expirationPreset}>
@@ -845,7 +903,7 @@ export function TokenDetailView({
                       const low = (big & BigInt("0xffffffffffffffffffffffffffffffff")).toString();
                       const high = (big >> BigInt(128)).toString();
                       return account!.execute([{
-                        contractAddress: MARKETPLACE_CONTRACT,
+                        contractAddress: marketplaceAddress,
                         entrypoint: "offer",
                         calldata: [address, low, high, quantityInput, priceToWei(priceInput), currencyInput, computeExpiration()],
                       }]);
@@ -978,6 +1036,40 @@ export function TokenDetailView({
           </div>
         )}
       </div>
+
+      <section className="space-y-3" data-testid="token-activity">
+        <h2 className="realm-kicker text-lg">Activity</h2>
+        {activityRows.length === 0 ? (
+          <p className="text-sm text-muted-foreground">No activity</p>
+        ) : (
+          <div className="divide-y divide-border/50 overflow-hidden rounded border border-border">
+            {activityRows.map((entry: MarketplaceActivity) => (
+              <div
+                className="flex flex-wrap items-center justify-between gap-2 px-3 py-2.5"
+                data-activity-row
+                key={`${entry.provenance.blockNumber}-${entry.provenance.transactionIndex}-${entry.provenance.eventIndex}`}
+              >
+                <div className="min-w-0">
+                  <p className="text-sm font-medium">{activityLabel(entry.type)}</p>
+                  <p className="text-xs text-muted-foreground">
+                    Block {entry.provenance.blockNumber}
+                    {entry.orderId ? ` · Order ${entry.orderId}` : ""}
+                  </p>
+                </div>
+                <a
+                  aria-label="View transaction"
+                  className="font-mono text-xs text-primary underline-offset-4 hover:underline"
+                  href={buildExplorerTxUrl(chainLabel, entry.provenance.transactionHash)}
+                  rel="noopener noreferrer"
+                  target="_blank"
+                >
+                  {truncateAddress(entry.provenance.transactionHash)}
+                </a>
+              </div>
+            ))}
+          </div>
+        )}
+      </section>
     </div>
   );
 }

@@ -11,6 +11,7 @@ import {
   collectionDiscoveryStateFromSearchParams,
   collectionDiscoveryStateToSearchParams,
   type CollectionSortMode,
+  type MarketplaceCurrencySymbol,
 } from "@/features/collections/collection-query-params";
 
 type CollectionRouteContainerProps = {
@@ -31,16 +32,19 @@ function cloneActiveFilters(activeFilters: ActiveFilters): ActiveFilters {
 function cloneDiscoveryState(state: {
   activeFilters: ActiveFilters;
   sortMode: CollectionSortMode;
+  currency: MarketplaceCurrencySymbol;
 }) {
   return {
     activeFilters: cloneActiveFilters(state.activeFilters),
     sortMode: state.sortMode,
+    currency: state.currency,
   };
 }
 
 type DiscoveryState = {
   activeFilters: ActiveFilters;
   sortMode: CollectionSortMode;
+  currency: MarketplaceCurrencySymbol;
 };
 
 type OptimisticDiscoveryState = {
@@ -109,6 +113,7 @@ export function CollectionRouteContainer({
   const applyDiscoveryState = useCallback((nextState: {
     activeFilters: ActiveFilters;
     sortMode: CollectionSortMode;
+    currency: MarketplaceCurrencySymbol;
   }) => {
     const clonedState = cloneDiscoveryState(nextState);
     const nextParams = collectionDiscoveryStateToSearchParams(
@@ -128,9 +133,14 @@ export function CollectionRouteContainer({
       applyDiscoveryState({
         activeFilters: nextFilters,
         sortMode: optimisticDiscoveryState.state.sortMode,
+        currency: optimisticDiscoveryState.state.currency,
       });
     },
-    [applyDiscoveryState, optimisticDiscoveryState.state.sortMode],
+    [
+      applyDiscoveryState,
+      optimisticDiscoveryState.state.currency,
+      optimisticDiscoveryState.state.sortMode,
+    ],
   );
 
   const handleSortModeChange = useCallback(
@@ -138,9 +148,24 @@ export function CollectionRouteContainer({
       applyDiscoveryState({
         activeFilters: optimisticDiscoveryState.state.activeFilters,
         sortMode: nextSortMode,
+        currency: optimisticDiscoveryState.state.currency,
       });
     },
-    [applyDiscoveryState, optimisticDiscoveryState.state.activeFilters],
+    [
+      applyDiscoveryState,
+      optimisticDiscoveryState.state.activeFilters,
+      optimisticDiscoveryState.state.currency,
+    ],
+  );
+
+  const handleCurrencyChange = useCallback(
+    (currency: MarketplaceCurrencySymbol) => {
+      applyDiscoveryState({
+        activeFilters: optimisticDiscoveryState.state.activeFilters,
+        sortMode: optimisticDiscoveryState.state.sortMode,
+        currency,
+      });
+    }, [applyDiscoveryState, optimisticDiscoveryState.state],
   );
 
   return (
@@ -148,9 +173,11 @@ export function CollectionRouteContainer({
       activeFilters={optimisticDiscoveryState.state.activeFilters}
       address={address}
       cursor={cursor}
+      currency={optimisticDiscoveryState.state.currency}
       collections={collections}
       onActiveFiltersChange={handleActiveFiltersChange}
       onSortModeChange={handleSortModeChange}
+      onCurrencyChange={handleCurrencyChange}
       sortMode={optimisticDiscoveryState.state.sortMode}
     />
   );

@@ -154,8 +154,18 @@ export function aggregateTraitValuePages(pages: TraitValuePage[]) {
 async function defaultFetchTraitNamesSummary(
   options: FetchTraitNamesSummaryOptions,
 ) {
-  const marketplace = await import("@cartridge/arcade/marketplace");
-  return marketplace.fetchTraitNamesSummary(options);
+  const { getMarketplaceApiClient } = await import("@/lib/marketplace/api-client");
+  const response = await getMarketplaceApiClient().traits(options.address);
+  return {
+    pages: [{
+      projectId: "owned",
+      traits: response.data.map((facet) => ({
+        traitName: facet.name,
+        valueCount: facet.values.length,
+      })),
+    }],
+    errors: [],
+  };
 }
 
 export async function fetchTraitNamesSummary(
@@ -173,8 +183,26 @@ export async function fetchTraitNamesSummary(
 }
 
 async function defaultFetchTraitValues(options: FetchTraitValuesOptions) {
-  const marketplace = await import("@cartridge/arcade/marketplace");
-  return marketplace.fetchTraitValues(options);
+  const { getMarketplaceApiClient } = await import("@/lib/marketplace/api-client");
+  const grouped = new Map<string, string[]>();
+  for (const filter of options.otherTraitFilters ?? []) {
+    grouped.set(filter.name, [...(grouped.get(filter.name) ?? []), filter.value]);
+  }
+  const response = await getMarketplaceApiClient().traits(options.address, {
+    traitName: options.traitName,
+    otherTraits: [...grouped].map(([name, values]) => ({ name, values })),
+  });
+  const facet = response.data.find((candidate) => candidate.name === options.traitName);
+  return {
+    pages: [{
+      projectId: "owned",
+      values: (facet?.values ?? []).map((entry) => ({
+        traitValue: String(entry.value),
+        count: Number(entry.count),
+      })),
+    }],
+    errors: [],
+  };
 }
 
 export async function fetchFilteredTraitValues(

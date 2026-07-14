@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
-import type { NormalizedToken } from "@cartridge/arcade/marketplace";
+import type { NormalizedToken } from "@/lib/marketplace/types";
 import {
   useCollectionListingsQuery,
   useCollectionQuery,
@@ -14,6 +14,13 @@ import {
 } from "@/lib/marketplace/token-display";
 import { TokenSymbol } from "@/components/ui/token-symbol";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import {
   type SeedCollection,
   getMarketplaceRuntimeConfig,
@@ -45,7 +52,10 @@ import {
   cheapestListingByTokenId,
 } from "@/features/cart/listing-utils";
 import { CART_MAX_ITEMS, useCartStore } from "@/features/cart/store/cart-store";
-import { type CollectionSortMode } from "@/features/collections/collection-query-params";
+import {
+  type CollectionSortMode,
+  type MarketplaceCurrencySymbol,
+} from "@/features/collections/collection-query-params";
 import { SweepBar } from "@/features/collections/sweep-bar";
 import { COLLECTION_LISTING_SAMPLE_LIMIT } from "@/lib/marketplace/query-limits";
 
@@ -58,8 +68,10 @@ type CollectionRouteViewProps = {
   collections?: SeedCollection[];
   activeFilters?: ActiveFilters;
   sortMode?: CollectionSortMode;
+  currency?: MarketplaceCurrencySymbol;
   onActiveFiltersChange?: (filters: ActiveFilters) => void;
   onSortModeChange?: (sortMode: CollectionSortMode) => void;
+  onCurrencyChange?: (currency: MarketplaceCurrencySymbol) => void;
 };
 
 const DEFAULT_SORT_OPTIONS: CollectionSortOption[] = [
@@ -169,8 +181,10 @@ export function CollectionRouteView({
   collections,
   activeFilters,
   sortMode = "recent",
+  currency = "STRK",
   onActiveFiltersChange,
   onSortModeChange,
+  onCurrencyChange,
 }: CollectionRouteViewProps) {
   const cartItems = useCartStore((state) => state.items);
   const cartOrderIds = useMemo(
@@ -179,10 +193,15 @@ export function CollectionRouteView({
   );
   const addCandidates = useCartStore((state) => state.addCandidates);
   const setCartOpen = useCartStore((state) => state.setOpen);
+  const runtimeConfig = getMarketplaceRuntimeConfig();
   const runtimeCollections = useMemo(
-    () => collections ?? getMarketplaceRuntimeConfig().collections,
-    [collections],
+    () => collections ?? runtimeConfig.collections,
+    [collections, runtimeConfig.collections],
   );
+  const currencyOptions = runtimeConfig.currencies;
+  const currencyAddress = currencyOptions.find(
+    (candidate) => candidate.symbol === currency,
+  )?.address ?? currencyOptions.find((candidate) => candidate.symbol === "STRK")?.address;
   const resolvedActiveFilters = activeFilters ?? EMPTY_ACTIVE_FILTERS;
   const selectedCollection = useMemo(
     () =>
@@ -192,7 +211,7 @@ export function CollectionRouteView({
     [address, runtimeCollections],
   );
   const projectId = selectedCollection?.projectId;
-  const sweepScopeKey = `${address}-${projectId ?? "default"}`;
+  const sweepScopeKey = `${address}-${currency}`;
   const [sweepCount, setSweepCount] = useState(0);
   const [visibleTokensByScope, setVisibleTokensByScope] = useState<
     Record<string, NormalizedToken[]>
@@ -219,6 +238,7 @@ export function CollectionRouteView({
     collection: address,
     projectId,
     limit: COLLECTION_LISTING_SAMPLE_LIMIT,
+    currency: currencyAddress,
     verifyOwnership: false,
   });
 
@@ -399,6 +419,7 @@ export function CollectionRouteView({
 
   const sortControls = useMemo<ReactNode>(
     () => (
+      <>
       <div
         className="flex flex-wrap items-center gap-2"
         data-testid="collection-sort-controls"
@@ -423,8 +444,27 @@ export function CollectionRouteView({
           );
         })}
       </div>
+
+      <div className="flex justify-end">
+        <Select
+          value={currency}
+          onValueChange={(value) => onCurrencyChange?.(value as MarketplaceCurrencySymbol)}
+        >
+          <SelectTrigger aria-label="Marketplace currency" className="w-36">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            {currencyOptions.map((option) => (
+              <SelectItem key={option.address} value={option.symbol}>
+                {option.symbol}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      </div>
+      </>
     ),
-    [handleSortOptionClick, sortMode, sortOptions],
+    [currency, currencyOptions, handleSortOptionClick, onCurrencyChange, sortMode, sortOptions],
   );
 
   return (
@@ -518,6 +558,7 @@ export function CollectionRouteView({
                   key={sweepScopeKey}
                   activeFilters={resolvedActiveFilters}
                   address={address}
+                  currency={currencyAddress}
                   onTokensChange={handleTokensChange}
                   projectId={projectId}
                   sortControls={sortControls}
@@ -528,7 +569,11 @@ export function CollectionRouteView({
             </TabsContent>
             <TabsContent value="market-activity">
               <div ref={activeTab === "market-activity" ? tabContentRef : undefined} key={`tab-market-${activeTab}`}>
-                <CollectionMarketPanel address={address} projectId={projectId} />
+                <CollectionMarketPanel
+                  address={address}
+                  currency={currencyAddress}
+                  projectId={projectId}
+                />
               </div>
             </TabsContent>
           </Tabs>
