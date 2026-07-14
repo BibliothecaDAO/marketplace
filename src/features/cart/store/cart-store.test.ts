@@ -4,6 +4,7 @@ import {
   type CartItem,
   createCartStore,
 } from "@/features/cart/store/cart-store";
+import { marketplaceOrderIdentityKey } from "@/lib/marketplace/order-identity";
 
 function makeItem(overrides?: Partial<CartItem>): CartItem {
   return {
@@ -23,21 +24,23 @@ describe("cart store", () => {
     localStorage.clear();
   });
 
-  it("cart_store_dedupes_by_order_id", () => {
+  it("cart_store_keeps_same_order_id_for_distinct_collection_token_identity", () => {
     const store = createCartStore();
 
     store.getState().addItem(makeItem({ orderId: "101" }));
-    store.getState().addItem(makeItem({ orderId: "101", tokenId: "2" }));
+    const result = store.getState().addItem(
+      makeItem({ orderId: "101", collection: "0xdef", tokenId: "2" }),
+    );
 
-    expect(store.getState().items).toHaveLength(1);
-    expect(store.getState().items[0]?.tokenId).toBe("1");
+    expect(result.ok).toBe(true);
+    expect(store.getState().items).toHaveLength(2);
   });
 
   it("cart_store_reports_already_in_cart_for_duplicate", () => {
     const store = createCartStore();
 
     store.getState().addItem(makeItem({ orderId: "101" }));
-    const result = store.getState().addItem(makeItem({ orderId: "101", tokenId: "2" }));
+    const result = store.getState().addItem(makeItem({ orderId: "101" }));
 
     expect(result.ok).toBe(false);
     expect(result.error).toMatch(/already in cart/i);
@@ -113,11 +116,12 @@ describe("cart store - mutation actions", () => {
 
   it("remove_item_removes_correct_item", () => {
     const store = createCartStore();
+    const first = makeItem({ orderId: "10", tokenId: "10" });
 
-    store.getState().addItem(makeItem({ orderId: "10", tokenId: "10" }));
+    store.getState().addItem(first);
     store.getState().addItem(makeItem({ orderId: "11", tokenId: "11" }));
 
-    store.getState().removeItem("10");
+    store.getState().removeItem(first);
 
     expect(store.getState().items).toHaveLength(1);
     expect(store.getState().items[0]?.orderId).toBe("11");
@@ -125,30 +129,52 @@ describe("cart store - mutation actions", () => {
 
   it("remove_item_also_removes_associated_inline_error", () => {
     const store = createCartStore();
+    const item = makeItem({ orderId: "10", tokenId: "10" });
+    const itemKey = marketplaceOrderIdentityKey(item);
 
-    store.getState().addItem(makeItem({ orderId: "10", tokenId: "10" }));
-    store.getState().setItemError("10", "some error");
+    store.getState().addItem(item);
+    store.getState().setItemError(item, "some error");
 
-    expect(store.getState().inlineErrors["10"]).toBe("some error");
+    expect(store.getState().inlineErrors[itemKey]).toBe("some error");
 
-    store.getState().removeItem("10");
+    store.getState().removeItem(item);
 
     expect(store.getState().items).toHaveLength(0);
-    expect(store.getState().inlineErrors["10"]).toBeUndefined();
+    expect(store.getState().inlineErrors[itemKey]).toBeUndefined();
   });
 
   it("remove_item_leaves_other_inline_errors_intact", () => {
     const store = createCartStore();
+    const first = makeItem({ orderId: "10", tokenId: "10" });
+    const second = makeItem({ orderId: "11", tokenId: "11" });
+    const firstKey = marketplaceOrderIdentityKey(first);
+    const secondKey = marketplaceOrderIdentityKey(second);
 
-    store.getState().addItem(makeItem({ orderId: "10", tokenId: "10" }));
-    store.getState().addItem(makeItem({ orderId: "11", tokenId: "11" }));
-    store.getState().setItemError("10", "error for 10");
-    store.getState().setItemError("11", "error for 11");
+    store.getState().addItem(first);
+    store.getState().addItem(second);
+    store.getState().setItemError(first, "error for 10");
+    store.getState().setItemError(second, "error for 11");
 
-    store.getState().removeItem("10");
+    store.getState().removeItem(first);
 
-    expect(store.getState().inlineErrors["10"]).toBeUndefined();
-    expect(store.getState().inlineErrors["11"]).toBe("error for 11");
+    expect(store.getState().inlineErrors[firstKey]).toBeUndefined();
+    expect(store.getState().inlineErrors[secondKey]).toBe("error for 11");
+  });
+
+  it("isolates removal and errors for rows sharing an order id", () => {
+    const store = createCartStore();
+    const first = makeItem({ orderId: "10", collection: "0xabc", tokenId: "1" });
+    const second = makeItem({ orderId: "10", collection: "0xdef", tokenId: "2" });
+    const secondKey = marketplaceOrderIdentityKey(second);
+
+    store.getState().addItem(first);
+    store.getState().addItem(second);
+    store.getState().setItemError(first, "first error");
+    store.getState().setItemError(second, "second error");
+    store.getState().removeItem(first);
+
+    expect(store.getState().items).toEqual([second]);
+    expect(store.getState().inlineErrors).toEqual({ [secondKey]: "second error" });
   });
 
   it("set_open_sets_is_open_true", () => {
@@ -169,56 +195,66 @@ describe("cart store - mutation actions", () => {
 
   it("set_item_error_stores_error_for_order", () => {
     const store = createCartStore();
+    const item = makeItem({ orderId: "20", tokenId: "20" });
 
-    store.getState().addItem(makeItem({ orderId: "20", tokenId: "20" }));
-    store.getState().setItemError("20", "purchase failed");
+    store.getState().addItem(item);
+    store.getState().setItemError(item, "purchase failed");
 
-    expect(store.getState().inlineErrors["20"]).toBe("purchase failed");
+    expect(store.getState().inlineErrors[marketplaceOrderIdentityKey(item)]).toBe(
+      "purchase failed",
+    );
   });
 
   it("set_item_error_can_overwrite_previous_error", () => {
     const store = createCartStore();
+    const item = makeItem({ orderId: "20", tokenId: "20" });
 
-    store.getState().addItem(makeItem({ orderId: "20", tokenId: "20" }));
-    store.getState().setItemError("20", "first error");
-    store.getState().setItemError("20", "second error");
+    store.getState().addItem(item);
+    store.getState().setItemError(item, "first error");
+    store.getState().setItemError(item, "second error");
 
-    expect(store.getState().inlineErrors["20"]).toBe("second error");
+    expect(store.getState().inlineErrors[marketplaceOrderIdentityKey(item)]).toBe(
+      "second error",
+    );
   });
 
   it("clear_item_error_removes_specific_error", () => {
     const store = createCartStore();
+    const first = makeItem({ orderId: "30", tokenId: "30" });
+    const second = makeItem({ orderId: "31", tokenId: "31" });
 
-    store.getState().addItem(makeItem({ orderId: "30", tokenId: "30" }));
-    store.getState().addItem(makeItem({ orderId: "31", tokenId: "31" }));
-    store.getState().setItemError("30", "err30");
-    store.getState().setItemError("31", "err31");
+    store.getState().addItem(first);
+    store.getState().addItem(second);
+    store.getState().setItemError(first, "err30");
+    store.getState().setItemError(second, "err31");
 
-    store.getState().clearItemError("30");
+    store.getState().clearItemError(first);
 
-    expect(store.getState().inlineErrors["30"]).toBeUndefined();
-    expect(store.getState().inlineErrors["31"]).toBe("err31");
+    expect(store.getState().inlineErrors[marketplaceOrderIdentityKey(first)]).toBeUndefined();
+    expect(store.getState().inlineErrors[marketplaceOrderIdentityKey(second)]).toBe("err31");
   });
 
   it("clear_item_error_is_noop_when_order_not_in_errors", () => {
     const store = createCartStore();
+    const item = makeItem({ orderId: "30", tokenId: "30" });
 
-    store.getState().addItem(makeItem({ orderId: "30", tokenId: "30" }));
-    store.getState().setItemError("30", "err30");
+    store.getState().addItem(item);
+    store.getState().setItemError(item, "err30");
 
-    // "99" is not in inlineErrors - should not throw or mutate anything
-    store.getState().clearItemError("99");
+    store.getState().clearItemError(makeItem({ orderId: "99", tokenId: "99" }));
 
-    expect(store.getState().inlineErrors["30"]).toBe("err30");
+    expect(store.getState().inlineErrors[marketplaceOrderIdentityKey(item)]).toBe("err30");
   });
 
   it("clear_inline_errors_removes_all_errors", () => {
     const store = createCartStore();
+    const first = makeItem({ orderId: "40", tokenId: "40" });
+    const second = makeItem({ orderId: "41", tokenId: "41" });
 
-    store.getState().addItem(makeItem({ orderId: "40", tokenId: "40" }));
-    store.getState().addItem(makeItem({ orderId: "41", tokenId: "41" }));
-    store.getState().setItemError("40", "errA");
-    store.getState().setItemError("41", "errB");
+    store.getState().addItem(first);
+    store.getState().addItem(second);
+    store.getState().setItemError(first, "errA");
+    store.getState().setItemError(second, "errB");
 
     store.getState().clearInlineErrors();
 
@@ -241,14 +277,15 @@ describe("cart store - mutation actions", () => {
 
   it("clear_cart_removes_items_inline_errors_and_action_error", () => {
     const store = createCartStore();
+    const item = makeItem({ orderId: "60", tokenId: "60", currency: "0xaaa" });
 
-    store.getState().addItem(makeItem({ orderId: "60", tokenId: "60", currency: "0xaaa" }));
-    store.getState().setItemError("60", "some error");
+    store.getState().addItem(item);
+    store.getState().setItemError(item, "some error");
     // Trigger lastActionError
     store.getState().addItem(makeItem({ orderId: "61", tokenId: "61", currency: "0xbbb" }));
 
     expect(store.getState().items).toHaveLength(1);
-    expect(store.getState().inlineErrors["60"]).toBe("some error");
+    expect(store.getState().inlineErrors[marketplaceOrderIdentityKey(item)]).toBe("some error");
     expect(store.getState().lastActionError).toBeTruthy();
 
     store.getState().clearCart();

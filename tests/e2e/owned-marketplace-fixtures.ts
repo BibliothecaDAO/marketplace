@@ -141,6 +141,7 @@ const book: MarketplaceBook = {
   feeDenominator: "10000",
   feeReceiver: felt("789"),
   updatedAt: provenance,
+  history: [],
 };
 
 const indexer: MarketplaceIndexerStatus = {
@@ -159,7 +160,7 @@ const indexer: MarketplaceIndexerStatus = {
 const meta: ApiMeta = {
   schemaVersion: "1.0.0",
   chain: "SN_MAIN",
-  chainId: "0x534e5f4d41494e",
+  chainId: "0x00000000000000000000000000000000000000000000000000534e5f4d41494e",
   worldAddress: E2E_WORLD,
   marketplaceAddress: E2E_MARKETPLACE,
   indexedBlock: indexer.indexedBlock,

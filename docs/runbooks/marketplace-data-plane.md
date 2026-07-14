@@ -132,6 +132,12 @@ Required repository/environment variables:
 - `MARKETPLACE_API_DOMAIN`
 - `MARKETPLACE_ROUTE53_ZONE_ID`
 
+The API task receives `MARKETPLACE_PUBLIC_BASE_URL=https://<api-domain>` from
+Terraform. It is the only origin used when emitting owned collection/token
+asset URLs. The public asset routes require a content-version query parameter,
+allow only registry collections, and proxy Torii's private sanitized static
+cache; never expose Torii `/static` or accept a caller-supplied source URL.
+
 Create all four RPC secret values in Secrets Manager after the launch-disabled
 bootstrap. Terraform creates the secret containers but never stores the URL in
 state or source.
@@ -189,7 +195,87 @@ Restore drill:
 
 Never test restore by overwriting the active volume.
 
-## 7. Blue/green Torii upgrade
+Record one JSON input per chain with `failureAt`, `latestReplicaAt`,
+`drillStartedAt`, `readyAt`, `restoredGeneration`, `indexedBlock`, `chainHead`,
+and `reconciliationMatched`. Evaluate both chains together; equality at the RPO
+or RTO boundary fails because the targets are strictly under five and sixty
+minutes:
+
+```bash
+RESTORE_DRILL_INPUT_PATH=.context/evidence/restore-inputs.json \
+RESTORE_DRILL_REPORT_PATH=.context/evidence/restore_drill_passed.json \
+pnpm --filter @biblio/marketplace-ops evaluate:restore
+```
+
+## 7. Load, soak, and chaos evidence
+
+Create a JSON array containing exactly 25 current tuple order keys, then run
+the cached browse routes and the full cart lookup under concurrent load:
+
+```bash
+MARKETPLACE_API_BASE_URL=https://marketplace-api.example.com \
+LOAD_CHAIN=SN_MAIN \
+LOAD_COLLECTION=0x... \
+LOAD_CURRENCY=0x... \
+LOAD_ORDER_KEYS_PATH=.context/evidence/load-order-keys.json \
+LOAD_DURATION_SECONDS=300 \
+LOAD_CONCURRENCY=20 \
+LOAD_REPORT_PATH=.context/evidence/load_test_passed.json \
+pnpm --filter @biblio/marketplace-ops load:api
+```
+
+The command warms every scenario, consumes complete responses, measures
+nearest-rank p50/p95/p99, requires at least 99.9% successful requests and p95
+under 500 ms, and exits nonzero on failure.
+
+Export the seven-day CloudWatch/API sample stream as a JSON array. Every sample
+contains `observedAt`, API availability, cached latency, accepted-block lag,
+and CPU/memory/disk percentages for both writers. Missing intervals are a
+failure, not silently discarded:
+
+```bash
+SOAK_SAMPLES_PATH=.context/evidence/seven-day-samples.json \
+SOAK_REPORT_PATH=.context/evidence/seven_day_soak_complete.json \
+pnpm --filter @biblio/marketplace-ops evaluate:soak
+```
+
+Run each chaos case in an isolated maintenance window and capture its result:
+
+- primary RPC transport failure, timeout, HTTP 429, and HTTP 5xx all select the
+  independently qualified fallback;
+- a deterministic JSON-RPC error is returned and is not hidden by failover;
+- Torii restart, disk pressure, and delayed indexing disable checkout;
+- recovery restores ready state without changing contract identity.
+
+Evaluate the eight-case report:
+
+```bash
+CHAOS_SCENARIOS_PATH=.context/evidence/chaos-cases.json \
+CHAOS_REPORT_PATH=.context/evidence/chaos_tests_passed.json \
+pnpm --filter @biblio/marketplace-ops evaluate:chaos
+```
+
+The evaluator requires every named case and explicit fail-closed evidence for
+Torii restart, disk pressure, and delayed indexing. It does not inject faults
+itself; fault activation remains an IAM/SSM-controlled production action.
+
+The signed Sepolia lifecycle is executed with dedicated funded seller and
+buyer accounts against the registered test collection. Capture the direct
+receipt callers/blocks, owned-API list and tuple lookup observations, cart
+action, purchase observation, and sampled final owner. Validate contract
+identity and index convergence against the checked-in registry:
+
+```bash
+SEPOLIA_LIFECYCLE_INPUT_PATH=.context/evidence/sepolia-lifecycle-input.json \
+SEPOLIA_LIFECYCLE_REPORT_PATH=.context/evidence/sepolia_lifecycle_passed.json \
+pnpm --filter @biblio/marketplace-ops evaluate:sepolia-lifecycle
+```
+
+This evaluator never holds a private key or submits a transaction. Signing is
+performed by the normal wallet flow; the report binds the resulting on-chain
+callers and receipts to the retained deployments.
+
+## 8. Blue/green Torii upgrade
 
 1. Build from the exact pinned source, apply the checked-in patch, run Rust
    security tests, scan the image, create an SBOM, and record the immutable
@@ -205,7 +291,7 @@ Never test restore by overwriting the active volume.
 If reconciliation differs, stop. Do not “repair” green by copying individual
 rows from blue.
 
-## 8. Progressive frontend cutover
+## 9. Progressive frontend cutover
 
 Set exactly one value:
 
@@ -229,7 +315,7 @@ The final `checkout` stage additionally requires:
 - receipt block observed by the indexer, or the non-failure message
   “Confirmed onchain, still indexing” after 60 seconds.
 
-## 9. Incident response
+## 10. Incident response
 
 ### API unavailable or identity mismatch
 
@@ -265,7 +351,7 @@ Keep cached browsing only within its declared stale policy and display degraded
 mode. Checkout stays closed. A third unqualified endpoint is not an emergency
 fallback.
 
-## 10. Rollback
+## 11. Rollback
 
 Rollback selects the preceding owned API task definition and/or Torii color and
 sets the rollout stage back. The retired Cartridge endpoint is not a target.
@@ -283,7 +369,29 @@ Rollback rules:
 - Do not submit, cancel, replay, or otherwise alter an on-chain order as part of
   rollback.
 
-## 11. Production release checklist
+## 12. Hash-verified release bundle
+
+Every release gate is stored as a separate JSON report named after its gate;
+reports must include `"passed": true`. In addition to the Terraform booleans,
+the bundle requires Torii security tests, Terraform/tflint/Checkov, container
+scans/SBOMs, a distinct load report, and a two-chain restore report. The
+preparer hashes every report, rejects missing/reused/out-of-directory files,
+rechecks soak/load/restore thresholds, and emits the only tfvars accepted for
+production:
+
+```bash
+RELEASE_EVIDENCE_DIRECTORY=.context/evidence/release-2026-08-01 \
+RELEASE_EVIDENCE_MEASURED_AT=2026-08-01T00:00:00Z \
+RELEASE_EVIDENCE_S3_URI=s3://marketplace-evidence/releases/2026-08-01/manifest.json \
+RELEASE_TFVARS_PATH=.context/evidence/release-2026-08-01/release.auto.tfvars.json \
+pnpm --filter @biblio/marketplace-ops prepare:release
+```
+
+Upload the whole directory without rewriting files, verify the remote object
+digests, then store the generated tfvars in the protected production secret.
+Do not hand-author release booleans.
+
+## 13. Production release checklist
 
 - [ ] Registry generation is clean and all start blocks/standards are verified.
 - [ ] QuickNode and Alchemy pass both chains, replay, and 24-hour soak.

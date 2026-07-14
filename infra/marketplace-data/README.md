@@ -8,6 +8,8 @@ tasks, one EC2/EBS SQLite writer per chain, private service discovery, ECR,
 encrypted/versioned S3 recovery storage, DLM snapshots, Secrets Manager
 containers, CloudWatch telemetry, and GitHub OIDC roles. Workloads are absent
 until `launch_enabled=true` and every release-evidence precondition passes.
+Token and collection images are relayed from private Torii through the API and
+cached by CloudFront at versioned, content-change URLs; Torii is never exposed.
 
 See [`docs/runbooks/marketplace-data-plane.md`](../../docs/runbooks/marketplace-data-plane.md)
 for bootstrap, qualification, restore, upgrade, rollout, and incident steps.
@@ -30,7 +32,9 @@ Terraform variables.
 
 The protected `MARKETPLACE_RELEASE_TFVARS` secret supplies a reviewed object of
 this shape; `false`, missing evidence, or an unmet numeric SLO blocks workload
-creation:
+creation. Generate it with `pnpm --filter @biblio/marketplace-ops
+prepare:release` from the complete hash-verified evidence directory. Do not
+hand-author the production value:
 
 ```hcl
 launch_enabled = true
@@ -65,4 +69,7 @@ release_evidence = {
 }
 ```
 
-This example is schema documentation, not release evidence.
+This example is schema documentation, not release evidence. The preparer also
+requires reports for Torii security tests, infrastructure checks, container
+scans/SBOMs, load, chaos, and both-chain restore drills even where Terraform
+does not expose a separate boolean.

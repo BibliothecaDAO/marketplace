@@ -132,7 +132,26 @@ pnpm ci:feature-routes
 pnpm ci:arcade-imports
 pnpm build
 pnpm start
+pnpm --filter @biblio/marketplace-ops load:api
+pnpm --filter @biblio/marketplace-ops evaluate:soak
+pnpm --filter @biblio/marketplace-ops evaluate:restore
+pnpm --filter @biblio/marketplace-ops evaluate:chaos
+pnpm --filter @biblio/marketplace-ops evaluate:sepolia-lifecycle
+pnpm --filter @biblio/marketplace-ops prepare:release
 ```
+
+Run the owned API locally with private Torii/RPC endpoints and an explicit
+public origin:
+
+```env
+MARKETPLACE_PUBLIC_BASE_URL=http://127.0.0.1:3001
+TORII_MAIN_URL=http://127.0.0.1:8080
+TORII_SEPOLIA_URL=http://127.0.0.1:8081
+```
+
+Deployed `MARKETPLACE_PUBLIC_BASE_URL` values must use HTTPS. Collection and
+token images are emitted as immutable, versioned owned-API URLs and are served
+from Torii's sanitized private asset cache.
 
 ## Testing and CI
 

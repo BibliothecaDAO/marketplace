@@ -28,8 +28,12 @@ import {
 import { getMarketplaceRuntimeConfig } from "@/lib/marketplace/config";
 import { useCartStore } from "@/features/cart/store/cart-store";
 import { useListAnimation } from "@/lib/animation";
-import { createMarketplaceWriteAdapter } from "@/lib/marketplace/write-adapter";
+import {
+  createMarketplaceWriteAdapter,
+  type MarketplaceContractCaller,
+} from "@/lib/marketplace/write-adapter";
 import { evaluateCheckoutPreflight } from "@/features/cart/checkout-preflight";
+import { marketplaceOrderIdentityKey } from "@/lib/marketplace/order-identity";
 import { waitForIndexedBlock } from "@/lib/marketplace/index-confirmation";
 
 const CLIENT_FEE_BPS = 500;
@@ -95,14 +99,6 @@ function asRecord(value: unknown) {
   return value && typeof value === "object"
     ? (value as Record<string, unknown>)
     : null;
-}
-
-const U128_MASK = (BigInt(1) << BigInt(128)) - BigInt(1);
-
-function toUint256Calldata(amount: bigint): [string, string] {
-  const low = (amount & U128_MASK).toString();
-  const high = (amount >> BigInt(128)).toString();
-  return [low, high];
 }
 
 function normalizeExecuteQuantity(quantity: string): string {
@@ -194,8 +190,11 @@ export function CartSidebar() {
     walletBalance < total;
 
   const writeAdapter = useMemo(
-    () => createMarketplaceWriteAdapter(chainId),
-    [chainId],
+    () => createMarketplaceWriteAdapter(chainId, {
+      marketplaceAddress,
+      contractCaller: account as unknown as MarketplaceContractCaller | null,
+    }),
+    [account, chainId, marketplaceAddress],
   );
 
   useEffect(() => {
@@ -280,7 +279,7 @@ export function CartSidebar() {
   }, [checkoutRolloutEnabled, client, marketplaceAddress, worldAddress]);
 
   const itemsKey = useMemo(
-    () => items.map((i) => `${i.orderId}:${i.price}`).join(","),
+    () => items.map((item) => `${marketplaceOrderIdentityKey(item)}:${item.price}`).join(","),
     [items],
   );
 
@@ -400,8 +399,9 @@ export function CartSidebar() {
         accountAddress: account.address,
       });
       if (!preflight.safe) {
-        Object.entries(preflight.rowErrors).forEach(([orderId, message]) => {
-          setItemError(orderId, message);
+        items.forEach((item) => {
+          const message = preflight.rowErrors[marketplaceOrderIdentityKey(item)];
+          if (message) setItemError(item, message);
         });
         const hasOwnListingError = Object.values(preflight.rowErrors).some(
           (message) => message === OWN_LISTING_ERROR,
@@ -420,6 +420,17 @@ export function CartSidebar() {
         return;
       }
 
+      const lookupByKey = new Map(
+        lookupResponse.data.orders.map((result) => [
+          marketplaceOrderIdentityKey({
+            orderId: result.key.id,
+            collection: result.key.collection,
+            tokenId: result.key.tokenId,
+          }),
+          result.order,
+        ]),
+      );
+
       const validateOnChainValidity = async (item: (typeof items)[number]) => {
         logCheckoutDiagnostics(debugEnabled, "validate.onchain.request", {
           orderId: item.orderId,
@@ -427,11 +438,17 @@ export function CartSidebar() {
           tokenId: item.tokenId,
         });
         try {
-          const isValid = await writeAdapter.isOrderValid({
-            id: item.orderId,
-            collection: item.collection,
-            tokenId: item.tokenId,
-          });
+          const owner = lookupByKey.get(marketplaceOrderIdentityKey(item))?.owner;
+          const isValid = owner
+            ? await writeAdapter.isSellOrderExecutable({
+                key: {
+                  id: item.orderId,
+                  collection: item.collection,
+                  tokenId: item.tokenId,
+                },
+                owner,
+              })
+            : false;
           logCheckoutDiagnostics(debugEnabled, "validate.onchain.response", {
             orderId: item.orderId,
             isValid,
@@ -489,7 +506,7 @@ export function CartSidebar() {
           })),
         });
         invalidRows.forEach(({ item }) => {
-          setItemError(item.orderId, STALE_LISTING_ERROR);
+          setItemError(item, STALE_LISTING_ERROR);
         });
         setCheckoutStatus({
           kind: "stale",
@@ -538,22 +555,16 @@ export function CartSidebar() {
           clientFee: effectiveFeeConfig.feeNum,
           clientReceiver,
         });
-        const tokenIdBigInt = BigInt(item.tokenId);
-        const [tokenIdLow, tokenIdHigh] = toUint256Calldata(tokenIdBigInt);
-        return {
-          contractAddress: marketplaceContractAddress,
-          entrypoint: "execute",
-          calldata: [
-            item.orderId,
-            item.collection,
-            tokenIdLow, tokenIdHigh,
-            tokenIdLow, tokenIdHigh,
-            executeQuantity,
-            "1",
-            effectiveFeeConfig.feeNum.toString(),
-            clientReceiver,
-          ],
-        };
+        return writeAdapter.buildExecuteCall({
+          orderId: item.orderId,
+          collection: item.collection,
+          tokenId: item.tokenId,
+          assetId: item.tokenId,
+          quantity: executeQuantity,
+          royalties: true,
+          clientFee: effectiveFeeConfig.feeNum.toString(),
+          clientReceiver,
+        });
       });
       const approvalSpenderAddress = marketplaceContractAddress;
 
@@ -563,8 +574,15 @@ export function CartSidebar() {
         calldata: string[];
       }> = [];
       const approvalAmount = total;
-      if (approvalAmount > BigInt(0)) {
-        const [amountLow, amountHigh] = toUint256Calldata(approvalAmount);
+      const currentAllowance = approvalAmount > BigInt(0)
+        ? await writeAdapter.getAllowance(cartCurrency, account.address)
+        : BigInt(0);
+      if (approvalAmount > BigInt(0) && currentAllowance < approvalAmount) {
+        const approvalCall = writeAdapter.buildErc20ApprovalCall(
+          cartCurrency,
+          approvalAmount,
+        );
+        const [, amountLow, amountHigh] = approvalCall.calldata;
         logCheckoutDiagnostics(debugEnabled, "checkout.approve.calldata", {
           currency: cartCurrency,
           spender: approvalSpenderAddress,
@@ -577,11 +595,7 @@ export function CartSidebar() {
           amountHigh,
           mode: "set",
         });
-        approveCalls.push({
-          contractAddress: cartCurrency,
-          entrypoint: "approve",
-          calldata: [approvalSpenderAddress, amountLow, amountHigh],
-        });
+        approveCalls.push(approvalCall);
       }
 
       const txCalls = [...approveCalls, ...executeCalls];
@@ -677,7 +691,8 @@ export function CartSidebar() {
       return;
     }
 
-    setRefreshingRows((state) => ({ ...state, [item.orderId]: true }));
+    const itemKey = marketplaceOrderIdentityKey(item);
+    setRefreshingRows((state) => ({ ...state, [itemKey]: true }));
     try {
       const [lookupResponse, bookResponse, indexerResponse] = await Promise.all([
         client.lookupOrders([{ id: item.orderId, collection: item.collection, tokenId: item.tokenId }]),
@@ -694,17 +709,23 @@ export function CartSidebar() {
         expectedMarketplaceAddress: marketplaceAddress,
         accountAddress: account?.address ?? "0x0",
       });
-      const rowError = preflight.rowErrors[item.orderId];
+      const rowError = preflight.rowErrors[itemKey];
       const isOwnListing = rowError === OWN_LISTING_ERROR;
       const hasMatchingListing = preflight.safe;
       let isOnChainValid = false;
       if (hasMatchingListing && !isOwnListing) {
         try {
-          isOnChainValid = await writeAdapter.isOrderValid({
-            id: item.orderId,
-            collection: item.collection,
-            tokenId: item.tokenId,
-          });
+          const owner = lookupResponse.data.orders[0]?.order?.owner;
+          isOnChainValid = owner
+            ? await writeAdapter.isSellOrderExecutable({
+                key: {
+                  id: item.orderId,
+                  collection: item.collection,
+                  tokenId: item.tokenId,
+                },
+                owner,
+              })
+            : false;
           logCheckoutDiagnostics(debugEnabled, "refresh.onchain.response", {
             orderId: item.orderId,
             isOnChainValid,
@@ -715,7 +736,7 @@ export function CartSidebar() {
       }
       const isValid = hasMatchingListing && isOnChainValid;
       if (isValid) {
-        clearItemError(item.orderId);
+        clearItemError(item);
         setCheckoutStatus({
           kind: "success",
           tone: "success",
@@ -725,7 +746,7 @@ export function CartSidebar() {
       }
 
       setItemError(
-        item.orderId,
+        item,
         rowError ?? preflight.globalError ?? STALE_LISTING_ERROR,
       );
       setCheckoutStatus({
@@ -737,7 +758,7 @@ export function CartSidebar() {
             "Listing is still stale or unavailable. Remove stale rows or refresh them, then retry checkout.",
       });
     } catch {
-      setItemError(item.orderId, STALE_LISTING_ERROR);
+      setItemError(item, STALE_LISTING_ERROR);
       setCheckoutStatus({
         kind: "error",
         tone: "error",
@@ -745,12 +766,12 @@ export function CartSidebar() {
       });
     } finally {
       setRefreshingRows((state) => {
-        if (!(item.orderId in state)) {
+        if (!(itemKey in state)) {
           return state;
         }
 
         const next = { ...state };
-        delete next[item.orderId];
+        delete next[itemKey];
         return next;
       });
     }
@@ -841,11 +862,12 @@ export function CartSidebar() {
             ) : (
               <div ref={itemsRef} className="space-y-3">
               {items.map((item) => {
-                const hasError = !!inlineErrors[item.orderId];
+                const itemKey = marketplaceOrderIdentityKey(item);
+                const hasError = !!inlineErrors[itemKey];
                 const detailHref = `/collections/${item.collection}/${item.tokenId}`;
                 return (
                   <div
-                    key={item.orderId}
+                    key={itemKey}
                     className="group/item rounded-lg border border-border/50 p-2"
                     data-testid={`cart-item-${item.orderId}`}
                   >
@@ -893,7 +915,7 @@ export function CartSidebar() {
                         className={hasError
                           ? "shrink-0 text-destructive hover:text-destructive"
                           : "shrink-0 opacity-0 transition-opacity group-hover/item:opacity-100"}
-                        onClick={() => removeItem(item.orderId)}
+                        onClick={() => removeItem(item)}
                         size="icon-xs"
                         type="button"
                         variant="ghost"
@@ -905,12 +927,12 @@ export function CartSidebar() {
                     {hasError ? (
                       <div className="mt-1.5 flex items-center gap-2 rounded-md bg-destructive/10 px-2 py-1.5">
                         <p className="flex-1 text-xs text-destructive">
-                          {inlineErrors[item.orderId]}
+                          {inlineErrors[itemKey]}
                         </p>
                         <Button
                           className="h-6 px-2 text-[11px]"
                           disabled={
-                            isSubmitting || refreshingRows[item.orderId] === true
+                            isSubmitting || refreshingRows[itemKey] === true
                           }
                           onClick={() => {
                             void handleRefreshListing(item);
@@ -919,7 +941,7 @@ export function CartSidebar() {
                           type="button"
                           variant="outline"
                         >
-                          {refreshingRows[item.orderId] ? "Refreshing..." : "Refresh"}
+                          {refreshingRows[itemKey] ? "Refreshing..." : "Refresh"}
                         </Button>
                       </div>
                     ) : null}

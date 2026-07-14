@@ -19,6 +19,11 @@ import {
 } from "@biblio/marketplace-api-contract";
 import type { CollectionSortMode } from "@/features/collections/collection-query-params";
 import { getMarketplaceRuntimeConfig } from "@/lib/marketplace/config";
+import {
+  assertOwnedReadEnabled,
+  type MarketplaceReadRollout,
+  type MarketplaceReadSurface,
+} from "@/lib/marketplace/rollout";
 
 type TokensResponse = Static<typeof TokensResponseSchema>;
 type OrdersResponse = Static<typeof OrdersResponseSchema>;
@@ -60,6 +65,7 @@ export type OrderQuery = {
 export type MarketplaceApiClientOptions = {
   baseUrl: string;
   chain: MarketplaceChainAlias;
+  readRollout: MarketplaceReadRollout;
   fetchImpl?: typeof fetch;
 };
 
@@ -93,6 +99,10 @@ export class MarketplaceApiClient {
 
   private path(suffix: string): string {
     return `${this.baseUrl}/v1/chains/${this.options.chain}${suffix}`;
+  }
+
+  private requireSurface(surface: MarketplaceReadSurface): void {
+    assertOwnedReadEnabled(this.options.readRollout, surface);
   }
 
   private async request<T extends TSchema>(
@@ -177,10 +187,12 @@ export class MarketplaceApiClient {
   }
 
   collections() {
+    this.requireSurface("browse");
     return this.request(this.path("/collections"), CollectionsResponseSchema);
   }
 
   collection(collection: string) {
+    this.requireSurface("browse");
     return this.request(
       this.path(`/collections/${encodeURIComponent(collection)}`),
       CollectionResponseSchema,
@@ -188,6 +200,7 @@ export class MarketplaceApiClient {
   }
 
   tokens(collection: string, query: TokenQuery): Promise<TokensResponse> {
+    this.requireSurface("browse");
     const url = new URL(this.path(`/collections/${encodeURIComponent(collection)}/tokens`));
     appendIfPresent(url.searchParams, "cursor", query.cursor);
     appendIfPresent(url.searchParams, "limit", query.limit);
@@ -217,6 +230,7 @@ export class MarketplaceApiClient {
       otherTraits?: Array<{ name: string; values: Array<string | number | boolean> }>;
     },
   ) {
+    this.requireSurface("portfolio");
     const suffix = options?.traitName
       ? `/collections/${encodeURIComponent(collection)}/traits/${encodeURIComponent(options.traitName)}`
       : `/collections/${encodeURIComponent(collection)}/traits`;
@@ -230,10 +244,12 @@ export class MarketplaceApiClient {
   }
 
   orders(collection: string, query: OrderQuery = {}): Promise<OrdersResponse> {
+    this.requireSurface("orders");
     return this.orderList(collection, "orders", query);
   }
 
   listings(collection: string, query: OrderQuery = {}): Promise<OrdersResponse> {
+    this.requireSurface("orders");
     return this.orderList(collection, "listings", query);
   }
 
@@ -255,6 +271,7 @@ export class MarketplaceApiClient {
   }
 
   token(collection: string, tokenId: string, currency?: string) {
+    this.requireSurface("browse");
     const url = new URL(
       this.path(`/tokens/${encodeURIComponent(collection)}/${encodeURIComponent(tokenId)}`),
     );
@@ -267,6 +284,7 @@ export class MarketplaceApiClient {
     tokenId: string,
     query: { cursor?: string | null; limit?: number } = {},
   ) {
+    this.requireSurface("orders");
     const url = new URL(
       this.path(
         `/tokens/${encodeURIComponent(collection)}/${encodeURIComponent(tokenId)}/activity`,
@@ -281,6 +299,7 @@ export class MarketplaceApiClient {
     account: string,
     query: { cursor?: string | null; limit?: number; collection?: string } = {},
   ) {
+    this.requireSurface("portfolio");
     const url = new URL(this.path(`/accounts/${encodeURIComponent(account)}/holdings`));
     appendIfPresent(url.searchParams, "cursor", query.cursor);
     appendIfPresent(url.searchParams, "limit", query.limit);
@@ -289,6 +308,7 @@ export class MarketplaceApiClient {
   }
 
   book() {
+    this.requireSurface("orders");
     return this.request(this.path("/marketplace/book"), BookResponseSchema);
   }
 
@@ -297,6 +317,7 @@ export class MarketplaceApiClient {
   }
 
   async lookupOrders(orders: OrderKey[]) {
+    this.requireSurface("checkout");
     const body = { orders };
     if (!Value.Check(OrderLookupRequestSchema, body)) {
       throw new MarketplaceApiError(
@@ -327,6 +348,7 @@ export function getMarketplaceApiClient(): MarketplaceApiClient {
     runtimeClient = new MarketplaceApiClient({
       baseUrl: config.apiBaseUrl,
       chain: config.chainLabel,
+      readRollout: config.readRollout,
     });
   }
   return runtimeClient;

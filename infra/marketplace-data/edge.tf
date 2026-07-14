@@ -267,6 +267,21 @@ resource "aws_cloudfront_cache_policy" "activity" {
   }
 }
 
+resource "aws_cloudfront_cache_policy" "assets" {
+  name        = "${local.name}-assets"
+  min_ttl     = 31536000
+  default_ttl = 31536000
+  max_ttl     = 31536000
+
+  parameters_in_cache_key_and_forwarded_to_origin {
+    cookies_config { cookie_behavior = "none" }
+    headers_config { header_behavior = "none" }
+    query_strings_config { query_string_behavior = "all" }
+    enable_accept_encoding_brotli = true
+    enable_accept_encoding_gzip   = true
+  }
+}
+
 resource "aws_cloudfront_cache_policy" "disabled" {
   name        = "${local.name}-disabled"
   min_ttl     = 0
@@ -289,6 +304,8 @@ resource "aws_cloudfront_origin_request_policy" "api" {
   query_strings_config { query_string_behavior = "all" }
   headers_config {
     header_behavior = "whitelist"
+    # CloudFront performs conditional origin revalidation itself; conditional
+    # request headers are intentionally not part of an origin request policy.
     headers { items = ["Accept", "Content-Type", "Origin", "Access-Control-Request-Headers", "Access-Control-Request-Method"] }
   }
 }
@@ -354,6 +371,17 @@ resource "aws_cloudfront_distribution" "api" {
       origin_request_policy_id = aws_cloudfront_origin_request_policy.api.id
       compress                 = true
     }
+  }
+
+  ordered_cache_behavior {
+    path_pattern             = "/v1/chains/*/assets/*"
+    target_origin_id         = "marketplace-alb"
+    viewer_protocol_policy   = "https-only"
+    allowed_methods          = ["GET", "HEAD", "OPTIONS"]
+    cached_methods           = ["GET", "HEAD", "OPTIONS"]
+    cache_policy_id          = aws_cloudfront_cache_policy.assets.id
+    origin_request_policy_id = aws_cloudfront_origin_request_policy.api.id
+    compress                 = false
   }
 
   dynamic "ordered_cache_behavior" {

@@ -4,6 +4,7 @@ FROM --platform=${TARGETPLATFORM} docker.io/library/rust:1.90.0-bookworm@sha256:
 
 ARG TORII_SOURCE_COMMIT=fe3ed0ffa1b0ae2f546d13ff390caf404943df02
 ARG TORII_PATCH_SHA256=107fac3616ddf0e8c330782292242a132e4d932d8f4d600aa29f5276a230cb53
+ARG TORII_CLIPPY_PATCH_SHA256=9125c152f5dd11de100c072dc80d2b08135ac3c983c58031065e6680b89dae5c
 
 RUN apt-get update \
     && apt-get install --yes --no-install-recommends \
@@ -24,10 +25,12 @@ RUN git init \
 
 COPY patches/ /patches/
 RUN test "$(sha256sum /patches/0001-marketplace-hardening.patch | cut -d ' ' -f 1)" = "${TORII_PATCH_SHA256}" \
+    && test "$(sha256sum /patches/0002-clippy-cleanup.patch | cut -d ' ' -f 1)" = "${TORII_CLIPPY_PATCH_SHA256}" \
     && git apply --check /patches/*.patch \
     && git apply /patches/*.patch \
     && cargo fmt --all -- --check \
-    && cargo test --locked -p torii-processors fetch::tests \
+    && cargo clippy --locked -p torii-processors -p torii-server -p torii-sqlite --all-targets -- -D warnings \
+    && cargo test --locked -p torii-processors -p torii-server -p torii-sqlite \
     && cargo build --locked --release --bin torii
 
 FROM --platform=${TARGETPLATFORM} docker.io/library/debian:bookworm-slim@sha256:1def178129dfb5f24db43afbf2fcac04530012e3264ba4ff81c71184e17a9ee4

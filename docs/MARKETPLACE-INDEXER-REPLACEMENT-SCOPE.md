@@ -1,14 +1,16 @@
 # Marketplace Indexer Replacement Scope — Existing Contracts Retained
 
-Status: Proposed
+Status: Accepted implementation scope
 
 Date: July 11, 2026
 
 Target: `BibliothecaDAO/marketplace`
 
-Decision under review: replace Cartridge-hosted marketplace indexing, token indexing, metadata delivery, and frontend read clients while retaining the currently deployed Arcade World and Marketplace contracts.
-
-This is the retained-contract alternative to the broader [`MARKETPLACE-INFRA-MIGRATION-SCOPE.md`](./MARKETPLACE-INFRA-MIGRATION-SCOPE.md).
+Decision: replace Cartridge-hosted marketplace indexing, token indexing,
+metadata delivery, and frontend read clients while retaining the currently
+deployed Arcade World and Marketplace contracts. Contract replacement was
+considered and rejected for this migration; the retained-contract ADR is
+authoritative.
 
 > **Immediate operational context:** On July 11, 2026, the pinned SDK's default `https://api.cartridge.gg/x/arcade-main/torii` endpoint and its `/graphql` and `/sql` paths returned HTTP 410. The retained mainnet World and Marketplace contracts still resolved at their expected addresses and class hashes. The first deliverable is therefore a deterministic chain replay, not a frontend endpoint toggle.
 

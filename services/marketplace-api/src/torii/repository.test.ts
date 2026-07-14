@@ -5,6 +5,90 @@ import { encodeCursor } from "../cursor.js";
 import { ToriiMarketplaceRepository } from "./repository.js";
 
 describe("Torii marketplace repository", () => {
+  it("exposes Book governance history with resulting state and provenance", async () => {
+    const felt = (value: string) => `0x${value.padStart(64, "0")}`;
+    const state = (overrides: Record<string, unknown> = {}) => ({
+      sequence: 1,
+      id: "0x1",
+      book_id: "0x1",
+      version: "0x1",
+      paused: 0,
+      royalties: 1,
+      counter: "0x1",
+      fee_num: "0x64",
+      fee_receiver: felt("9"),
+      updated_block_number: 100,
+      updated_transaction_hash: felt("7"),
+      updated_transaction_index: 1,
+      updated_event_index: 2,
+      updated_caller: felt("8"),
+      ...overrides,
+    });
+    const repository = new ToriiMarketplaceRepository({
+      query: async (_chain, sql) => sql.includes("marketplace_book_audit")
+        ? [
+            state(),
+            state({ sequence: 2, counter: "0x2", updated_block_number: 101 }),
+            state({
+              sequence: 3,
+              version: "0x2",
+              paused: 1,
+              royalties: 0,
+              counter: "0x3",
+              fee_num: "0xc8",
+              fee_receiver: felt("a"),
+              updated_block_number: 102,
+              updated_transaction_hash: felt("b"),
+            }),
+          ]
+        : [state({
+            id: "0x1",
+            version: "0x2",
+            paused: 1,
+            royalties: 0,
+            counter: "0x3",
+            fee_num: "0xc8",
+            fee_receiver: felt("a"),
+            updated_block_number: 102,
+            updated_transaction_hash: felt("b"),
+          })],
+    });
+
+    const book = await repository.getBook("SN_MAIN");
+
+    expect(book.history).toHaveLength(2);
+    expect(book.history[0]).toEqual(expect.objectContaining({
+      sequence: "1",
+      changeTypes: ["initialized"],
+    }));
+    expect(book.history[1]).toEqual({
+      sequence: "3",
+      changeTypes: [
+        "paused",
+        "fee_changed",
+        "fee_receiver_changed",
+        "royalties_disabled",
+        "version_changed",
+      ],
+      resultingState: {
+        version: "2",
+        paused: true,
+        royaltiesEnabled: false,
+        counter: "3",
+        feeNumerator: "200",
+        feeDenominator: "10000",
+        feeReceiver: felt("a"),
+      },
+      provenance: {
+        blockNumber: 102,
+        transactionHash: felt("b"),
+        transactionIndex: 1,
+        eventIndex: 2,
+        caller: felt("8"),
+      },
+    });
+  });
+
   it("maps full-key order rows to lossless domain values and preserves missing keys", async () => {
     const felt = (value: string) => `0x${value.padStart(64, "0")}`;
     let capturedSql = "";
@@ -110,6 +194,7 @@ describe("Torii marketplace repository", () => {
               description: "A battle mage",
               image: "ipfs://mage",
             }),
+            updated_at: "2026-07-14T00:00:00.000Z",
             owner: felt("3"),
             balance: "0x1",
             first_event_id: `0x64:${felt("4")}:${felt("2")}:0x0`,
@@ -161,6 +246,7 @@ describe("Torii marketplace repository", () => {
           SN_SEPOLIA: [],
         },
         nowEpochSeconds: () => 1_700_000_000,
+        assetBaseUrl: "https://assets.market.example",
       },
     );
 
@@ -179,7 +265,9 @@ describe("Torii marketplace repository", () => {
         tokenId: "42",
         name: "Mage #42",
         description: "A battle mage",
-        image: "ipfs://mage",
+        image: expect.stringMatching(
+          new RegExp(`^https://assets\\.market\\.example/v1/chains/SN_MAIN/assets/${felt("2")}/42/image\\?v=[0-9a-f]{16}$`),
+        ),
         owner: felt("3"),
         balance: "1",
         firstSeenBlock: 100,
@@ -202,6 +290,10 @@ describe("Torii marketplace repository", () => {
     expect(capturedSql).toContain("candidate.category = 2");
     expect(capturedSql).toContain(`candidate.currency = '${felt("1")}'`);
     expect(capturedSql).toContain("ORDER BY candidate.price ASC");
+    expect(capturedSql).toContain(
+      "ltrim(lower(replace(b.balance, '0x', '')), '0') <> ''",
+    );
+    expect(capturedSql).not.toContain("b.balance NOT IN");
   });
 
   it.each(COLLECTION_SORT_MODES)("builds a complete server-side %s sort", async (sort) => {

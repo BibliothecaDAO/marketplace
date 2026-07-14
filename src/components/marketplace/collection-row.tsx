@@ -291,7 +291,10 @@ export function CollectionRow({
           {visibleTokens.map((token) => {
             const tokenKey = displayTokenId(token);
             const cheapestListing = cheapestListings.get(tokenKey);
-            const isAdded = isRecentlyAdded(cheapestListing?.orderId);
+            const cartItem = cheapestListing
+              ? cartItemFromTokenListing(token, address, cheapestListing, projectId)
+              : null;
+            const isAdded = isRecentlyAdded(cartItem);
             const price =
               cheapestListing?.price ??
               listingPrices.get(tokenKey) ??
@@ -313,14 +316,7 @@ export function CollectionRow({
                       return;
                     }
 
-                    addListingToCart(
-                      cartItemFromTokenListing(
-                        token,
-                        address,
-                        cheapestListing,
-                        projectId,
-                      ),
-                    );
+                    addListingToCart(cartItem!);
                   }}
                   size="sm"
                   type="button"

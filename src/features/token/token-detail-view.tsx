@@ -35,6 +35,10 @@ import {
 } from "@/lib/marketplace/token-display";
 import { calculateMarketplaceFee, parseBigInt } from "@/lib/marketplace/fees";
 import { waitForIndexedBlock } from "@/lib/marketplace/index-confirmation";
+import {
+  createMarketplaceWriteAdapter,
+  type MarketplaceContractCaller,
+} from "@/lib/marketplace/write-adapter";
 import { TOKEN_DETAIL_LISTING_LIMIT } from "@/lib/marketplace/query-limits";
 import type { CheapestListing } from "@/features/cart/listing-utils";
 import {
@@ -188,6 +192,13 @@ export function TokenDetailView({
   const { client } = useMarketplaceClient(account);
   const runtimeConfig = getMarketplaceRuntimeConfig();
   const { collections, chainLabel, currencies, marketplaceAddress } = runtimeConfig;
+  const writeAdapter = useMemo(
+    () => createMarketplaceWriteAdapter(runtimeConfig.chainId, {
+      marketplaceAddress,
+      contractCaller: account as unknown as MarketplaceContractCaller | null,
+    }),
+    [account, marketplaceAddress, runtimeConfig.chainId],
+  );
   const defaultCurrency =
     currencies.find((currency) => currency.symbol === "STRK") ?? currencies[0];
   if (!defaultCurrency) {
@@ -285,7 +296,15 @@ export function TokenDetailView({
       ) ?? null
     );
   }, [listingRows, walletAddress]);
-  const isCheapestAdded = isRecentlyAdded(cheapestListing?.orderId);
+  const isCheapestAdded = isRecentlyAdded(
+    cheapestListing
+      ? {
+          orderId: cheapestListing.orderId,
+          collection: address,
+          tokenId: cheapestListing.tokenId,
+        }
+      : null,
+  );
   // True when the user's own listing happens to be the cheapest
   const isOwnCheapest = !!(ownListing && cheapestListing?.orderId === String(ownListing.id));
 
@@ -608,16 +627,13 @@ export function TokenDetailView({
                     className="h-6 px-2 text-xs"
                     disabled={pendingAction !== null}
                     onClick={() => {
-                      void runTransaction("cancel", () => {
-                        const big = BigInt(normalizedTokenId);
-                        const low = (big & BigInt("0xffffffffffffffffffffffffffffffff")).toString();
-                        const high = (big >> BigInt(128)).toString();
-                        return account!.execute([{
-                          contractAddress: marketplaceAddress,
-                          entrypoint: "cancel",
-                          calldata: [String(ownListing.id), address, low, high],
-                        }]);
-                      });
+                      void runTransaction("cancel", () => account!.execute([
+                        writeAdapter.buildCancelCall({
+                          id: String(ownListing.id),
+                          collection: address,
+                          tokenId: normalizedTokenId,
+                        }),
+                      ]));
                     }}
                     size="sm"
                     type="button"
@@ -666,25 +682,33 @@ export function TokenDetailView({
                 className="w-full"
                 disabled={pendingAction !== null}
                 onClick={() => {
-                  void runTransaction("list", () => {
-                    const tokenBig = BigInt(normalizedTokenId);
-                    const tokenLow = (tokenBig & BigInt("0xffffffffffffffffffffffffffffffff")).toString();
-                    const tokenHigh = (tokenBig >> BigInt(128)).toString();
-                    return account!.execute([
-                      {
-                        // Approve marketplace to transfer all tokens in this collection
-                        contractAddress: address,
-                        entrypoint: "set_approval_for_all",
-                        calldata: [marketplaceAddress, "1"],
-                      },
-                      {
-                        contractAddress: marketplaceAddress,
-                        entrypoint: "list",
-                        // ERC721: quantity must be 0 (contract checks value==0 for ERC721 validity)
-                        // price is u128 (1 felt), token_id is u256 (2 felts), royalties is bool
-                        calldata: [address, tokenLow, tokenHigh, "0", priceToWei(priceInput), currencyInput, computeExpiration(), "1"],
-                      },
-                    ]);
+                  void runTransaction("list", async () => {
+                    if (!walletAddress || !await writeAdapter.isTokenOwner(
+                      address,
+                      normalizedTokenId,
+                      walletAddress,
+                    )) {
+                      throw new Error("Listing blocked: direct ownership check failed.");
+                    }
+                    const approved = await writeAdapter.isTokenApproved(
+                      address,
+                      normalizedTokenId,
+                      walletAddress,
+                    );
+                    const calls = approved
+                      ? []
+                      : [writeAdapter.buildSetApprovalForAllCall(address)];
+                    calls.push(writeAdapter.buildListCall({
+                      collection: address,
+                      tokenId: normalizedTokenId,
+                      // ERC721 orders retain the deployed contract's zero-quantity encoding.
+                      quantity: "0",
+                      price: priceToWei(priceInput),
+                      currency: currencyInput,
+                      expiration: computeExpiration(),
+                      royalties: true,
+                    }));
+                    return account!.execute(calls);
                   });
                 }}
                 size="sm"
@@ -898,15 +922,32 @@ export function TokenDetailView({
                 <Button
                   disabled={pendingAction !== null}
                   onClick={() => {
-                    void runTransaction("offer", () => {
-                      const big = BigInt(normalizedTokenId);
-                      const low = (big & BigInt("0xffffffffffffffffffffffffffffffff")).toString();
-                      const high = (big >> BigInt(128)).toString();
-                      return account!.execute([{
-                        contractAddress: marketplaceAddress,
-                        entrypoint: "offer",
-                        calldata: [address, low, high, quantityInput, priceToWei(priceInput), currencyInput, computeExpiration()],
-                      }]);
+                    void runTransaction("offer", async () => {
+                      if (!walletAddress) {
+                        throw new Error("Offer blocked: wallet address is unavailable.");
+                      }
+                      const price = BigInt(priceToWei(priceInput));
+                      const quantity = BigInt(quantityInput);
+                      const requiredAllowance = price * quantity;
+                      const allowance = await writeAdapter.getAllowance(
+                        currencyInput,
+                        walletAddress,
+                      );
+                      const calls = allowance >= requiredAllowance
+                        ? []
+                        : [writeAdapter.buildErc20ApprovalCall(
+                            currencyInput,
+                            requiredAllowance,
+                          )];
+                      calls.push(writeAdapter.buildOfferCall({
+                        collection: address,
+                        tokenId: normalizedTokenId,
+                        quantity: quantity.toString(),
+                        price: price.toString(),
+                        currency: currencyInput,
+                        expiration: computeExpiration(),
+                      }));
+                      return account!.execute(calls);
                     });
                   }}
                   size="sm"
@@ -965,7 +1006,11 @@ export function TokenDetailView({
             {listingRows.map((listing, index) => {
               const isCheapest = cheapestListing?.orderId === String(listing.id);
               const rowOrderId = String(listing.id);
-              const isRowAdded = isRecentlyAdded(rowOrderId);
+              const isRowAdded = isRecentlyAdded({
+                orderId: rowOrderId,
+                collection: address,
+                tokenId: formatNumberish(listing.tokenId) ?? normalizedTokenId,
+              });
               const isOwnRow = !!(walletAddress && listing.owner.toLowerCase() === walletAddress.toLowerCase());
               const hasFullCartData =
                 listing.id !== undefined &&

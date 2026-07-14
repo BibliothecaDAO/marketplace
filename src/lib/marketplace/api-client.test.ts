@@ -5,7 +5,7 @@ const felt = (digit: string) => `0x${digit.repeat(64)}`;
 const meta = {
   schemaVersion: "1.0.0",
   chain: "SN_MAIN",
-  chainId: "0x534e5f4d41494e",
+  chainId: "0x00000000000000000000000000000000000000000000000000534e5f4d41494e",
   worldAddress: felt("1"),
   marketplaceAddress: felt("2"),
   indexedBlock: 100,
@@ -35,6 +35,7 @@ describe("owned marketplace API client", () => {
     const client = new MarketplaceApiClient({
       baseUrl: "https://market.example",
       chain: "SN_MAIN",
+      readRollout: "checkout",
     });
 
     await expect(client.collections()).resolves.toMatchObject({ data: [] });
@@ -51,6 +52,7 @@ describe("owned marketplace API client", () => {
     const client = new MarketplaceApiClient({
       baseUrl: "https://market.example/",
       chain: "SN_MAIN",
+      readRollout: "checkout",
       fetchImpl,
     });
 
@@ -79,6 +81,7 @@ describe("owned marketplace API client", () => {
     const client = new MarketplaceApiClient({
       baseUrl: "https://market.example",
       chain: "SN_MAIN",
+      readRollout: "checkout",
       fetchImpl: async () => Response.json({ data: { items: [] }, meta }),
     });
     await expect(client.tokens("0xabc", {})).rejects.toMatchObject({
@@ -91,6 +94,7 @@ describe("owned marketplace API client", () => {
     const client = new MarketplaceApiClient({
       baseUrl: "https://market.example",
       chain: "SN_MAIN",
+      readRollout: "checkout",
       fetchImpl: async () =>
         Response.json(
           {
@@ -121,6 +125,7 @@ describe("owned marketplace API client", () => {
     const client = new MarketplaceApiClient({
       baseUrl: "https://market.example",
       chain: "SN_MAIN",
+      readRollout: "checkout",
       fetchImpl,
     });
     await client.lookupOrders([
@@ -144,5 +149,21 @@ describe("owned marketplace API client", () => {
         })),
       ),
     ).rejects.toThrow(/25/);
+  });
+
+  it("enforces the cumulative rollout before issuing network requests", async () => {
+    const fetchImpl = vi.fn<typeof fetch>();
+    const client = new MarketplaceApiClient({
+      baseUrl: "https://market.example",
+      chain: "SN_MAIN",
+      readRollout: "portfolio",
+      fetchImpl,
+    });
+
+    expect(() => client.orders("0xabc")).toThrow(/orders reads are disabled/);
+    await expect(client.lookupOrders([
+      { id: "7", collection: "0xabc", tokenId: "9" },
+    ])).rejects.toThrow(/checkout reads are disabled/);
+    expect(fetchImpl).not.toHaveBeenCalled();
   });
 });

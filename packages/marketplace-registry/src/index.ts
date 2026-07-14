@@ -2,6 +2,7 @@ import { Type, type Static } from "@sinclair/typebox";
 import { Value } from "@sinclair/typebox/value";
 
 const FeltSchema = Type.String({ pattern: "^0x[0-9a-fA-F]{1,64}$" });
+const STARK_FIELD_PRIME = (1n << 251n) + 17n * (1n << 192n) + 1n;
 
 const ContractSchema = Type.Object(
   {
@@ -79,9 +80,19 @@ export class MarketplaceRegistryError extends Error {
 }
 
 export function canonicalFelt(value: string): string {
-  const parsed = BigInt(value);
+  let parsed: bigint;
+  try {
+    parsed = BigInt(value);
+  } catch {
+    throw new MarketplaceRegistryError([`Felt ${value} is not valid hexadecimal.`]);
+  }
   if (parsed === 0n) {
     throw new MarketplaceRegistryError([`Felt ${value} must not be zero.`]);
+  }
+  if (parsed >= STARK_FIELD_PRIME) {
+    throw new MarketplaceRegistryError([
+      `Felt ${value} is outside the Starknet field range.`,
+    ]);
   }
   return `0x${parsed.toString(16).padStart(64, "0")}`;
 }

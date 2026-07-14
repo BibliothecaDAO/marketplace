@@ -4,6 +4,7 @@ import type {
   MarketplaceIndexerStatus,
   OrderLookupResult,
 } from "@biblio/marketplace-api-contract";
+import { marketplaceOrderIdentityKey } from "@/lib/marketplace/order-identity";
 
 export type CheckoutPreflightItem = {
   orderId: string;
@@ -41,11 +42,15 @@ function feltEqual(left: string, right: string): boolean {
 }
 
 function key(item: CheckoutPreflightItem): string {
-  return `${BigInt(item.orderId)}:${BigInt(item.collection)}:${BigInt(item.tokenId)}`;
+  return marketplaceOrderIdentityKey(item);
 }
 
 function lookupKey(result: OrderLookupResult): string {
-  return `${BigInt(result.key.id)}:${BigInt(result.key.collection)}:${BigInt(result.key.tokenId)}`;
+  return marketplaceOrderIdentityKey({
+    orderId: result.key.id,
+    collection: result.key.collection,
+    tokenId: result.key.tokenId,
+  });
 }
 
 export function evaluateCheckoutPreflight(
@@ -78,10 +83,11 @@ export function evaluateCheckoutPreflight(
   const now = input.nowEpochSeconds ?? Math.floor(Date.now() / 1000);
   const rowErrors: Record<string, string> = {};
   for (const item of input.items) {
+    const itemKey = key(item);
     const result = byKey.get(key(item));
     const order = result?.order;
     if (!order) {
-      rowErrors[item.orderId] = "Listing is stale or unavailable.";
+      rowErrors[itemKey] = "Listing is stale or unavailable.";
       continue;
     }
     if (
@@ -89,19 +95,19 @@ export function evaluateCheckoutPreflight(
       !feltEqual(order.collection, item.collection) ||
       order.tokenId !== BigInt(item.tokenId).toString()
     ) {
-      rowErrors[item.orderId] = "Listing identity changed.";
+      rowErrors[itemKey] = "Listing identity changed.";
       continue;
     }
     if (order.status !== "placed" || order.category !== "sell") {
-      rowErrors[item.orderId] = "Listing is not placed.";
+      rowErrors[itemKey] = "Listing is not placed.";
       continue;
     }
     if (BigInt(order.expiration) <= BigInt(now)) {
-      rowErrors[item.orderId] = "Listing has expired.";
+      rowErrors[itemKey] = "Listing has expired.";
       continue;
     }
     if (feltEqual(order.owner, input.accountAddress)) {
-      rowErrors[item.orderId] = "Cannot buy your own listing.";
+      rowErrors[itemKey] = "Cannot buy your own listing.";
       continue;
     }
     if (
@@ -109,7 +115,7 @@ export function evaluateCheckoutPreflight(
       order.remainingQuantity !== BigInt(item.quantity).toString() ||
       !feltEqual(order.currency, item.currency)
     ) {
-      rowErrors[item.orderId] = "Listing terms changed after it was added to the cart.";
+      rowErrors[itemKey] = "Listing terms changed after it was added to the cart.";
     }
   }
   return {

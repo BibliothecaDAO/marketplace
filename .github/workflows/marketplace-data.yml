@@ -47,6 +47,8 @@ jobs:
           node-version: 20
           cache: pnpm
           cache-dependency-path: pnpm-lock.yaml
+      - name: Install SQLite fixture runtime
+        run: sudo apt-get update && sudo apt-get install --yes sqlite3
       - run: pnpm install --frozen-lockfile
       - name: Verify generated registry artifacts
         run: |

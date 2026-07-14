@@ -23,7 +23,7 @@ describe("owned marketplace diagnostics", () => {
     mockUseIndexerStatusQuery.mockReset();
     mockGetMarketplaceRuntimeConfig.mockReturnValue({
       chainLabel: "SN_MAIN",
-      chainId: "0x534e5f4d41494e",
+      chainId: "0x00000000000000000000000000000000000000000000000000534e5f4d41494e",
       worldAddress: "0xworld",
       marketplaceAddress: "0xmarket",
       schemaVersion: "1.0.0",

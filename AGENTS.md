@@ -12,7 +12,9 @@ Contributor and coding-agent playbook for `biblio/marketplace`.
 
 ## 1) Mission and Constraints
 
-This repo is a production-oriented marketplace frontend for Starknet collections.
+This repo is a production-oriented Starknet marketplace and its owned read
+plane. The deployed Arcade World and Marketplace contracts remain the write
+authority; Cartridge-hosted marketplace reads are not a supported dependency.
 
 Non-negotiable constraints:
 
@@ -36,7 +38,11 @@ Before changing code:
 - Next.js `16.1.6` + React `19`
 - TypeScript
 - Tailwind CSS v4
-- `@cartridge/arcade` SDK + `@starknet-react/*`
+- Fastify + TypeBox for the owned marketplace API
+- A pinned, hardened Torii build for indexing
+- `@cartridge/arcade` only in `src/lib/marketplace/write-adapter.ts`
+- `@starknet-react/*` for wallets and direct chain checks
+- Terraform for the AWS data plane
 - Zustand for persisted cart state
 - Vitest + React Testing Library + MSW
 - Playwright for e2e and feature screenshots
@@ -58,6 +64,13 @@ Package manager notes:
 - `src/components/ui/*`: shadcn primitives only
 - `src/components/providers/*`: Starknet/query/marketplace provider setup
 - `src/lib/marketplace/*`: config parsing, hooks, fee logic, token display
+- `services/marketplace-api/*`: public `/v1` marketplace read API
+- `packages/marketplace-api-contract/*`: shared TypeBox schemas and OpenAPI
+- `packages/marketplace-registry/*`: registry validation and config generation
+- `packages/marketplace-ops/*`: replay, RPC qualification, and reconciliation
+- `config/marketplace/chains.json`: canonical chain/product registry
+- `docker/torii/*`: pinned Torii source patch and generated configuration
+- `infra/marketplace-data/*`: AWS Terraform
 - `src/test/*`: unit/integration test setup + MSW
 - `tests/e2e/*`: Playwright tests
 - `scripts/ci/*`: screenshot route detection and CI helper scripts
@@ -67,7 +80,9 @@ Package manager notes:
 
 ### Multi-collection
 
-- Collections come from `NEXT_PUBLIC_MARKETPLACE_COLLECTIONS` in `address|name|projectId` format.
+- Collections come from generated `config/marketplace/chains.json` data.
+- `NEXT_PUBLIC_MARKETPLACE_COLLECTIONS` is a temporary rollout override; its
+  legacy `projectId` field is accepted but ignored.
 - Route and query logic must handle collection switching without stale state leakage.
 
 ### Multi-currency marketplace behavior
@@ -80,7 +95,7 @@ Package manager notes:
 
 ### Checkout and cart safety
 
-- Cart row identity is `orderId`.
+- Marketplace and cart row identity is `(orderId, collection, tokenId)`.
 - Cart maximum is 25 items.
 - Checkout must pre-validate listing freshness and block if any row is stale.
 - Checkout executes as one transaction; no partial fallback path.
@@ -91,14 +106,18 @@ Package manager notes:
 Use `.env.local`:
 
 - `NEXT_PUBLIC_MARKETPLACE_CHAIN_ID`
-- `NEXT_PUBLIC_MARKETPLACE_DEFAULT_PROJECT`
-- `NEXT_PUBLIC_MARKETPLACE_COLLECTIONS`
+- `NEXT_PUBLIC_MARKETPLACE_API_BASE_URL`
+- `MARKETPLACE_READ_ROLLOUT` (`off|browse|portfolio|orders|checkout`)
+- `NEXT_PUBLIC_MARKETPLACE_COLLECTIONS` (temporary rollout override)
 - `NEXT_PUBLIC_SITE_URL` (recommended for canonical/OG metadata)
 
 Collections format:
 
 ```env
-NEXT_PUBLIC_MARKETPLACE_COLLECTIONS=address|name|projectId,address|name|projectId
+NEXT_PUBLIC_MARKETPLACE_API_BASE_URL=http://localhost:3001
+MARKETPLACE_READ_ROLLOUT=off
+# Optional during rollout; the third field is ignored.
+NEXT_PUBLIC_MARKETPLACE_COLLECTIONS=address|name|legacyProjectId
 ```
 
 After env edits, restart dev server.
@@ -195,8 +214,11 @@ For docs-only changes, tests may be skipped, but state that explicitly in PR not
 ## 11) API/Data Rules
 
 - Keep query boundaries explicit: loading, empty, error, success.
-- Prefer deterministic parsing/normalization for SDK payload variance.
-- Do not hardcode fee results when SDK methods are available.
+- Use the shared TypeBox contract for public API request/response validation.
+- Prefer deterministic parsing/normalization for chain and Torii payload variance.
+- Never expose Torii SQL or accept raw query/sort syntax from clients.
+- Read marketplace fees and Book state from the owned API; use direct contract
+  calls for validity, ownership, approval, allowance, and royalty preflight.
 - Preserve URL-canonical state for filters/sort/cursor where implemented.
 
 ## 12) PR Requirements

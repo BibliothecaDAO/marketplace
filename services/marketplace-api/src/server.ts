@@ -6,6 +6,7 @@ import { StarknetRpcClient } from "./rpc/client.js";
 import { buildRpcProxy } from "./rpc/proxy.js";
 import { HttpToriiClient } from "./torii/http-client.js";
 import { ToriiMarketplaceRepository } from "./torii/repository.js";
+import { normalizePublicBaseUrl } from "./public-base-url.js";
 
 function requiredEnv(name: string): string {
   const value = process.env[name]?.trim();
@@ -14,6 +15,9 @@ function requiredEnv(name: string): string {
 }
 
 async function main() {
+  const publicBaseUrl = normalizePublicBaseUrl(
+    requiredEnv("MARKETPLACE_PUBLIC_BASE_URL"),
+  );
   const registryPath =
     process.env.MARKETPLACE_REGISTRY_PATH ??
     fileURLToPath(new URL("../../../config/marketplace/chains.json", import.meta.url));
@@ -49,6 +53,7 @@ async function main() {
     buildVersion: process.env.TORII_BUILD_VERSION,
     replayVersion: process.env.TORII_REPLAY_VERSION,
     databaseSchemaVersion: process.env.TORII_DATABASE_SCHEMA_VERSION,
+    assetBaseUrl: publicBaseUrl,
   });
   const app = await buildApp({
     allowedOrigins: (process.env.CORS_ORIGINS ?? "")
@@ -57,6 +62,7 @@ async function main() {
       .filter(Boolean),
     repository,
     registry,
+    assetSource: torii,
     logger: true,
   });
   const rpcProxy = await buildRpcProxy({ providers, logger: true });

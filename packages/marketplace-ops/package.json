@@ -5,6 +5,12 @@
   "type": "module",
   "scripts": {
     "build": "tsc -p tsconfig.build.json",
+    "evaluate:chaos": "tsx src/evaluate-chaos.ts",
+    "evaluate:restore": "tsx src/evaluate-restore.ts",
+    "evaluate:sepolia-lifecycle": "tsx src/evaluate-sepolia-lifecycle.ts",
+    "evaluate:soak": "tsx src/evaluate-soak.ts",
+    "load:api": "tsx src/load-owned-api.ts",
+    "prepare:release": "tsx src/prepare-release-evidence.ts",
     "proxy:bounded": "tsx src/bounded-rpc.ts",
     "qualify:rpc": "tsx src/qualify-rpc.ts",
     "rank:rpc": "tsx src/rank-rpc.ts",

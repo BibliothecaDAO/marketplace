@@ -35,7 +35,11 @@ import type {
 import { canonicalFelt } from "@biblio/marketplace-registry";
 import { Type } from "@sinclair/typebox";
 import { trace } from "@opentelemetry/api";
-import Fastify, { type FastifyError, type FastifyInstance } from "fastify";
+import Fastify, {
+  type FastifyError,
+  type FastifyInstance,
+  type FastifyReply,
+} from "fastify";
 
 export type IndexerStatus = {
   chain: "SN_MAIN" | "SN_SEPOLIA";
@@ -132,10 +136,28 @@ export type PageOptions = {
   limit: number;
 };
 
+export type MarketplaceAsset = {
+  status: 200 | 304 | 404;
+  body: Uint8Array;
+  contentType: string | null;
+  etag: string | null;
+  lastModified: string | null;
+};
+
+export type MarketplaceAssetSource = {
+  getImage(
+    chain: MarketplaceChainAlias,
+    collection: string,
+    tokenId: string | null,
+    conditional: { etag?: string; modifiedSince?: string },
+  ): Promise<MarketplaceAsset>;
+};
+
 export type BuildAppOptions = {
   allowedOrigins: string[];
   repository: MarketplaceRepository;
   registry?: MarketplaceRegistry;
+  assetSource?: MarketplaceAssetSource;
   logger?: boolean;
 };
 
@@ -192,6 +214,12 @@ const TokenParamsSchema = Type.Object({
   collection: FeltSchema,
   tokenId: Type.String({ pattern: "^(0|[1-9][0-9]*)$" }),
 });
+const AssetQuerySchema = Type.Object(
+  {
+    v: Type.String({ pattern: "^[0-9a-f]{16,64}$" }),
+  },
+  { additionalProperties: false },
+);
 const AccountParamsSchema = Type.Object({
   chain: ChainAliasSchema,
   account: FeltSchema,
@@ -273,7 +301,7 @@ function responseMeta(
   return {
     schemaVersion: registry.schemaVersion,
     chain,
-    chainId: config.chainId,
+    chainId: canonicalFelt(config.chainId),
     worldAddress: config.world.address,
     marketplaceAddress: config.marketplace.address,
     indexedBlock: status.indexedBlock,
@@ -370,6 +398,96 @@ export async function buildApp(options: BuildAppOptions): Promise<FastifyInstanc
         retryable: false,
       },
     }),
+  );
+
+  const sendAsset = async (
+    input: {
+      chain: MarketplaceChainAlias;
+      collection: string;
+      tokenId: string | null;
+      version: string;
+      etag?: string;
+      modifiedSince?: string;
+    },
+    reply: FastifyReply,
+  ) => {
+    if (!options.assetSource) {
+      throw new MarketplaceHttpError(
+        503,
+        "ASSET_SOURCE_UNAVAILABLE",
+        "Owned marketplace asset serving is unavailable.",
+        true,
+      );
+    }
+    const collection = canonicalFelt(input.collection);
+    const configuredCollections = options.registry?.chains[input.chain]?.collections;
+    if (
+      configuredCollections &&
+      !configuredCollections.some((candidate) => candidate.address === collection)
+    ) {
+      throw new MarketplaceHttpError(404, "ASSET_NOT_FOUND", "Asset not found.");
+    }
+    const asset = await options.assetSource.getImage(
+      input.chain,
+      collection,
+      input.tokenId,
+      { etag: input.etag, modifiedSince: input.modifiedSince },
+    );
+    if (asset.status === 404) {
+      throw new MarketplaceHttpError(404, "ASSET_NOT_FOUND", "Asset not found.");
+    }
+    if (asset.etag) reply.header("etag", asset.etag);
+    if (asset.lastModified) reply.header("last-modified", asset.lastModified);
+    reply.header(
+      "cache-control",
+      "public, max-age=31536000, immutable",
+    );
+    reply.header("x-content-type-options", "nosniff");
+    reply.header("cross-origin-resource-policy", "cross-origin");
+    if (asset.status === 304) return reply.code(304).send();
+    if (!asset.contentType) {
+      throw new MarketplaceHttpError(502, "INVALID_ASSET", "Asset MIME type is missing.");
+    }
+    reply.type(asset.contentType);
+    if (asset.contentType === "image/svg+xml") {
+      reply.header(
+        "content-security-policy",
+        "sandbox; default-src 'none'; img-src data:; style-src 'none'",
+      );
+    }
+    return reply.send(Buffer.from(asset.body));
+  };
+
+  app.get<{
+    Params: { chain: MarketplaceChainAlias; collection: string; tokenId: string };
+    Querystring: { v: string };
+  }>(
+    "/v1/chains/:chain/assets/:collection/:tokenId/image",
+    { schema: { params: TokenParamsSchema, querystring: AssetQuerySchema } },
+    (request, reply) => sendAsset({
+      chain: request.params.chain,
+      collection: request.params.collection,
+      tokenId: BigInt(request.params.tokenId).toString(),
+      version: request.query.v,
+      etag: request.headers["if-none-match"],
+      modifiedSince: request.headers["if-modified-since"],
+    }, reply),
+  );
+
+  app.get<{
+    Params: { chain: MarketplaceChainAlias; collection: string };
+    Querystring: { v: string };
+  }>(
+    "/v1/chains/:chain/assets/:collection/image",
+    { schema: { params: CollectionParamsSchema, querystring: AssetQuerySchema } },
+    (request, reply) => sendAsset({
+      chain: request.params.chain,
+      collection: request.params.collection,
+      tokenId: null,
+      version: request.query.v,
+      etag: request.headers["if-none-match"],
+      modifiedSince: request.headers["if-modified-since"],
+    }, reply),
   );
 
   app.get(

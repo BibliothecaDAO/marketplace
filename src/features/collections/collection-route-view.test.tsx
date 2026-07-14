@@ -137,10 +137,11 @@ function successQuery(data: unknown) {
   };
 }
 
-function token(tokenId: string) {
+function token(tokenId: string, overrides: Record<string, unknown> = {}) {
   return {
     token_id: tokenId,
     metadata: { name: `Token #${tokenId}` },
+    ...overrides,
   };
 }
 
@@ -283,27 +284,27 @@ describe("collection route view", () => {
     );
   });
 
-  it("collection_route_uses_unverified_listings_query_for_browse", () => {
+  it("queries the API-wide cheapest token page for sweep candidates", () => {
     mockUseCollectionQuery.mockReturnValue(successQuery(null));
 
     render(<CollectionRouteView address="0xabc" collections={collections} />);
 
-    expect(mockUseCollectionListingsQuery).toHaveBeenCalledWith(
+    expect(mockUseCollectionTokensQuery).toHaveBeenCalledWith(
       expect.objectContaining({
-        collection: "0xabc",
-        projectId: "project-a",
-        limit: 100,
-        verifyOwnership: false,
+        address: "0xabc",
+        project: "project-a",
+        limit: 25,
+        sort: "price-asc",
       }),
     );
   });
 
-  it("listed_count_matches_visible_listed_tokens", async () => {
-    mockUseCollectionQuery.mockReturnValue(successQuery(null));
-    mockUseCollectionListingsQuery.mockReturnValue(successQuery([
-      { id: 11, tokenId: 11, price: 300, currency: "0xfee", quantity: 1 },
-      { id: 12, tokenId: 12, price: 100, currency: "0xfee", quantity: 1 },
-    ]));
+  it("listed_count_uses_the_API-wide_collection_summary", async () => {
+    mockUseCollectionQuery.mockReturnValue(successQuery({
+      metadata: { name: "Genesis" },
+      listingCount: "2",
+      floorByCurrency: [],
+    }));
     setMockVisibleTokens([token("12")]);
     const user = userEvent.setup();
 
@@ -311,20 +312,21 @@ describe("collection route view", () => {
 
     await user.click(screen.getByRole("button", { name: /emit visible tokens/i }));
 
+    expect(screen.getByText("2", { selector: ".realm-stat-pill > span" }).parentElement)
+      .toHaveTextContent("2 listed");
     expect(
-      screen.getByText((_, node) => node?.textContent === "1 listed"),
-    ).toBeVisible();
-    expect(
-      screen.queryByText((_, node) => node?.textContent === "2 listed"),
+      screen.queryByText((_, node) => node?.textContent === "1 listed"),
     ).toBeNull();
   });
 
-  it("does_not_issue_secondary_token_query_for_sweep_candidates", () => {
+  it("issues_a_complete-result_token_query_for_sweep_candidates", () => {
     mockUseCollectionQuery.mockReturnValue(successQuery(null));
 
     render(<CollectionRouteView address="0xabc" collections={collections} />);
 
-    expect(mockUseCollectionTokensQuery).not.toHaveBeenCalled();
+    expect(mockUseCollectionTokensQuery).toHaveBeenCalledWith(
+      expect.objectContaining({ limit: 25, sort: "price-asc" }),
+    );
   });
 
   it("keeps_on_tokens_change_callback_stable_within_same_scope", async () => {
@@ -504,14 +506,20 @@ describe("collection route view", () => {
 
   it("collection_route_sweep_adds_cheapest_candidates_and_resets_count", async () => {
     mockUseCollectionQuery.mockReturnValue(successQuery(null));
-    mockUseCollectionListingsQuery.mockReturnValue(successQuery([
+    const listings = [
       { id: 11, tokenId: 1, price: 300, currency: "0xfee", quantity: 1 },
       { id: 12, tokenId: 2, price: 100, currency: "0xfee", quantity: 1 },
       { id: 13, tokenId: 3, price: 200, currency: "0xfee", quantity: 1 },
-    ]));
-    // The route view calls useCollectionTokensQuery directly for listed tokens.
+    ];
     mockUseCollectionTokensQuery.mockReturnValue({
-      data: { page: { tokens: [token("1"), token("2"), token("3")], nextCursor: null } },
+      data: {
+        page: {
+          tokens: listings.map((listing) => token(String(listing.tokenId), {
+            best_listing: listing,
+          })),
+          nextCursor: null,
+        },
+      },
       isLoading: false,
       isSuccess: true,
       isError: false,

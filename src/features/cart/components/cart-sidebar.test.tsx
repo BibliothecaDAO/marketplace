@@ -3,6 +3,7 @@ import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { CartSidebar } from "@/features/cart/components/cart-sidebar";
 import { useCartStore } from "@/features/cart/store/cart-store";
+import { marketplaceOrderIdentityKey } from "@/lib/marketplace/order-identity";
 
 const {
   mockUseAccount,
@@ -18,6 +19,8 @@ const {
   mockBook,
   mockIndexerStatus,
   mockManifestWorldAddress,
+  mockIsSellOrderExecutable,
+  mockGetAllowance,
 } = vi.hoisted(() => ({
   mockUseAccount: vi.fn(),
   mockUseBalance: vi.fn(),
@@ -32,6 +35,8 @@ const {
   mockBook: vi.fn(),
   mockIndexerStatus: vi.fn(),
   mockManifestWorldAddress: { current: null as string | null },
+  mockIsSellOrderExecutable: vi.fn(),
+  mockGetAllowance: vi.fn(),
 }));
 
 vi.mock("@starknet-react/core", () => ({
@@ -59,6 +64,40 @@ vi.mock("@cartridge/arcade", () => ({
     };
   }),
   NAMESPACE: "ARCADE",
+}));
+
+vi.mock("@/lib/marketplace/write-adapter", () => ({
+  createMarketplaceWriteAdapter: () => ({
+    isOrderValid: async (key: { id: string; collection: string; tokenId: string }) => {
+      const result = await mockGetValidity(key.id, key.collection, key.tokenId);
+      return Array.isArray(result) && (result[0] === "0x1" || result[0] === "1");
+    },
+    isSellOrderExecutable: mockIsSellOrderExecutable,
+    getAllowance: mockGetAllowance,
+    buildExecuteCall: (input: {
+      orderId: string; collection: string; tokenId: string; assetId: string;
+      quantity: string; royalties: boolean; clientFee: string; clientReceiver: string;
+    }) => {
+      mockBuildExecuteCalldata(
+        input.orderId, input.collection, input.tokenId, input.assetId,
+        input.quantity, input.royalties, input.clientFee, input.clientReceiver,
+      );
+      return {
+        contractAddress: "0x456",
+        entrypoint: "execute",
+        calldata: [
+          input.orderId, input.collection, input.tokenId, "0", input.assetId, "0",
+          input.quantity, input.royalties ? "1" : "0", input.clientFee,
+          input.clientReceiver,
+        ],
+      };
+    },
+    buildErc20ApprovalCall: (currency: string, amount: bigint) => ({
+      contractAddress: currency,
+      entrypoint: "approve",
+      calldata: ["0x456", amount.toString(), "0"],
+    }),
+  }),
 }));
 
 vi.mock("@/lib/marketplace/config", () => ({
@@ -108,6 +147,8 @@ describe("cart sidebar", () => {
     mockUseAccount.mockReset();
     mockUseBalance.mockReset();
     mockUseMarketplaceClient.mockReset();
+    mockIsSellOrderExecutable.mockReset();
+    mockGetAllowance.mockReset();
 
     // Default: ample balance so balance check doesn't interfere with unrelated tests
     mockUseBalance.mockReturnValue({ data: { value: BigInt("999999999999999999999") }, isLoading: false });
@@ -252,6 +293,17 @@ describe("cart sidebar", () => {
       calldata: [orderId],
     }));
     mockGetValidity.mockResolvedValue(["0x1", "0x0"]);
+    mockIsSellOrderExecutable.mockImplementation(
+      async (input: { key: { id: string; collection: string; tokenId: string } }) => {
+        const result = await mockGetValidity(
+          input.key.id,
+          input.key.collection,
+          input.key.tokenId,
+        );
+        return Array.isArray(result) && (result[0] === "0x1" || result[0] === "1");
+      },
+    );
+    mockGetAllowance.mockResolvedValue(BigInt(0));
     mockAccountExecute.mockResolvedValue({ transaction_hash: "0xcheckout" });
     vi.unstubAllEnvs();
     consoleInfoSpy = vi.spyOn(console, "info").mockImplementation(() => {});
@@ -349,9 +401,10 @@ describe("cart sidebar", () => {
 
   it("cart_sidebar_renders_inline_item_errors", async () => {
     const user = userEvent.setup();
+    const item = makeItem("7001", "1", "100");
     useCartStore.setState({
-      items: [makeItem("7001", "1", "100")],
-      inlineErrors: { "7001": "Listing is stale." },
+      items: [item],
+      inlineErrors: { [marketplaceOrderIdentityKey(item)]: "Listing is stale." },
       isOpen: false,
       lastActionError: null,
     });
@@ -488,8 +541,36 @@ describe("cart sidebar", () => {
       entrypoint: "execute",
       calldata: ["7001", "0xabc", "1", "0", "1", "0", "1", "1", "500", "0x049fb4281d13e1f5f488540cd051e1507149e99cc2e22635101041ec5e4e4557"],
     });
+    expect(mockIsSellOrderExecutable).toHaveBeenCalledWith({
+      key: { id: "7001", collection: "0xabc", tokenId: "1" },
+      owner: "0xseller",
+    });
     expect(await screen.findByText(/transaction submitted; waiting for onchain confirmation/i)).toBeVisible();
     expect(screen.getByText("Token #1")).toBeVisible();
+  });
+
+  it("checkout_skips_erc20_approval_when_direct_allowance_already_covers_total", async () => {
+    const user = userEvent.setup();
+    mockUseAccount.mockReturnValue({
+      account: { address: "0xwallet", execute: mockAccountExecute },
+      isConnected: true,
+      status: "connected",
+      address: "0xwallet",
+    });
+    mockGetAllowance.mockResolvedValue(BigInt(10_000));
+    useCartStore.setState({
+      items: [makeItem("7001", "1", "100")],
+      inlineErrors: {},
+      isOpen: true,
+      lastActionError: null,
+    });
+
+    render(<CartSidebar />);
+    await user.click(screen.getByRole("button", { name: /complete purchase/i }));
+
+    await waitFor(() => expect(mockAccountExecute).toHaveBeenCalledOnce());
+    const calls = mockAccountExecute.mock.calls[0]?.[0] as Array<{ entrypoint: string }>;
+    expect(calls.map((call) => call.entrypoint)).toEqual(["execute"]);
   });
 
   it("checkout_approves_total_wallet_outflow_including_royalty_estimate", async () => {

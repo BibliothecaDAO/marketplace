@@ -4,6 +4,54 @@ import { buildApp } from "./app.js";
 const felt = (value: string) => `0x${value.padStart(64, "0")}`;
 
 describe("marketplace read routes", () => {
+  it("serves versioned owned assets through the API with restrictive SVG headers", async () => {
+    const calls: unknown[] = [];
+    const app = await buildApp({
+      allowedOrigins: [],
+      repository: {
+        getIndexerStatus: async (chain) => ({
+          chain,
+          indexedBlock: 500,
+          indexedBlockHash: felt("e"),
+          chainHead: 501,
+          observedAt: "2026-07-14T00:00:00.000Z",
+        }),
+      },
+      assetSource: {
+        getImage: async (...args) => {
+          calls.push(args);
+          return {
+            status: 200 as const,
+            body: new TextEncoder().encode("<svg xmlns=\"http://www.w3.org/2000/svg\"/>"),
+            contentType: "image/svg+xml",
+            etag: "\"content-hash\"",
+            lastModified: "Tue, 14 Jul 2026 00:00:00 GMT",
+          };
+        },
+      },
+    });
+
+    const response = await app.inject({
+      method: "GET",
+      url: "/v1/chains/SN_MAIN/assets/0x2/42/image?v=abc123abc123abcd",
+      headers: { "if-none-match": "\"old\"" },
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.headers["content-type"]).toContain("image/svg+xml");
+    expect(response.headers["cache-control"]).toBe("public, max-age=31536000, immutable");
+    expect(response.headers["content-security-policy"]).toContain("default-src 'none'");
+    expect(response.headers["x-content-type-options"]).toBe("nosniff");
+    expect(response.payload).toContain("<svg");
+    expect(calls).toEqual([[
+      "SN_MAIN",
+      felt("2"),
+      "42",
+      { etag: "\"old\"", modifiedSince: undefined },
+    ]]);
+    await app.close();
+  });
+
   it("applies global token sorting, currency, traits, and keyset pagination", async () => {
     const app = await buildApp({
       allowedOrigins: [],
@@ -217,6 +265,7 @@ describe("marketplace read routes", () => {
         eventIndex: 2,
         caller: felt("9"),
       },
+      history: [],
     };
     const app = await buildApp({
       allowedOrigins: [],

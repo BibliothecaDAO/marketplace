@@ -1,139 +1,158 @@
 # Biblio Marketplace Scope
 
+Status: Accepted architecture, staged production rollout
+
 ## 1. Goal
-Build a production-ready Next.js marketplace for multiple collections using only:
-- `shadcn/ui` components
-- Tailwind CSS tokens/utilities
-- `@cartridge/arcade` marketplace SDK
 
-The current scaffold is a foundation release (P0) with SDK wiring, typed runtime config, and a minimal responsive UI shell.
+Operate a production Starknet marketplace for multiple collections with an
+owned read plane while retaining the deployed Arcade World and Marketplace
+contracts, existing orders, approvals, calldata, and wallet transaction flow.
 
-## 2. Product Requirements
-- Multi-collection browsing and switching.
-- Collection/token listing views powered by Arcade marketplace hooks.
-- Minimal but polished visual language using semantic theme tokens (`primary`, `secondary`, `accent`, `muted`, `destructive`, `chart-*`).
-- No custom design system outside shadcn+Tailwind primitives.
-- Configuration via environment variables for chain and collection registry.
-- Cart-based buying flow that allows selecting NFTs and purchasing selected listings in one action.
-- Sweeper-ready selection pipeline that can auto-add lowest-value listings into the cart.
+The application uses only shadcn primitives and Tailwind tokens for UI. The
+owned data plane consists of a pinned Torii indexer per chain and a stable,
+versioned Fastify API. `@cartridge/arcade` is permitted only behind the narrow
+contract write adapter.
 
-## 3. Architecture (Target)
-- **Framework**: Next.js App Router (TypeScript).
-- **UI**: shadcn components + Tailwind theme variables.
-- **Data Layer**: Arcade React hooks under `MarketplaceClientProvider`.
-- **Client State**: Zustand for persisted cart state and checkout status.
-- **Config**: runtime env parsing in `src/lib/marketplace/config.ts`.
-- **Rendering strategy**:
-  - Server component route shell (`src/app/page.tsx`).
-  - Client marketplace module for interactive state/hooks (`src/components/marketplace/marketplace-shell.tsx`).
+## 2. Product requirements
 
-## 4. SDK Integration Plan
-1. Initialize provider once at app layout level.
-2. Read chain/project defaults from env and build `MarketplaceClientConfig`.
-3. Source collection registry from env (`NEXT_PUBLIC_MARKETPLACE_COLLECTIONS`).
-4. Use hooks per selected collection:
-   - `useMarketplaceCollection`
-   - `useMarketplaceCollectionTokens`
-   - `useMarketplaceCollectionListings`
-5. Add robust loading/error/empty UI states at every query boundary.
+- Multi-collection browsing and switching without stale state leakage.
+- API-wide token search, trait filtering, numeric ranges, currency selection,
+  and all supported sort modes.
+- Collection, token, metadata, ownership, order, activity, portfolio, SEO,
+  Book, cart-validation, and diagnostics reads from the owned API.
+- Multi-currency listings and offers with STRK as the default; floors and price
+  comparisons are always scoped to one selected currency.
+- Cart-based buying with a maximum of 25 rows, one currency per checkout,
+  batch freshness validation, and one atomic transaction.
+- Explicit loading, empty, error, and success states at every query boundary.
+- No browser access to Torii SQL, Torii administration, Cartridge-hosted Torii,
+  or Cartridge-hosted assets.
 
-## 5. Route Map (Planned)
-- `/`:
-  - Collection switcher
-  - Token grid
-  - Status/metrics cards
-  - Theme token palette
-- `/collections/[address]` (P1):
-  - Collection profile
-  - Trait filters
-  - Pagination/infinite scroll
-- `/collections/[address]/tokens/[tokenId]` (P1):
-  - Token detail
-  - Listing history
-  - Royalty + fees
-- Global header cart control (P2):
-  - Top-right cart trigger
-  - Right-side cart popout/sidebar
-  - Checkout state and inline per-item validation errors
+Contract upgrades, migrations, relisting, renewed approvals, fee/royalty rule
+changes, wallet-provider replacement, a Starknet full node, and general UI
+redesign are out of scope.
 
-## 6. Delivery Phases
+## 3. Architecture
 
-## Phase P0 (implemented in this init)
-- Next.js + Tailwind + shadcn setup.
-- Arcade SDK install and provider wiring.
-- Typed env configuration parser with warnings.
-- Minimal responsive marketplace shell with:
-  - collection selection
-  - token querying
-  - listing counts
-  - theme color coverage card
-- Setup docs (`README.md`, `.env.example`).
+- **Frontend:** Next.js App Router and React, with business logic in
+  `src/lib` and `src/features`.
+- **Public read contract:** TypeBox schemas in
+  `packages/marketplace-api-contract`; the same schemas generate OpenAPI.
+- **Read API:** Fastify service in `services/marketplace-api`, exposing only
+  owned, parameterized `/v1` query templates.
+- **Indexer:** one hardened Torii/SQLite writer per configured chain, using
+  accepted L2 state and historical Order/Book storage.
+- **Registry:** `config/marketplace/chains.json` is the checked-in source of
+  truth and generates Torii and frontend configuration.
+- **Writes:** the deployed Arcade contracts remain authoritative. Wallet
+  transactions and direct RPC preflight remain unchanged.
+- **Client state:** Zustand persists cart state; TanStack Query owns remote
+  read state.
+- **Infrastructure:** AWS CloudFront/WAF/ALB, two ECS API tasks, private EC2/EBS
+  Torii writers, WAL-aware S3 replication, snapshots, metrics, and traces.
 
-## Phase P1 (core marketplace UX)
-- URL-stateful collection/token routes.
-- Pagination and cursor management for token results.
-- Token detail page with orders/listings.
-- Fees + royalty display using SDK methods.
-- Strong error states and retry controls.
+## 4. Domain invariants
 
-## Phase P2 (conversion + cart checkout)
-- Wallet/connect integration if required by product flow.
-- Offer/listing action flows and transaction UX.
-- Cart item selection from collection/home/detail surfaces.
-- Persisted Zustand cart store with local storage.
-- Single-transaction cart checkout.
-- Checkout fee-inclusive totals and strict stale listing validation.
-- Collection verification badges and provenance metadata.
-- Analytics instrumentation (view/click/listing funnel).
+1. Marketplace order identity is `(orderId, collection, tokenId)` everywhere.
+2. Felt input may be padded or unpadded; API output is canonical 64-digit
+   lowercase hexadecimal.
+3. IDs, amounts, quantities, balances, and timestamps cross the API as decimal
+   strings.
+4. Accepted L2 state is canonical and reported in every successful envelope.
+5. Trait names combine with AND; values within one trait combine with OR.
+6. Numeric ranges are inclusive; missing numeric values fail the range and sort
+   last.
+7. Raw atomic prices are never compared across currencies.
+8. Checkout fails closed when the API is unhealthy, contract identity differs,
+   Book is paused, lag exceeds two blocks, or an order changed.
+9. Offers remain supported. The retained buy-order executor fee-receiver risk
+   must remain visible beside offer creation.
 
-## Phase P3 (sweeper + scale + ops)
-- Sweeper intake logic to auto-add lowest-value listings to cart.
-- Caching strategy and ISR/revalidation policy.
-- Monitoring + alerting around SDK/API failures.
-- Security hardening and dependency policy.
-- CI pipeline: lint, typecheck, tests, build.
+## 5. Routes
 
-## 7. Configuration Contract
-Environment variables:
-- `NEXT_PUBLIC_MARKETPLACE_CHAIN_ID` = `SN_MAIN` | `SN_SEPOLIA` | `0x...`
-- `NEXT_PUBLIC_MARKETPLACE_DEFAULT_PROJECT` = optional Arcade project id
-- `NEXT_PUBLIC_MARKETPLACE_COLLECTIONS` = CSV of `address|name|projectId`
+- `/`: collection discovery
+- `/collections/[address]`: collection filters, grid, orders, and activity
+- `/collections/[address]/[tokenId]`: token metadata, listings, activity, and
+  write actions
+- `/portfolio`: arbitrary-wallet holdings
+- `/profile/[address]`: wallet profile
+- `/ops`: API/indexer diagnostics
 
-Example:
-`0x123...|Genesis|project-a,0x456...|Artifacts|project-b`
+The public read API surface is defined by
+`packages/marketplace-api-contract/src/index.ts` and versioned under `/v1`.
+Metadata image URLs resolve through the owned, registry-allowlisted asset
+routes `/v1/chains/:chain/assets/:collection/image?v=:contentVersion` and
+`/v1/chains/:chain/assets/:collection/:tokenId/image?v=:contentVersion`.
+Those routes proxy only Torii's private sanitized image cache; they never fetch
+an arbitrary URL supplied by a browser.
 
-## 8. Testing Strategy
-- P0: lint + build gate (done for scaffold validation).
-- P1:
-  - Unit tests for env parser and metadata extraction helpers.
-  - Component tests for loading/error/empty/success states.
-  - E2E flow: select collection -> render tokens -> open token detail.
-- P2+:
-  - Smoke tests against staging chain/project.
-  - Contract/SDK response shape validation.
+## 6. Configuration contract
 
-## 9. Risks and Mitigation
-- **SDK/node engine drift**: lock versions and enforce CI runtime.
-- **Collection metadata inconsistency**: normalize fields and keep fallbacks.
-- **Slow queries on large collections**: cursor pagination + virtualization.
-- **Env misconfiguration**: startup warnings and visible empty-state guidance.
+Required or supported frontend variables:
 
-## 10. Acceptance Criteria for Initial Scaffold
-- App starts with `npm run dev`.
-- Uses shadcn/Tailwind only for UI primitives.
-- Marketplace provider is initialized globally.
-- At least one configured collection can be queried via SDK hooks.
-- Scope document clearly defines phased plan and delivery boundaries.
+```env
+NEXT_PUBLIC_MARKETPLACE_CHAIN_ID=SN_MAIN
+NEXT_PUBLIC_MARKETPLACE_API_BASE_URL=http://localhost:3001
+MARKETPLACE_READ_ROLLOUT=off
+NEXT_PUBLIC_SITE_URL=http://localhost:3000
+```
 
-## 11. Approved Cart and Sweeper Scope (February 18, 2026)
-1. Cart entries represent specific listings and are keyed by `orderId` with `collection` and `tokenId` context.
-2. Add-to-cart behavior from collection/home views auto-selects the cheapest active listing for a token.
-3. Token detail view supports `Add to cart` only for buy intent (no direct buy shortcut in this phase).
-4. Cart accepts only one currency at a time.
-5. Cart has a hard cap of 25 items.
-6. Cart state persists locally through Zustand persistence.
-7. Checkout must run as a single transaction and does not fall back to sequential execution.
-8. Checkout blocks strictly when any selected listing is stale or changed.
-9. Validation failures are shown as per-item inline error rows in the cart.
-10. Cart total includes marketplace fee data in summary calculations.
-11. Sweeper integration path auto-adds lowest-value listings into the cart as candidate selections.
+`MARKETPLACE_READ_ROLLOUT` must be exactly
+`off|browse|portfolio|orders|checkout`; each value includes preceding stages.
+Invalid values fail startup.
+
+During staged rollout only,
+`NEXT_PUBLIC_MARKETPLACE_COLLECTIONS=address|name|legacyProjectId` may override
+the generated collection list. The third field is ignored. Cartridge project
+and runtime values are not product data-routing inputs.
+
+RPC URLs and credentials live in Secrets Manager and never in the registry.
+The API additionally requires `MARKETPLACE_PUBLIC_BASE_URL`; it must be an
+HTTPS origin in deployed environments and is used to generate owned asset
+URLs. HTTP is accepted only for loopback development origins.
+
+## 7. Delivery and rollout
+
+1. Validate the registry, contract freeze, start blocks, and class hashes.
+2. Qualify two managed RPC providers with deterministic bounded replays.
+3. Build and security-test the pinned Torii image and generated configuration.
+4. Provision backups, restore automation, monitoring, and blue/green operation.
+5. Deploy the shared API contract and Fastify read service.
+6. Populate metadata and content-hashed asset delivery.
+7. Move browse, portfolio/SEO, orders, and checkout in that order.
+8. Run shadow reconciliation, load/chaos tests, soak periods, and restore drills.
+
+The unavailable Cartridge endpoint is not a rollback target. Owned deployment
+versions are retained for rollback; browse may enter a visibly degraded cached
+mode, while checkout always fails closed.
+
+## 8. Testing and release gates
+
+Behavior changes follow RED -> GREEN -> REFACTOR. Required layers include:
+
+- registry golden tests;
+- Torii hardening Rust tests;
+- API schema, pagination, filtering, sorting, currency, query-safety, timeout,
+  cache, and fixture-database integration tests;
+- frontend MSW tests using the owned API contract;
+- deterministic Playwright browse, portfolio, cart, checkout, and diagnostics;
+- live Sepolia lifecycle, two-provider replay/failover, restore, chaos, and load
+  evidence;
+- Terraform validation, static analysis, container scanning, and SBOMs.
+
+Production cutover is blocked until replay hashes match, both RPC providers
+qualify, p95 lag is at most two blocks during a seven-day soak, cached API p95
+is under 500 ms, availability reaches 99.9%, and a restore demonstrates RPO
+under five minutes and RTO under 60 minutes.
+
+## 9. Completion definition
+
+The migration is complete only when every read surface uses the owned API,
+browser traffic contains no Cartridge Torii/static requests, checkout safety
+gates are active, replay/restore/failover evidence passes, and writes still
+target the retained World and Marketplace deployments.
+
+The detailed implementation contract is
+[`MARKETPLACE-INDEXER-REPLACEMENT-SCOPE.md`](./MARKETPLACE-INDEXER-REPLACEMENT-SCOPE.md),
+with the retained-contract decision recorded in
+[`adr/0001-retain-arcade-contracts.md`](./adr/0001-retain-arcade-contracts.md).

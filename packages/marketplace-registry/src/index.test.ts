@@ -1,9 +1,24 @@
 import { describe, expect, it } from "vitest";
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
-import { generateToriiConfig, parseMarketplaceRegistry } from "./index.js";
+import {
+  canonicalFelt,
+  generateToriiConfig,
+  parseMarketplaceRegistry,
+} from "./index.js";
 
 describe("marketplace registry", () => {
+  it("rejects values outside the Starknet field range", () => {
+    const starkFieldPrime = (1n << 251n) + 17n * (1n << 192n) + 1n;
+
+    expect(() => canonicalFelt(`0x${starkFieldPrime.toString(16)}`)).toThrow(
+      /outside the Starknet field range/i,
+    );
+    expect(() => canonicalFelt(`0x${(starkFieldPrime + 1n).toString(16)}`)).toThrow(
+      /outside the Starknet field range/i,
+    );
+  });
+
   it("accepts a complete chain registry and canonicalizes felt addresses", () => {
     const registry = parseMarketplaceRegistry({
       schemaVersion: "1.0.0",

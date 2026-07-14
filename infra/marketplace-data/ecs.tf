@@ -102,6 +102,7 @@ resource "aws_ecs_task_definition" "api" {
       environment = [
         { name = "NODE_ENV", value = "production" },
         { name = "CORS_ORIGINS", value = join(",", var.cors_origins) },
+        { name = "MARKETPLACE_PUBLIC_BASE_URL", value = "https://${var.domain_name}" },
         { name = "TORII_MAIN_URL", value = "http://torii-mainnet.marketplace.internal:8080" },
         { name = "TORII_SEPOLIA_URL", value = "http://torii-sepolia.marketplace.internal:8080" },
         { name = "TORII_BUILD_VERSION", value = "fe3ed0ffa1b0ae2f546d13ff390caf404943df02" },

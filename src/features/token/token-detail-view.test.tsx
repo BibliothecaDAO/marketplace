@@ -25,6 +25,15 @@ const { mockUseMarketplaceClient, mockGetFees, mockGetRoyaltyFee } = vi.hoisted(
   mockGetFees: vi.fn(),
   mockGetRoyaltyFee: vi.fn(),
 }));
+const {
+  mockIsTokenOwner,
+  mockIsTokenApproved,
+  mockGetAllowance,
+} = vi.hoisted(() => ({
+  mockIsTokenOwner: vi.fn(),
+  mockIsTokenApproved: vi.fn(),
+  mockGetAllowance: vi.fn(),
+}));
 
 vi.mock("@/lib/marketplace/hooks", () => ({
   useTokenDetailQuery: mockUseTokenDetailQuery,
@@ -39,6 +48,51 @@ vi.mock("@starknet-react/core", () => ({
 
 vi.mock("@/lib/marketplace/read-client", () => ({
   useMarketplaceClient: mockUseMarketplaceClient,
+}));
+
+vi.mock("@/lib/marketplace/write-adapter", () => ({
+  createMarketplaceWriteAdapter: () => ({
+    isTokenOwner: mockIsTokenOwner,
+    isTokenApproved: mockIsTokenApproved,
+    getAllowance: mockGetAllowance,
+    buildCancelCall: (key: { id: string; collection: string; tokenId: string }) => ({
+      contractAddress: "0x456",
+      entrypoint: "cancel",
+      calldata: [key.id, key.collection, key.tokenId, "0"],
+    }),
+    buildSetApprovalForAllCall: (collection: string) => ({
+      contractAddress: collection,
+      entrypoint: "set_approval_for_all",
+      calldata: ["0x456", "1"],
+    }),
+    buildErc20ApprovalCall: (currency: string, amount: bigint) => ({
+      contractAddress: currency,
+      entrypoint: "approve",
+      calldata: ["0x456", amount.toString(), "0"],
+    }),
+    buildListCall: (input: {
+      collection: string; tokenId: string; quantity: string; price: string;
+      currency: string; expiration: string; royalties: boolean;
+    }) => ({
+      contractAddress: "0x456",
+      entrypoint: "list",
+      calldata: [
+        input.collection, input.tokenId, "0", input.quantity, input.price,
+        input.currency, input.expiration, input.royalties ? "1" : "0",
+      ],
+    }),
+    buildOfferCall: (input: {
+      collection: string; tokenId: string; quantity: string; price: string;
+      currency: string; expiration: string;
+    }) => ({
+      contractAddress: "0x456",
+      entrypoint: "offer",
+      calldata: [
+        input.collection, input.tokenId, "0", input.quantity, input.price,
+        input.currency, input.expiration,
+      ],
+    }),
+  }),
 }));
 
 vi.mock("@/features/cart/store/cart-store", () => ({
@@ -146,6 +200,12 @@ describe("token detail view", () => {
     mockUseMarketplaceClient.mockReset();
     mockGetFees.mockReset();
     mockGetRoyaltyFee.mockReset();
+    mockIsTokenOwner.mockReset();
+    mockIsTokenApproved.mockReset();
+    mockGetAllowance.mockReset();
+    mockIsTokenOwner.mockResolvedValue(true);
+    mockIsTokenApproved.mockResolvedValue(false);
+    mockGetAllowance.mockResolvedValue(BigInt("0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"));
     mockUseCollectionListingsQuery.mockReturnValue(successListingsQuery([]));
     mockUseAccount.mockReturnValue({
       account: undefined,
@@ -793,6 +853,30 @@ describe("token detail view", () => {
     expect(calls[1].calldata[0]).toBe("0x123"); // collection address
   });
 
+  it("list_action_fails_closed_when_direct_owner_check_disagrees", async () => {
+    const mockAccountExecute = vi.fn();
+    mockUseAccount.mockReturnValue({
+      account: { execute: mockAccountExecute },
+      address: "0xabc",
+      isConnected: true,
+      status: "connected",
+    });
+    mockUseTokenOwnershipQuery.mockReturnValue(ownershipQuery(true));
+    mockIsTokenOwner.mockResolvedValue(false);
+    mockUseTokenDetailQuery.mockReturnValue(successQuery({
+      token: { token_id: "7", image: null, metadata: { name: "Token #7" } },
+      orders: [],
+      listings: [],
+    }));
+
+    const user = userEvent.setup();
+    render(<TokenDetailView address="0x123" tokenId="7" />);
+    await user.click(screen.getByRole("button", { name: /list for sale/i }));
+
+    expect(await screen.findByText(/direct ownership check failed/i)).toBeVisible();
+    expect(mockAccountExecute).not.toHaveBeenCalled();
+  });
+
   // --- New tests ---
 
   it("renders_token_not_found", () => {
@@ -862,6 +946,31 @@ describe("token detail view", () => {
     expect(calls[0].entrypoint).toBe("offer");
     expect(calls[0].contractAddress).toBe("0x456");
     expect(calls[0].calldata[0]).toBe("0x123"); // collection address
+  });
+
+  it("make_offer_adds_erc20_approval_only_when_direct_allowance_is_short", async () => {
+    const mockAccountExecute = vi.fn().mockResolvedValue({ transaction_hash: "0xofferhash" });
+    mockUseAccount.mockReturnValue({
+      account: { execute: mockAccountExecute },
+      address: "0xabc",
+      isConnected: true,
+      status: "connected",
+    });
+    mockUseTokenOwnershipQuery.mockReturnValue(ownershipQuery(false));
+    mockGetAllowance.mockResolvedValue(BigInt(0));
+    mockUseTokenDetailQuery.mockReturnValue(successQuery({
+      token: { token_id: "7", image: null, metadata: { name: "Token #7" } },
+      orders: [],
+      listings: [],
+    }));
+
+    const user = userEvent.setup();
+    render(<TokenDetailView address="0x123" tokenId="7" />);
+    await user.click(screen.getByRole("button", { name: /make offer/i }));
+
+    await waitFor(() => expect(mockAccountExecute).toHaveBeenCalledOnce());
+    const [calls] = mockAccountExecute.mock.calls[0] as [Array<{ entrypoint: string }>];
+    expect(calls.map((call) => call.entrypoint)).toEqual(["approve", "offer"]);
   });
 
   // UPDATED: account.execute rejects to test error display

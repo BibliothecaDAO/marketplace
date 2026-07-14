@@ -53,6 +53,8 @@ type CollectionTokenGridProps = {
   onTokensChange?: (tokens: NormalizedToken[]) => void;
   sortControls?: ReactNode;
   sweepPreviewTokenIds?: Set<string>;
+  initialCursor?: string | null;
+  onCursorChange?: (cursor: string | null) => void;
 };
 
 type GridDensityMode = "compact" | "dense";
@@ -202,6 +204,8 @@ export function CollectionTokenGrid({
   onTokensChange,
   sortControls,
   sweepPreviewTokenIds,
+  initialCursor,
+  onCursorChange,
 }: CollectionTokenGridProps) {
   const { addListingToCart, isRecentlyAdded } = useAddToCartFeedback();
   const collectionFilterConfig = useMemo(
@@ -236,7 +240,7 @@ export function CollectionTokenGrid({
     [activeFilters],
   );
   const [pagination, dispatch] = useReducer(gridPaginationReducer, {
-    cursor: undefined,
+    cursor: initialCursor ?? undefined,
     tokens: [],
   });
 
@@ -390,7 +394,6 @@ export function CollectionTokenGrid({
           {sortedTokens.map((token) => {
             const tokenKey = displayTokenId(token);
             const cheapestListing = listingPrices.get(tokenKey);
-            const isAdded = isRecentlyAdded(cheapestListing?.orderId);
             const isSweepPreview = sweepPreviewTokenIds?.has(tokenKey) ?? false;
             const price =
               cheapestListing?.price ??
@@ -403,6 +406,7 @@ export function CollectionTokenGrid({
                 projectId,
               )
               : null;
+            const isAdded = isRecentlyAdded(cardItem);
 
             return (
               <div key={tokenId(token)} data-token-card>
@@ -466,12 +470,15 @@ export function CollectionTokenGrid({
                 {sortedTokens.map((token) => {
                   const tokenKey = displayTokenId(token);
                   const cheapestListing = listingPrices.get(tokenKey);
-                  const isAdded = isRecentlyAdded(cheapestListing?.orderId);
                   const isSweepPreview = sweepPreviewTokenIds?.has(tokenKey) ?? false;
                   const price =
                     cheapestListing?.price ??
                     tokenPrice(token);
                   const displayPrice = formatPriceForDisplay(price);
+                  const cartItem = cheapestListing
+                    ? cartItemFromTokenListing(token, address, cheapestListing, projectId)
+                    : null;
+                  const isAdded = isRecentlyAdded(cartItem);
 
                   return (
                     <TableRow key={tokenId(token)} className={cn(isSweepPreview && "bg-muted/60")}>
@@ -509,20 +516,13 @@ export function CollectionTokenGrid({
                       </TableCell>
                       <TableCell className="text-right">
                         <Button
-                          disabled={!cheapestListing || isSweepPreview}
+                          disabled={!cartItem || isSweepPreview}
                           onClick={() => {
-                            if (!cheapestListing) {
+                            if (!cartItem) {
                               return;
                             }
 
-                            addListingToCart(
-                              cartItemFromTokenListing(
-                                token,
-                                address,
-                                cheapestListing,
-                                projectId,
-                              ),
-                            );
+                            addListingToCart(cartItem);
                           }}
                           size="sm"
                           type="button"
@@ -555,6 +555,7 @@ export function CollectionTokenGrid({
           onClick={() => {
             if (nextCursor) {
               dispatch({ type: "ADVANCE_CURSOR", cursor: nextCursor });
+              onCursorChange?.(nextCursor);
             }
           }}
           type="button"

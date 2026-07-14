@@ -48,7 +48,7 @@ describe("marketplace API contract", () => {
       meta: {
         schemaVersion: "1.0.0",
         chain: "SN_MAIN",
-        chainId: "0x534e5f4d41494e",
+        chainId: `0x${"534e5f4d41494e".padStart(64, "0")}`,
         worldAddress: `0x${"e".padStart(64, "0")}`,
         marketplaceAddress: `0x${"f".padStart(64, "0")}`,
         indexedBlock: 500,
@@ -61,6 +61,10 @@ describe("marketplace API contract", () => {
     };
 
     expect(Value.Check(MarketplaceOrderResponseSchema, response)).toBe(true);
+    expect(Value.Check(MarketplaceOrderResponseSchema, {
+      ...response,
+      meta: { ...response.meta, chainId: "0x534e5f4d41494e" },
+    })).toBe(false);
     expect(Value.Check(MarketplaceOrderResponseSchema, {
       ...response,
       data: { ...response.data, royaltyTerms: undefined },

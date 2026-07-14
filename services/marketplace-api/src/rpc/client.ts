@@ -30,11 +30,28 @@ type JsonRpcResponse<T> = {
 };
 
 function transientHttpStatus(status: number): boolean {
-  return status === 408 || status === 425 || status === 429 || status >= 500;
+  return status === 408 || status === 425 || status === 429 ||
+    (status >= 500 && status < 600);
 }
 
-function transientRpcCode(code: number): boolean {
-  return code === -32005 || code === -32010 || code === -32099;
+function transientRpcError(error: NonNullable<JsonRpcResponse<unknown>["error"]>): boolean {
+  if (
+    error.code === -32603 ||
+    error.code === -32005 ||
+    error.code === -32010 ||
+    error.code === -32099 ||
+    error.code === 429 ||
+    (error.code >= 500 && error.code < 600)
+  ) {
+    return true;
+  }
+  if (error.data && typeof error.data === "object") {
+    const status = Number((error.data as Record<string, unknown>).status);
+    if (status === 429 || (status >= 500 && status < 600)) return true;
+  }
+  return /rate.?limit|too many requests|timed? ?out|temporar(?:y|ily)|unavailable|bad gateway|gateway timeout|internal server/i.test(
+    error.message,
+  );
 }
 
 export class StarknetRpcClient {
@@ -121,7 +138,7 @@ export class StarknetRpcClient {
       if (payload.error) {
         throw new RpcClientError(
           `RPC ${payload.error.code}: ${payload.error.message}`,
-          transientRpcCode(payload.error.code),
+          transientRpcError(payload.error),
           provider,
           payload.error.code,
         );

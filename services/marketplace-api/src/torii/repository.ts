@@ -1,7 +1,9 @@
+import { createHash } from "node:crypto";
 import type {
   CollectionSummary,
   MarketplaceActivity,
   MarketplaceBook,
+  MarketplaceBookHistoryEntry,
   MarketplaceHolding,
   MarketplaceIndexerStatus,
   MarketplaceToken,
@@ -43,6 +45,7 @@ export type ToriiMarketplaceRepositoryOptions = {
   replayVersion?: string;
   databaseSchemaVersion?: string;
   checkoutLagLimit?: number;
+  assetBaseUrl?: string;
 };
 
 type OrderRow = Record<string, unknown>;
@@ -419,10 +422,33 @@ function traitPredicates(traits: string[]): string[] {
 
 type TokenRow = Record<string, unknown>;
 
+type AssetContext = {
+  baseUrl?: string;
+  chain: MarketplaceChainAlias;
+};
+
+function ownedAssetUrl(
+  context: AssetContext,
+  collection: string,
+  tokenId: string | null,
+  source: string,
+  updatedAt: unknown,
+): string {
+  if (!context.baseUrl) return source;
+  const version = createHash("sha256")
+    .update(`${String(updatedAt ?? "")}:${source}`)
+    .digest("hex")
+    .slice(0, 16);
+  const base = context.baseUrl.replace(/\/$/, "");
+  const tokenPath = tokenId === null ? "" : `/${tokenId}`;
+  return `${base}/v1/chains/${context.chain}/assets/${collection}${tokenPath}/image?v=${version}`;
+}
+
 function tokenFromRow(
   row: TokenRow,
   configuredCurrencies: Array<{ address: string; symbol: string }>,
   selectedCurrency?: { address: string; symbol: string },
+  assetContext: AssetContext = { chain: "SN_MAIN" },
 ): MarketplaceToken {
   const metadata = parseJsonRecord(row.metadata);
   const tokenId = decimal(row.token_id);
@@ -460,17 +486,25 @@ function tokenFromRow(
       : typeof row.name === "string" && row.name.trim()
         ? row.name.trim()
         : `Token #${tokenId}`;
+  const rawImage = typeof metadata.image === "string"
+    ? metadata.image
+    : typeof metadata.image_url === "string"
+      ? metadata.image_url
+      : null;
   return {
     collection: canonicalFelt(String(row.contract_address)),
     tokenId,
     name,
     description: typeof metadata.description === "string" ? metadata.description : null,
-    image:
-      typeof metadata.image === "string"
-        ? metadata.image
-        : typeof metadata.image_url === "string"
-          ? metadata.image_url
-          : null,
+    image: rawImage
+      ? ownedAssetUrl(
+          assetContext,
+          canonicalFelt(String(row.contract_address)),
+          tokenId,
+          rawImage,
+          row.updated_at,
+        )
+      : null,
     owner,
     balance: decimal(row.balance ?? (owner ? 1 : 0)),
     firstSeenBlock: firstSeenBlock(row.first_event_id),
@@ -616,6 +650,70 @@ function activityFromRow(row: OrderRow): MarketplaceActivity {
   };
 }
 
+function bookResultingState(
+  row: OrderRow,
+): MarketplaceBookHistoryEntry["resultingState"] {
+  return {
+    version: decimal(row.version),
+    paused: boolean(row.paused),
+    royaltiesEnabled: boolean(row.royalties),
+    counter: decimal(row.counter),
+    feeNumerator: decimal(row.fee_num),
+    feeDenominator: "10000",
+    feeReceiver: canonicalFelt(String(row.fee_receiver)),
+  };
+}
+
+function bookChangeTypes(
+  previous: OrderRow | null,
+  current: OrderRow,
+): MarketplaceBookHistoryEntry["changeTypes"] {
+  if (!previous) return ["initialized"];
+  const changes: MarketplaceBookHistoryEntry["changeTypes"] = [];
+  if (boolean(previous.paused) !== boolean(current.paused)) {
+    changes.push(boolean(current.paused) ? "paused" : "resumed");
+  }
+  if (decimal(previous.fee_num) !== decimal(current.fee_num)) {
+    changes.push("fee_changed");
+  }
+  if (!feltEqualForRepository(previous.fee_receiver, current.fee_receiver)) {
+    changes.push("fee_receiver_changed");
+  }
+  if (boolean(previous.royalties) !== boolean(current.royalties)) {
+    changes.push(boolean(current.royalties) ? "royalties_enabled" : "royalties_disabled");
+  }
+  if (decimal(previous.version) !== decimal(current.version)) {
+    changes.push("version_changed");
+  }
+  return changes;
+}
+
+function feltEqualForRepository(left: unknown, right: unknown): boolean {
+  try {
+    return BigInt(String(left)) === BigInt(String(right));
+  } catch {
+    return String(left).toLowerCase() === String(right).toLowerCase();
+  }
+}
+
+function bookHistory(rows: OrderRow[]): MarketplaceBookHistoryEntry[] {
+  let previous: OrderRow | null = null;
+  const entries: MarketplaceBookHistoryEntry[] = [];
+  for (const row of rows) {
+    const changeTypes = bookChangeTypes(previous, row);
+    previous = row;
+    // Counter-only snapshots remain in Torii's audit table but are not governance changes.
+    if (changeTypes.length === 0) continue;
+    entries.push({
+      sequence: decimal(row.sequence),
+      changeTypes,
+      resultingState: bookResultingState(row),
+      provenance: provenance(row, "updated"),
+    });
+  }
+  return entries;
+}
+
 export class ToriiMarketplaceRepository {
   private readonly nowEpochSeconds: () => number;
   private readonly now: () => Date;
@@ -673,7 +771,7 @@ GROUP BY collection, currency`,
       ),
       this.client.query(
         chain,
-        `SELECT contract_address, metadata FROM tokens WHERE token_id IS NULL OR token_id = ''`,
+        `SELECT contract_address, metadata, updated_at FROM tokens WHERE token_id IS NULL OR token_id = ''`,
       ),
     ])) as [
       Array<Record<string, unknown>>,
@@ -688,7 +786,7 @@ GROUP BY collection, currency`,
     const metadataByCollection = new Map(
       metadataRows.map((row) => [
         canonicalFelt(String(row.contract_address)),
-        parseJsonRecord(row.metadata),
+        row,
       ]),
     );
     for (const row of listingRows) {
@@ -710,13 +808,33 @@ GROUP BY collection, currency`,
       floors.set(collection, collectionFloors);
     }
     return chainConfig.collections.map((collection) => {
-      const metadata = metadataByCollection.get(collection.address) ?? {};
-      const image = typeof metadata.image === "string"
+      const metadataRow = metadataByCollection.get(collection.address) ?? {};
+      const metadata = parseJsonRecord(metadataRow.metadata);
+      const rawImage = typeof metadata.image === "string"
         ? metadata.image
         : typeof metadata.image_url === "string" ? metadata.image_url : null;
-      const bannerImage = typeof metadata.banner_image === "string"
+      const rawBannerImage = typeof metadata.banner_image === "string"
         ? metadata.banner_image
         : typeof metadata.bannerImage === "string" ? metadata.bannerImage : null;
+      const image = rawImage
+        ? ownedAssetUrl(
+            { baseUrl: this.options.assetBaseUrl, chain },
+            collection.address,
+            null,
+            rawImage,
+            metadataRow.updated_at,
+          )
+        : null;
+      // Torii caches a single sanitized contract image. Use it for the banner
+      // instead of leaking a second untrusted remote URI through the API.
+      const bannerImage = rawBannerImage ? image : null;
+      const rawMetadata = this.options.assetBaseUrl
+        ? {
+            ...metadata,
+            ...(image ? { image, image_url: image } : {}),
+            ...(bannerImage ? { banner_image: bannerImage, bannerImage } : {}),
+          }
+        : metadata;
       return {
         address: collection.address,
         name: typeof metadata.name === "string" && metadata.name.trim()
@@ -725,7 +843,7 @@ GROUP BY collection, currency`,
         description: typeof metadata.description === "string" ? metadata.description : null,
         image,
         bannerImage,
-        rawMetadata: metadata,
+        rawMetadata,
         standard: collection.standard,
         deploymentBlock: collection.startBlock,
         verified: true,
@@ -739,21 +857,33 @@ GROUP BY collection, currency`,
   }
 
   async getBook(chain: MarketplaceChainAlias): Promise<MarketplaceBook> {
-    const rows = (await this.client.query(
-      chain,
-      `SELECT
+    const [rows, auditRows] = (await Promise.all([
+      this.client.query(chain, `SELECT
   b.*,
   e.id AS updated_event_id,
   tx.block_number AS updated_block_number,
   e.transaction_hash AS updated_transaction_hash,
+  e.event_index AS updated_event_index,
   tx.sender_address AS updated_caller,
   COALESCE((SELECT COUNT(*) FROM transactions tx2 WHERE tx2.block_number = tx.block_number AND tx2.rowid < tx.rowid), 0) AS updated_transaction_index
 FROM "ARCADE-Book" b
 LEFT JOIN events e ON e.id = b.internal_event_id
 LEFT JOIN transactions tx ON tx.transaction_hash = e.transaction_hash
 ORDER BY b.id ASC
-LIMIT 1`,
-    )) as OrderRow[];
+LIMIT 1`),
+      this.client.query(chain, `SELECT
+  audit.*,
+  e.id AS updated_event_id,
+  tx.block_number AS updated_block_number,
+  e.transaction_hash AS updated_transaction_hash,
+  e.event_index AS updated_event_index,
+  tx.sender_address AS updated_caller,
+  COALESCE((SELECT COUNT(*) FROM transactions tx2 WHERE tx2.block_number = tx.block_number AND tx2.rowid < tx.rowid), 0) AS updated_transaction_index
+FROM marketplace_book_audit audit
+JOIN events e ON e.id = audit.event_id
+JOIN transactions tx ON tx.transaction_hash = e.transaction_hash
+ORDER BY audit.sequence ASC`),
+    ])) as [OrderRow[], OrderRow[]];
     const row = rows[0];
     if (!row) throw new Error("Marketplace Book has not been indexed.");
     return {
@@ -766,6 +896,7 @@ LIMIT 1`,
       feeDenominator: "10000",
       feeReceiver: canonicalFelt(String(row.fee_receiver)),
       updatedAt: provenance(row, "updated"),
+      history: bookHistory(auditRows),
     };
   }
 
@@ -946,8 +1077,9 @@ LIMIT ${options.limit + 1}`;
   t.token_id,
   t.name,
   t.metadata,
-  (SELECT b.account_address FROM token_balances b WHERE b.token_id = t.id AND b.balance NOT IN ('0', '0x0', '0x00000000000000000000000000000000') ORDER BY b.account_address LIMIT 1) AS owner,
-  COALESCE((SELECT b.balance FROM token_balances b WHERE b.token_id = t.id AND b.balance NOT IN ('0', '0x0', '0x00000000000000000000000000000000') ORDER BY b.account_address LIMIT 1), '0') AS balance,
+  t.updated_at,
+  (SELECT b.account_address FROM token_balances b WHERE b.token_id = t.id AND ltrim(lower(replace(b.balance, '0x', '')), '0') <> '' ORDER BY b.account_address LIMIT 1) AS owner,
+  COALESCE((SELECT b.balance FROM token_balances b WHERE b.token_id = t.id AND ltrim(lower(replace(b.balance, '0x', '')), '0') <> '' ORDER BY b.account_address LIMIT 1), '0') AS balance,
   (SELECT MIN(tt.event_id) FROM token_transfers tt WHERE tt.token_id = t.id) AS first_event_id,
   COALESCE((SELECT json_group_array(json_object('trait_name', ta.trait_name, 'trait_value', ta.trait_value)) FROM token_attributes ta WHERE ta.token_id = t.id), '[]') AS attributes_json,
   f.floor_price,
@@ -969,7 +1101,10 @@ LIMIT ${options.limit + 1}`;
     const rows = (await this.client.query(chain, sql)) as TokenRow[];
     const pageRows = rows.slice(0, options.limit);
     const items = pageRows.map((row) =>
-      tokenFromRow(row, [selectedCurrency], selectedCurrency),
+      tokenFromRow(row, [selectedCurrency], selectedCurrency, {
+        baseUrl: this.options.assetBaseUrl,
+        chain,
+      }),
     );
     const lastRow = pageRows.at(-1);
     const nextCursor = rows.length > options.limit && lastRow
@@ -1057,6 +1192,7 @@ ORDER BY a.trait_name ASC, value_count DESC, a.trait_value ASC`;
   t.token_id,
   t.name,
   t.metadata,
+  t.updated_at,
   (SELECT b.account_address FROM token_balances b WHERE b.token_id = t.id AND ltrim(lower(replace(b.balance, '0x', '')), '0') <> '' ORDER BY b.account_address LIMIT 1) AS owner,
   COALESCE((SELECT b.balance FROM token_balances b WHERE b.token_id = t.id AND ltrim(lower(replace(b.balance, '0x', '')), '0') <> '' ORDER BY b.account_address LIMIT 1), '0') AS balance,
   (SELECT MIN(tt.event_id) FROM token_transfers tt WHERE tt.token_id = t.id) AS first_event_id,
@@ -1084,6 +1220,7 @@ LIMIT 1`,
           row,
           configuredCurrencies.length > 0 ? configuredCurrencies : [selectedCurrency],
           selectedCurrency,
+          { baseUrl: this.options.assetBaseUrl, chain },
         )
       : null;
   }
@@ -1122,6 +1259,7 @@ LIMIT 1`,
   b.balance,
   t.name,
   t.metadata,
+  t.updated_at,
   b.account_address AS owner,
   (SELECT MIN(tt.event_id) FROM token_transfers tt WHERE tt.token_id = t.id) AS first_event_id,
   COALESCE((SELECT json_group_array(json_object('trait_name', ta.trait_name, 'trait_value', ta.trait_value)) FROM token_attributes ta WHERE ta.token_id = t.id), '[]') AS attributes_json,
@@ -1144,7 +1282,10 @@ LIMIT ${options.limit + 1}`,
     const pageRows = rows.slice(0, options.limit);
     const configuredCurrencies = this.options.currencies?.[chain] ?? [];
     const items = pageRows.map((row) => {
-      const token = tokenFromRow(row, configuredCurrencies);
+      const token = tokenFromRow(row, configuredCurrencies, undefined, {
+        baseUrl: this.options.assetBaseUrl,
+        chain,
+      });
       return {
         account,
         collection: token.collection,

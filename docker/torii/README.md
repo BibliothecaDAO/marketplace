@@ -1,9 +1,11 @@
 # Hardened marketplace Torii
 
 This image builds Torii from the exact `v1.8.16` source commit recorded in
-`image.lock.json`, applies the checked-in security patch, runs the security unit tests, and
-then builds the release binary. Production deployment accepts only an ECR image reference by
-digest; CI writes that immutable digest into the release artifact after publishing.
+`image.lock.json`, verifies and applies every checked-in patch, runs formatting,
+`clippy -D warnings`, and all tests for each changed Torii crate, and then builds
+the release binary. Production deployment accepts only an ECR image reference
+by digest; CI writes that immutable digest into the release artifact after
+publishing.
 
 Runtime inputs are `TORII_CHAIN`, `TORII_RPC_URL`, `TORII_DB_DIR`,
 `TORII_METADATA_CONCURRENCY`, and optionally `TORII_IPFS_GATEWAY`. RPC URLs are rendered into a

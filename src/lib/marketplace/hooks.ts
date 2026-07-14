@@ -9,6 +9,7 @@ import {
   tokenFromApi,
 } from "@/lib/marketplace/api-adapter";
 import { getMarketplaceApiClient } from "@/lib/marketplace/api-client";
+import { getMarketplaceRuntimeConfig } from "@/lib/marketplace/config";
 import type {
   CollectionListingsOptions,
   CollectionOrdersOptions,
@@ -159,17 +160,20 @@ export function useTokenDetailQuery(options: TokenDetailsOptions) {
     ] as const,
     queryFn: async () => {
       const client = getMarketplaceApiClient();
-      const [token, orders, listings, activity] = await Promise.all([
-        client.token(options.collection, tokenId, options.currency),
-        client.orders(options.collection, { tokenId, currency: options.currency, limit: 100 }),
-        client.listings(options.collection, { tokenId, currency: options.currency, limit: 100 }),
-        client.activity(options.collection, tokenId, { limit: 100 }),
-      ]);
+      const token = await client.token(options.collection, tokenId, options.currency);
+      const ordersEnabled = getMarketplaceRuntimeConfig().isReadSurfaceEnabled("orders");
+      const [orders, listings, activity] = ordersEnabled
+        ? await Promise.all([
+            client.orders(options.collection, { tokenId, currency: options.currency, limit: 100 }),
+            client.listings(options.collection, { tokenId, currency: options.currency, limit: 100 }),
+            client.activity(options.collection, tokenId, { limit: 100 }),
+          ])
+        : [null, null, null];
       return {
         token: tokenFromApi(token.data),
-        orders: orders.data.items.map(orderFromApi),
-        listings: listings.data.items.map(orderFromApi),
-        activity: activity.data.items,
+        orders: orders?.data.items.map(orderFromApi) ?? [],
+        listings: listings?.data.items.map(orderFromApi) ?? [],
+        activity: activity?.data.items ?? [],
         meta: token.meta,
       };
     },

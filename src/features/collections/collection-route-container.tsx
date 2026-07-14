@@ -168,6 +168,16 @@ export function CollectionRouteContainer({
     }, [applyDiscoveryState, optimisticDiscoveryState.state],
   );
 
+  const handleCursorChange = useCallback((nextCursor: string | null) => {
+    const nextParams = new URLSearchParams(searchParamsKey);
+    if (nextCursor) nextParams.set("cursor", nextCursor);
+    else nextParams.delete("cursor");
+    const query = nextParams.toString();
+    startTransition(() => {
+      router.replace(query ? `${pathname}?${query}` : pathname);
+    });
+  }, [pathname, router, searchParamsKey]);
+
   return (
     <CollectionRouteView
       activeFilters={optimisticDiscoveryState.state.activeFilters}
@@ -178,6 +188,7 @@ export function CollectionRouteContainer({
       onActiveFiltersChange={handleActiveFiltersChange}
       onSortModeChange={handleSortModeChange}
       onCurrencyChange={handleCurrencyChange}
+      onCursorChange={handleCursorChange}
       sortMode={optimisticDiscoveryState.state.sortMode}
     />
   );

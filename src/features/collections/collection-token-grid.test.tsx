@@ -121,6 +121,7 @@ describe("collection token grid", () => {
   });
 
   it("token_grid_loads_next_cursor_page_without_duplicates", async () => {
+    const onCursorChange = vi.fn();
     mockUseCollectionTokensQuery.mockImplementation((options) => {
       const cursor = options?.cursor;
       if (cursor === "cursor-2") {
@@ -159,7 +160,13 @@ describe("collection token grid", () => {
     });
 
     const user = userEvent.setup();
-    render(<CollectionTokenGrid address="0xabc" projectId="project-a" />);
+    render(
+      <CollectionTokenGrid
+        address="0xabc"
+        onCursorChange={onCursorChange}
+        projectId="project-a"
+      />,
+    );
 
     expect(screen.getByText("Token #1")).toBeVisible();
     expect(screen.getByText("Token #2")).toBeVisible();
@@ -169,6 +176,25 @@ describe("collection token grid", () => {
       await screen.findByRole("article", { name: "token-3" }),
     ).toBeVisible();
     expect(screen.getAllByText("Token #2")).toHaveLength(1);
+    expect(onCursorChange).toHaveBeenCalledWith("cursor-2");
+  });
+
+  it("starts from the URL-provided cursor", () => {
+    mockUseCollectionTokensQuery.mockReturnValue({
+      data: { page: { tokens: [], nextCursor: null }, error: null },
+      isLoading: false,
+      isSuccess: true,
+      isError: false,
+      error: null,
+      isFetching: false,
+      refetch: vi.fn(),
+    });
+
+    render(<CollectionTokenGrid address="0xabc" initialCursor="url-cursor" />);
+
+    expect(mockUseCollectionTokensQuery).toHaveBeenCalledWith(
+      expect.objectContaining({ cursor: "url-cursor" }),
+    );
   });
 
   it("token_grid_respects_limit_and_tokenIds_filters", () => {

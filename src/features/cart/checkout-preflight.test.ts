@@ -7,6 +7,7 @@ import type {
   OrderLookupResult,
 } from "@biblio/marketplace-api-contract";
 import { evaluateCheckoutPreflight } from "./checkout-preflight";
+import { marketplaceOrderIdentityKey } from "@/lib/marketplace/order-identity";
 
 const felt = (digit: string) => `0x${digit.repeat(64)}`;
 const provenance = {
@@ -22,7 +23,7 @@ const order: MarketplaceOrder = {
   createdAt: provenance, updatedAt: provenance,
 };
 const meta: ApiMeta = {
-  schemaVersion: "1.0.0", chain: "SN_MAIN", chainId: "0x534e5f4d41494e",
+  schemaVersion: "1.0.0", chain: "SN_MAIN", chainId: "0x00000000000000000000000000000000000000000000000000534e5f4d41494e",
   worldAddress: felt("4"), marketplaceAddress: felt("5"), indexedBlock: 100,
   indexedBlockHash: felt("6"), chainHead: 101, lagBlocks: 1,
   finality: "accepted_l2", observedAt: "2026-07-14T00:00:00.000Z",
@@ -31,6 +32,7 @@ const book: MarketplaceBook = {
   id: "0", version: "1", paused: false, royaltiesEnabled: true, counter: "8",
   feeNumerator: "250", feeDenominator: "10000", feeReceiver: felt("7"),
   updatedAt: provenance,
+  history: [],
 };
 const indexer: MarketplaceIndexerStatus = {
   buildVersion: "1", replayVersion: "1", databaseSchemaVersion: "1",
@@ -44,6 +46,7 @@ const cart = [{
 const lookup: OrderLookupResult[] = [{
   key: { id: "7", collection: felt("1"), tokenId: "42" }, order,
 }];
+const cartKey = marketplaceOrderIdentityKey(cart[0]!);
 
 describe("owned checkout preflight", () => {
   it("accepts only exact tuple identity and unchanged placed terms", () => {
@@ -87,7 +90,7 @@ describe("owned checkout preflight", () => {
         accountAddress: felt("8"), nowEpochSeconds: 1_900_000_000,
       });
       expect(result.safe).toBe(false);
-      expect(result.rowErrors["7"]).toMatch(message);
+      expect(result.rowErrors[cartKey]).toMatch(message);
     }
   });
 });

@@ -162,7 +162,7 @@ describe("marketplace API", () => {
       meta: {
         schemaVersion: "1.0.0",
         chain: "SN_MAIN",
-        chainId: "0x534e5f4d41494e",
+        chainId: "0x00000000000000000000000000000000000000000000000000534e5f4d41494e",
         worldAddress,
         marketplaceAddress,
         indexedBlock: 500,

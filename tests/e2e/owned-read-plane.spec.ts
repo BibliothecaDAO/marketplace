@@ -8,6 +8,7 @@ import {
   test,
   waitForReactHydration,
 } from "./owned-marketplace-test";
+import { marketplaceOrderIdentityKey } from "../../src/lib/marketplace/order-identity";
 
 test("browse filters and currency stay URL-canonical and query the owned API", async ({
   page,
@@ -80,8 +81,13 @@ test("portfolio and diagnostics are exclusively populated by owned response enve
 test("a missing tuple order remains visibly stale during cart refresh", async ({ page }) => {
   await page.unroute(`${E2E_API_BASE_URL}/**`);
   await installOwnedMarketplaceApi(page, { staleOrderLookup: true });
+  const inlineErrorKey = marketplaceOrderIdentityKey({
+    orderId: "42",
+    collection: E2E_COLLECTION,
+    tokenId: "1",
+  });
   await page.addInitScript(
-    ({ collection, currency }) => {
+    ({ collection, currency, inlineErrorKey }) => {
       localStorage.setItem(
         "marketplace-cart-v1",
         JSON.stringify({
@@ -99,14 +105,18 @@ test("a missing tuple order remains visibly stale during cart refresh", async ({
               },
             ],
             isOpen: true,
-            inlineErrors: { "42": "Listing is stale or unavailable." },
+            inlineErrors: { [inlineErrorKey]: "Listing is stale or unavailable." },
             lastActionError: null,
           },
           version: 0,
         }),
       );
     },
-    { collection: E2E_COLLECTION, currency: E2E_STRK },
+    {
+      collection: E2E_COLLECTION,
+      currency: E2E_STRK,
+      inlineErrorKey,
+    },
   );
 
   await page.goto("/");

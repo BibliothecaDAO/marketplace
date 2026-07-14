@@ -23,7 +23,7 @@ export const ApiMetaSchema = Type.Object(
   {
     schemaVersion: Type.String({ pattern: "^[0-9]+\\.[0-9]+\\.[0-9]+$" }),
     chain: ChainAliasSchema,
-    chainId: FeltSchema,
+    chainId: CanonicalFeltSchema,
     worldAddress: CanonicalFeltSchema,
     marketplaceAddress: CanonicalFeltSchema,
     indexedBlock: Type.Integer({ minimum: 0 }),
@@ -237,6 +237,41 @@ export const MarketplaceHoldingSchema = Type.Object(
   { additionalProperties: false },
 );
 
+export const MarketplaceBookChangeTypeSchema = Type.Union([
+  Type.Literal("initialized"),
+  Type.Literal("paused"),
+  Type.Literal("resumed"),
+  Type.Literal("fee_changed"),
+  Type.Literal("fee_receiver_changed"),
+  Type.Literal("royalties_enabled"),
+  Type.Literal("royalties_disabled"),
+  Type.Literal("version_changed"),
+  Type.Literal("unknown"),
+]);
+
+export const MarketplaceBookResultingStateSchema = Type.Object(
+  {
+    version: DecimalStringSchema,
+    paused: Type.Boolean(),
+    royaltiesEnabled: Type.Boolean(),
+    counter: DecimalStringSchema,
+    feeNumerator: DecimalStringSchema,
+    feeDenominator: DecimalStringSchema,
+    feeReceiver: CanonicalFeltSchema,
+  },
+  { additionalProperties: false },
+);
+
+export const MarketplaceBookHistoryEntrySchema = Type.Object(
+  {
+    sequence: DecimalStringSchema,
+    changeTypes: Type.Array(MarketplaceBookChangeTypeSchema, { minItems: 1 }),
+    resultingState: MarketplaceBookResultingStateSchema,
+    provenance: ProvenanceSchema,
+  },
+  { additionalProperties: false },
+);
+
 export const MarketplaceBookSchema = Type.Object(
   {
     id: DecimalStringSchema,
@@ -248,6 +283,7 @@ export const MarketplaceBookSchema = Type.Object(
     feeDenominator: DecimalStringSchema,
     feeReceiver: CanonicalFeltSchema,
     updatedAt: ProvenanceSchema,
+    history: Type.Array(MarketplaceBookHistoryEntrySchema),
   },
   { additionalProperties: false },
 );
@@ -359,6 +395,9 @@ export type TraitFacet = Static<typeof TraitFacetSchema>;
 export type MarketplaceActivity = Static<typeof MarketplaceActivitySchema>;
 export type MarketplaceHolding = Static<typeof MarketplaceHoldingSchema>;
 export type MarketplaceBook = Static<typeof MarketplaceBookSchema>;
+export type MarketplaceBookHistoryEntry = Static<
+  typeof MarketplaceBookHistoryEntrySchema
+>;
 export type MarketplaceIndexerStatus = Static<typeof IndexerStatusSchema>;
 export type MarketplaceOrderResponse = Static<
   typeof MarketplaceOrderResponseSchema

@@ -21,11 +21,17 @@ vi.mock("@/lib/marketplace/api-client", async (importOriginal) => ({
   getMarketplaceApiClient: () => api,
 }));
 
+vi.mock("@/lib/marketplace/config", () => ({
+  getMarketplaceRuntimeConfig: () => ({
+    isReadSurfaceEnabled: () => true,
+  }),
+}));
+
 const felt = (digit: string) => `0x${digit.repeat(64)}`;
 const meta = {
   schemaVersion: "1.0.0",
   chain: "SN_MAIN",
-  chainId: "0x534e5f4d41494e",
+  chainId: "0x00000000000000000000000000000000000000000000000000534e5f4d41494e",
   worldAddress: felt("1"),
   marketplaceAddress: felt("2"),
   indexedBlock: 100,
